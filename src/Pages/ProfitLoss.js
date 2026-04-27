@@ -4,13 +4,6 @@ import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
 
-function formatAmount(value) {
-  return Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 function ProfitLossTable({ title, rows, accent, company }) {
   return (
     <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
@@ -99,12 +92,12 @@ export default function ProfitLoss() {
   const summaryCards = useMemo(
     () => [
       {
-        label: "Direct Income",
+        label: "Net Sales",
         value: report.totals?.grossIncome,
         accent: "bg-emerald-50 text-emerald-700",
       },
       {
-        label: "Direct Expense",
+        label: "COGS",
         value: report.totals?.grossExpense,
         accent: "bg-amber-50 text-amber-700",
       },
@@ -127,6 +120,11 @@ export default function ProfitLoss() {
         label: "Net Profit",
         value: report.totals?.netProfit,
         accent: "bg-indigo-50 text-indigo-700",
+      },
+      {
+        label: "Profit Margin %",
+        value: `${Number(report.totals?.profitMargin || 0).toFixed(2)}%`,
+        accent: "bg-fuchsia-50 text-fuchsia-700",
       },
     ],
     [report.totals]
@@ -202,10 +200,53 @@ export default function ProfitLoss() {
                     {card.label}
                   </div>
                   <p className="mt-4 text-2xl font-bold text-slate-900">
-                    {formatCurrencyAmount(card.value, selectedCompany)}
+                    {typeof card.value === "string"
+                      ? card.value
+                      : formatCurrencyAmount(card.value, selectedCompany)}
                   </p>
                 </article>
               ))}
+            </section>
+
+            <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Trading Account</h2>
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                  Formula based
+                </span>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Particulars</th>
+                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ["Sales", report.trading?.sales],
+                      ["Sales Return", report.trading?.salesReturns],
+                      ["Net Sales", report.trading?.netSales],
+                      ["Opening Stock", report.trading?.openingStock],
+                      ["Purchases", report.trading?.purchases],
+                      ["Purchase Return", report.trading?.purchaseReturns],
+                      ["Net Purchases", report.trading?.netPurchases],
+                      ["Closing Stock", report.trading?.closingStock],
+                      ["Cost of Goods Sold", report.trading?.costOfGoodsSold],
+                      ["Gross Profit", report.trading?.grossProfit],
+                    ].map(([label, value]) => (
+                      <tr key={label} className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-medium text-slate-800">{label}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                          {formatCurrencyAmount(value, selectedCompany)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             <section className="grid gap-6 xl:grid-cols-2">

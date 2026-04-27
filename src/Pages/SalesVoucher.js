@@ -1,138 +1,151 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import api from "../api/api";
-import { Trash2, FileText, Package } from "lucide-react";
+import VoucherWorkspace, {
+  VoucherPanel,
+  formatVoucherMoney,
+  renderBalance,
+} from "../Component/VoucherWorkspace";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
+
+const shortcutKeys = [
+  { key: "F5", label: "Payment" },
+  { key: "F6", label: "Receipt" },
+  { key: "F7", label: "Journal" },
+  { key: "F8", label: "Sales", active: true },
+  { key: "F9", label: "Purchase" },
+];
+
+const emptyRow = {
+  itemId: "",
+  actualQty: "1",
+  billedQty: "1",
+  rate: "",
+  discountPercent: "",
+};
 
 export default function SalesVoucher({ companyId }) {
   const [salesTypeId, setSalesTypeId] = useState("");
   const [salesLedgerId, setSalesLedgerId] = useState("");
   const [partyLedgers, setPartyLedgers] = useState([]);
+  const [salesLedgers, setSalesLedgers] = useState([]);
+  const [allLedgers, setAllLedgers] = useState([]);
   const [items, setItems] = useState([]);
-  const [customerPriceLevelId, setCustomerPriceLevelId] = useState(null);
+  const [priceLevels, setPriceLevels] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [companyCurrency, setCompanyCurrency] = useState({ symbol: "Rs" });
-
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().substring(0, 10),
+    date: new Date().toISOString().slice(0, 10),
     partyLedger: "",
+    salesLedger: "",
+    priceLevelId: "",
     narration: "",
-    rows: [
-      {
-        itemId: "",
-        qty: "1",
-        rate: "",
-        amount: "",
-        discountType: "fixed",
-        discountValue: "",
-      },
-    ],
+    discountAmount: "",
+    additionalCharges: "",
+    rows: [emptyRow],
   });
 
   useEffect(() => {
     if (!companyId) return;
-
     async function loadMasters() {
       setLoading(true);
       try {
-        const [vtypesRes, partyRes, itemsRes, defaultsRes, companiesRes] = await Promise.all([
+        const [
+          voucherResponse,
+          debtorResponse,
+          itemResponse,
+          defaultsResponse,
+          companyResponse,
+          balanceResponse,
+          salesLedgerResponse,
+          priceLevelResponse,
+        ] = await Promise.all([
           api.get(`/companies/${companyId}/voucher-types`),
           api.get(`/companies/${companyId}/ledgers/by-group?names=Sundry Debtors`),
           api.get(`/companies/${companyId}/items`),
           api.get(`/companies/${companyId}/ledgers/defaults`),
           api.get("/companies"),
+          api.get(`/companies/${companyId}/ledgers/with-balances`, { params: { to: form.date } }),
+          api.get(`/companies/${companyId}/ledgers/by-group?names=Sales Accounts`),
+          api.get(`/companies/${companyId}/price-levels`),
         ]);
 
-        const salesType = vtypesRes.data.find((v) => v.name.toLowerCase() === "sales");
+        const salesType = voucherResponse.data.find((row) => row.name.toLowerCase() === "sales");
+        const defaultSalesId = defaultsResponse.data.salesLedger?._id || "";
         setSalesTypeId(salesType?._id || "");
-        setSalesLedgerId(defaultsRes.data.salesLedger?._id || "");
-        setPartyLedgers(partyRes.data);
-        setItems(itemsRes.data);
-        const company = companiesRes.data.find((entry) => entry._id === companyId);
-        setCompanyCurrency(getCompanyCurrency(company));
-      } catch (err) {
-        alert("Failed to load master data");
+        setPartyLedgers(debtorResponse.data);
+        setItems(itemResponse.data);
+        setCompanies(companyResponse.data);
+        setAllLedgers(balanceResponse.data);
+        setSalesLedgers(salesLedgerResponse.data);
+        setPriceLevels(priceLevelResponse.data);
+        setSalesLedgerId(defaultSalesId);
+        setForm((prev) => ({
+          ...prev,
+          salesLedger: prev.salesLedger || defaultSalesId,
+        }));
+      } catch (error) {
+        alert("Failed to load sales master data");
       } finally {
         setLoading(false);
       }
     }
-
     loadMasters();
-  }, [companyId]);
-
-  useEffect(() => {
-    if (!form.partyLedger) {
-      setCustomerPriceLevelId(null);
-      return;
-    }
-    const ledger = partyLedgers.find((entry) => entry._id === form.partyLedger);
-    setCustomerPriceLevelId(ledger?.priceLevelId || null);
-  }, [form.partyLedger, partyLedgers]);
+  }, [companyId, form.date]);
 
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.map((row) => recalculateRowRate(row, prev.date)),
+      rows: prev.rows.map((row) => recalculateRow(row, prev.date, activePriceLevelId)),
     }));
-  }, [customerPriceLevelId]);
+  }, [form.partyLedger, form.priceLevelId, items.length]);
 
-  const calculateRowAmount = (row) => {
-    const qty = Number(row.qty || 0);
+  const company = companies.find((entry) => entry._id === companyId);
+  const currency = getCompanyCurrency(company);
+  const ledgerMap = useMemo(
+    () => new Map(allLedgers.map((ledger) => [ledger._id, ledger])),
+    [allLedgers]
+  );
+  const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
+  const partyLedger = ledgerMap.get(form.partyLedger) || partyLedgers.find((row) => row._id === form.partyLedger);
+  const activePriceLevelId = form.priceLevelId || partyLedger?.priceLevelId || "";
+  const salesLedger = ledgerMap.get(form.salesLedger || salesLedgerId);
+
+  const lineAmount = (row) => {
+    const qty = Number(row.billedQty || row.actualQty || 0);
     const rate = Number(row.rate || 0);
-    let amount = qty * rate;
-
-    if (row.discountValue) {
-      const value = Number(row.discountValue);
-      if (row.discountType === "percent") {
-        amount -= amount * (value / 100);
-      } else {
-        amount -= value;
-      }
-    }
-    return Number(amount.toFixed(2));
+    const gross = qty * rate;
+    const discount = (gross * Number(row.discountPercent || 0)) / 100;
+    return Number((gross - discount).toFixed(2));
   };
 
-  const recalculateRowRate = (row, voucherDate) => {
+  const recalculateRow = (row, voucherDate, priceLevelId) => {
     if (!row.itemId) return row;
-    const item = items.find((entry) => entry._id === row.itemId);
-    const rate = resolveItemRateByDate(item, customerPriceLevelId, voucherDate);
-    const next = { ...row, rate };
-    next.amount = calculateRowAmount(next);
-    return next;
+    const item = itemMap.get(row.itemId);
+    const rate = resolveItemRateByDate(item, priceLevelId || null, voucherDate);
+    return { ...row, rate };
   };
 
   const updateRow = (index, key, value) => {
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
-
-      if (key === "itemId" && value) {
-        rows[index] = recalculateRowRate(rows[index], prev.date);
-
-        if (index === rows.length - 1) {
-          rows.push({
-            itemId: "",
-            qty: "1",
-            rate: "",
-            amount: "",
-            discountType: "fixed",
-            discountValue: "",
-          });
-        }
-      } else {
-        rows[index].amount = calculateRowAmount(rows[index]);
+      if (key === "itemId") {
+        rows[index] = recalculateRow(rows[index], prev.date, activePriceLevelId);
       }
-
+      if (key === "actualQty" && !rows[index].billedQty) {
+        rows[index].billedQty = value;
+      }
       return { ...prev, rows };
     });
   };
 
-  const updateVoucherDate = (value) => {
+  const addRow = () => {
     setForm((prev) => ({
       ...prev,
-      date: value,
-      rows: prev.rows.map((row) => recalculateRowRate(row, value)),
+      rows: [...prev.rows, emptyRow],
     }));
   };
 
@@ -143,268 +156,373 @@ export default function SalesVoucher({ companyId }) {
     }));
   };
 
-  const validRows = form.rows.filter((row) => row.itemId);
-  const grandTotal = validRows
-    .reduce((sum, row) => sum + calculateRowAmount(row), 0)
-    .toFixed(2);
+  const updateDate = (value) => {
+    setForm((prev) => ({
+      ...prev,
+      date: value,
+      rows: prev.rows.map((row) => recalculateRow(row, value, activePriceLevelId)),
+    }));
+  };
+
+  const updatePriceLevel = (value) => {
+    setForm((prev) => ({
+      ...prev,
+      priceLevelId: value,
+      rows: prev.rows.map((row) => recalculateRow(row, prev.date, value || partyLedger?.priceLevelId)),
+    }));
+  };
+
+  const validRows = form.rows.filter((row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0);
+  const subtotal = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalDiscount = validRows.reduce((sum, row) => {
+    const qty = Number(row.billedQty || row.actualQty || 0);
+    const rate = Number(row.rate || 0);
+    return sum + (qty * rate * Number(row.discountPercent || 0)) / 100;
+  }, 0);
+  const invoiceDiscount = Number(form.discountAmount || 0);
+  const additionalCharges = Number(form.additionalCharges || 0);
+  const totalAmount = Number((subtotal - invoiceDiscount + additionalCharges).toFixed(2));
+  const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
+
+  const resetForm = () =>
+    setForm({
+      number: "",
+      date: new Date().toISOString().slice(0, 10),
+      partyLedger: "",
+      salesLedger: salesLedgerId,
+      priceLevelId: "",
+      narration: "",
+      discountAmount: "",
+      additionalCharges: "",
+      rows: [emptyRow],
+    });
 
   const save = async () => {
-    if (!form.partyLedger) return alert("Please select a Customer");
-    if (!salesLedgerId) return alert("Sales ledger is missing for this company");
+    if (!form.partyLedger) return alert("Please select a party account");
+    if (!form.salesLedger && !salesLedgerId) return alert("Sales ledger is missing for this company");
     if (validRows.length === 0) return alert("Please add at least one item");
 
     const inventoryLines = validRows.map((row) => {
-      const item = items.find((entry) => entry._id === row.itemId);
+      const item = itemMap.get(row.itemId);
       return {
         itemId: item._id,
         itemName: item.name,
-        qty: Number(row.qty),
+        qty: Number(row.billedQty || row.actualQty),
         rate: Number(row.rate),
-        discount: Number(row.discountValue || 0),
-        amount: Number(calculateRowAmount(row)),
+        discount: Number(row.discountPercent || 0),
+        amount: lineAmount(row),
         productSnapshot: { name: item.name, prices: item.prices },
       };
     });
 
-    const body = {
+    await api.post(`/companies/${companyId}/vouchers`, {
       voucherTypeId: salesTypeId,
       number: form.number,
       date: form.date,
-      narration: form.narration || "Sales Invoice",
+      narration: form.narration || "Sales Voucher",
       lines: [
-        { ledgerId: form.partyLedger, debit: Number(grandTotal), credit: 0 },
-        { ledgerId: salesLedgerId, debit: 0, credit: Number(grandTotal) },
+        { ledgerId: form.partyLedger, debit: totalAmount, credit: 0 },
+        { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: totalAmount },
       ],
       inventoryLines,
-    };
+    });
 
-    try {
-      await api.post(`/companies/${companyId}/vouchers`, body);
-      alert("Sales Invoice Saved Successfully!");
-
-      setForm({
-        number: "",
-        date: new Date().toISOString().substring(0, 10),
-        partyLedger: "",
-        narration: "",
-        rows: [
-          {
-            itemId: "",
-            qty: "1",
-            rate: "",
-            amount: "",
-            discountType: "fixed",
-            discountValue: "",
-          },
-        ],
-      });
-    } catch (err) {
-      alert(err.response?.data?.message || "Save failed");
-    }
+    alert("Sales voucher saved");
+    resetForm();
   };
 
   if (loading) {
-    return <div className="p-10 text-center text-gray-500">Loading sales form...</div>;
+    return <div className="p-10 text-center text-slate-500">Loading sales voucher...</div>;
   }
 
-  const isCustomerSelected = !!form.partyLedger;
-
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold flex items-center gap-3 text-gray-800">
-          <FileText className="w-8 h-8 text-green-600" />
-          Sales Voucher
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Voucher number is manual. Item rate now follows the voucher date and customer price level.
-        </p>
-      </div>
-
-      <div className="bg-white shadow-xl rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="p-6 bg-gradient-to-r from-green-600 to-emerald-700 text-white grid grid-cols-1 md:grid-cols-3 gap-6">
+    <VoucherWorkspace
+      title="Sales Voucher"
+      subtitle="Create item-wise sales invoices with party balances, price levels, and dated rates."
+      icon={FileText}
+      iconTone="bg-emerald-50 text-emerald-600"
+      onCancel={resetForm}
+      onSave={save}
+      onSaveDraft={() => alert("Draft support can be added next.")}
+      summaryTag="Sales Voucher"
+      summaryItems={[
+        { label: "Voucher No.", value: form.number || "-" },
+        { label: "Date", value: form.date },
+        { label: "Company", value: company?.name },
+        { label: "Party A/c", value: partyLedger?.name || "-" },
+        { label: "Sales Ledger", value: salesLedger?.name || "-" },
+      ]}
+      amountSummaryItems={[
+        { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
+        { label: "Discount", value: formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol) },
+        { label: "Additional Charges", value: formatVoucherMoney(additionalCharges, currency.symbol) },
+        {
+          label: "Total Amount",
+          value: formatVoucherMoney(totalAmount, currency.symbol),
+          tone: "text-emerald-600",
+          emphasis: true,
+        },
+      ]}
+      shortcuts={shortcutKeys}
+    >
+      <VoucherPanel title="Voucher Header">
+        <div className="grid gap-4 md:grid-cols-4">
           <div>
-            <label className="block text-sm opacity-90">Invoice No</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
-              className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full placeholder-white/70"
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
               value={form.number}
-              onChange={(e) => setForm({ ...form, number: e.target.value })}
-              placeholder="Enter invoice no"
+              onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
-
           <div>
-            <label className="block text-sm opacity-90">Date</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
             <input
               type="date"
-              className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full"
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
               value={form.date}
-              onChange={(e) => updateVoucherDate(e.target.value)}
+              onChange={(event) => updateDate(event.target.value)}
             />
           </div>
-
           <div>
-            <label className="block text-sm opacity-90">
-              Customer <span className="text-red-300">*</span>
-            </label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              {company?.name || "-"}
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Price Level</label>
             <select
-              className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full text-white"
-              value={form.partyLedger}
-              onChange={(e) => setForm({ ...form, partyLedger: e.target.value })}
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.priceLevelId}
+              onChange={(event) => updatePriceLevel(event.target.value)}
             >
-              <option value="" className="text-gray-800">Select Customer</option>
-              {partyLedgers.map((ledger) => (
-                <option key={ledger._id} value={ledger._id} className="text-gray-800">
-                  {ledger.name}
+              <option value="">Party Default / Not Applicable</option>
+              {priceLevels.map((level) => (
+                <option key={level._id} value={level._id}>
+                  {level.name || level.code}
                 </option>
               ))}
             </select>
           </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Party A/c Name</label>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.partyLedger}
+              onChange={(event) => setForm((prev) => ({ ...prev, partyLedger: event.target.value }))}
+            >
+              <option value="">Select customer</option>
+              {partyLedgers.map((ledger) => (
+                <option key={ledger._id} value={ledger._id}>
+                  {ledger.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Current Balance:{" "}
+              {partyLedger
+                ? renderBalance(
+                    partyLedger.currentBalanceAbs,
+                    partyLedger.currentBalanceSide,
+                    currency.symbol
+                  )
+                : "-"}
+            </p>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Sales Ledger</label>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.salesLedger}
+              onChange={(event) => setForm((prev) => ({ ...prev, salesLedger: event.target.value }))}
+            >
+              <option value="">Select sales ledger</option>
+              {salesLedgers.map((ledger) => (
+                <option key={ledger._id} value={ledger._id}>
+                  {ledger.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Current Balance:{" "}
+              {salesLedger
+                ? renderBalance(
+                    salesLedger.currentBalanceAbs,
+                    salesLedger.currentBalanceSide,
+                    currency.symbol
+                  )
+                : "-"}
+            </p>
+          </div>
+        </div>
+      </VoucherPanel>
+
+      <VoucherPanel title="Item Details">
+        <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">Item Name</th>
+                <th className="px-4 py-3 font-medium">Actual</th>
+                <th className="px-4 py-3 font-medium">Billed</th>
+                <th className="px-4 py-3 font-medium">Rate</th>
+                <th className="px-4 py-3 font-medium">Disc %</th>
+                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {form.rows.map((row, index) => {
+                const item = itemMap.get(row.itemId);
+                return (
+                  <tr key={index} className="border-t border-slate-100">
+                    <td className="px-4 py-4 text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4">
+                      <select
+                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        value={row.itemId}
+                        onChange={(event) => updateRow(index, "itemId", event.target.value)}
+                      >
+                        <option value="">Select item</option>
+                        {items.map((entry) => (
+                          <option key={entry._id} value={entry._id}>
+                            {entry.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Stock: {Number(item?.openingQty || item?.currentQty || 0).toLocaleString("en-IN")} pcs
+                      </p>
+                    </td>
+                    <td className="px-4 py-4">
+                      <input
+                        type="number"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        value={row.actualQty}
+                        onChange={(event) => updateRow(index, "actualQty", event.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-4">
+                      <input
+                        type="number"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        value={row.billedQty}
+                        onChange={(event) => updateRow(index, "billedQty", event.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-4">
+                      <input
+                        type="number"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        value={row.rate}
+                        onChange={(event) => updateRow(index, "rate", event.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-4">
+                      <input
+                        type="number"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        value={row.discountPercent}
+                        onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-right font-semibold text-slate-900">
+                      {formatVoucherMoney(lineAmount(row), currency.symbol)}
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      {form.rows.length > 1 ? (
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          onClick={() => removeRow(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        <div className="p-8">
-          <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-800">
-            <Package className="w-6 h-6 text-green-600" />
-            Sale Items
-          </h2>
+        <button
+          type="button"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          onClick={addRow}
+        >
+          <Plus className="h-4 w-4" />
+          Add New Item
+        </button>
+      </VoucherPanel>
 
-          {!isCustomerSelected && (
-            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-              <p className="text-lg font-medium">Please select a customer to begin</p>
-              <p className="text-sm mt-2">Rate will follow the selected voucher date and the customer price level.</p>
-            </div>
-          )}
-
-          {isCustomerSelected && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left p-4 font-semibold text-gray-700">Item</th>
-                    <th className="text-center p-4 w-32">Qty</th>
-                    <th className="text-center p-4 w-32">Rate</th>
-                    <th className="text-center p-4 w-40">Discount</th>
-                    <th className="text-right p-4 w-40">Amount</th>
-                    <th className="w-16"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.rows.map((row, index) => (
-                    <tr key={index} className="border-b hover:bg-gray-50 transition">
-                      <td className="p-4">
-                        <select
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-green-500"
-                          value={row.itemId}
-                          onChange={(e) => updateRow(index, "itemId", e.target.value)}
-                        >
-                          <option value="">Select Item</option>
-                          {items.map((item) => (
-                            <option key={item._id} value={item._id}>
-                              {item.name} {item.alias && `(${item.alias})`}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-
-                      <td className="p-4 text-center">
-                        <input
-                          type="number"
-                          min="1"
-                          className="w-24 text-center border border-gray-300 rounded-lg px-3 py-2"
-                          value={row.qty}
-                          onChange={(e) => updateRow(index, "qty", e.target.value)}
-                          disabled={!row.itemId}
-                        />
-                      </td>
-
-                      <td className="p-4 text-center">
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-28 text-center border border-gray-300 rounded-lg px-3 py-2"
-                          value={row.rate}
-                          onChange={(e) => updateRow(index, "rate", e.target.value)}
-                          disabled={!row.itemId}
-                        />
-                      </td>
-
-                      <td className="p-4">
-                        <div className="flex items-center gap-2 justify-center">
-                          <select
-                            className="border border-gray-300 rounded px-2 py-2 text-sm"
-                            value={row.discountType}
-                            onChange={(e) => updateRow(index, "discountType", e.target.value)}
-                            disabled={!row.itemId}
-                          >
-                            <option value="fixed">Rs</option>
-                            <option value="percent">%</option>
-                          </select>
-                          <input
-                            type="number"
-                            placeholder="0"
-                            className="w-24 border border-gray-300 rounded px-3 py-2 text-sm"
-                            value={row.discountValue}
-                            onChange={(e) => updateRow(index, "discountValue", e.target.value)}
-                            disabled={!row.itemId}
-                          />
-                        </div>
-                      </td>
-
-                      <td className="p-4 text-right font-semibold text-gray-800">
-                        {companyCurrency.symbol} {row.itemId ? calculateRowAmount(row).toFixed(2) : "0.00"}
-                      </td>
-
-                      <td className="p-4 text-center">
-                        {row.itemId && form.rows.length > 1 && (
-                          <button
-                            onClick={() => removeRow(index)}
-                            className="text-red-500 hover:bg-red-50 p-2 rounded-full transition"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {isCustomerSelected && validRows.length > 0 && (
-            <div className="mt-8 flex justify-end">
-              <div className="bg-green-50 border border-green-200 rounded-xl px-8 py-6 w-96">
-                <div className="flex justify-between text-2xl font-bold text-green-700">
-                  <span>Grand Total</span>
-                  <span>{companyCurrency.symbol} {grandTotal}</span>
-                </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <VoucherPanel title="Discount">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Discount Type</label>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Invoice Discount
               </div>
             </div>
-          )}
-
-          <div className="mt-8">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Narration (Optional)
-            </label>
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500"
-              rows="3"
-              placeholder="Sold to customer as per invoice..."
-              value={form.narration}
-              onChange={(e) => setForm({ ...form, narration: e.target.value })}
-            />
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
+              <input
+                type="number"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                value={form.discountAmount}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, discountAmount: event.target.value }))
+                }
+              />
+            </div>
           </div>
+        </VoucherPanel>
+        <VoucherPanel title="Additional Charges">
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
+          <input
+            type="number"
+            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            value={form.additionalCharges}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, additionalCharges: event.target.value }))
+            }
+          />
+        </VoucherPanel>
+      </div>
 
-          <div className="mt-10 text-right">
-            <button
-              onClick={save}
-              className="bg-gradient-to-r from-green-600 to-emerald-700 text-white font-bold px-12 py-4 rounded-xl hover:from-green-700 hover:to-emerald-800 transform hover:scale-105 transition shadow-lg text-lg"
-            >
-              Save Sales Invoice
-            </button>
+      <VoucherPanel title="Narration">
+        <textarea
+          className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          value={form.narration}
+          onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+          placeholder="Sold to customer as per invoice."
+        />
+      </VoucherPanel>
+
+      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 text-center">
+            <p className="text-sm text-slate-500">Total Quantity</p>
+            <p className="mt-2 text-3xl font-bold text-slate-900">{totalQty} pcs</p>
+          </div>
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-5 text-center">
+            <p className="text-sm text-rose-600">Total Discount</p>
+            <p className="mt-2 text-3xl font-bold text-rose-600">
+              {formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-5 text-center">
+            <p className="text-sm text-emerald-700">Total Amount Payable</p>
+            <p className="mt-2 text-4xl font-bold text-emerald-700">
+              {formatVoucherMoney(totalAmount, currency.symbol)}
+            </p>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </VoucherWorkspace>
   );
 }

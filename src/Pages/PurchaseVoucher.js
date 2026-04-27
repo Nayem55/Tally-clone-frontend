@@ -1,364 +1,426 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FileSpreadsheet, Plus, Trash2 } from "lucide-react";
 import api from "../api/api";
-import { Trash2, Calendar, FileText, Package, Building2 } from "lucide-react";
+import VoucherWorkspace, {
+  VoucherPanel,
+  formatVoucherMoney,
+  renderBalance,
+} from "../Component/VoucherWorkspace";
 import { resolveItemRateByDate } from "../utils/pricing";
+import { getCompanyCurrency } from "../utils/currency";
+
+const shortcutKeys = [
+  { key: "F5", label: "Payment" },
+  { key: "F6", label: "Receipt" },
+  { key: "F7", label: "Journal" },
+  { key: "F8", label: "Sales" },
+  { key: "F9", label: "Purchase", active: true },
+];
+
+const emptyRow = {
+  itemId: "",
+  actualQty: "1",
+  billedQty: "1",
+  rate: "",
+};
 
 export default function PurchaseVoucher({ companyId }) {
   const [purchaseTypeId, setPurchaseTypeId] = useState("");
+  const [suppliers, setSuppliers] = useState([]);
   const [purchaseLedgers, setPurchaseLedgers] = useState([]);
-  const [defaultPurchaseLedgerId, setDefaultPurchaseLedgerId] = useState("");
+  const [allLedgers, setAllLedgers] = useState([]);
   const [items, setItems] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [defaultPurchaseLedgerId, setDefaultPurchaseLedgerId] = useState("");
   const [loading, setLoading] = useState(true);
-
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().substring(0, 10),
+    date: new Date().toISOString().slice(0, 10),
     supplierInvoiceNo: "",
     supplierLedger: "",
     purchaseLedger: "",
     narration: "",
-    rows: [{ itemId: "", qty: "1", rate: "", amount: "" }],
+    rows: [emptyRow],
   });
 
   useEffect(() => {
     if (!companyId) return;
-
     async function loadMasters() {
       setLoading(true);
       try {
-        const [vtypesRes, creditorsRes, itemsRes, defaultsRes] = await Promise.all([
+        const [
+          voucherResponse,
+          supplierResponse,
+          itemResponse,
+          defaultsResponse,
+          companyResponse,
+          balanceResponse,
+          purchaseLedgerResponse,
+        ] = await Promise.all([
           api.get(`/companies/${companyId}/voucher-types`),
           api.get(`/companies/${companyId}/ledgers/by-group?names=Sundry Creditors`),
           api.get(`/companies/${companyId}/items`),
           api.get(`/companies/${companyId}/ledgers/defaults`),
+          api.get("/companies"),
+          api.get(`/companies/${companyId}/ledgers/with-balances`, { params: { to: form.date } }),
+          api.get(`/companies/${companyId}/ledgers/by-group?names=Purchase Accounts`),
         ]);
 
-        const purchaseType = vtypesRes.data.find(
-          (voucherType) => voucherType.name.toLowerCase() === "purchase"
+        const purchaseType = voucherResponse.data.find(
+          (row) => row.name.toLowerCase() === "purchase"
         );
+        const defaultPurchaseId = defaultsResponse.data.purchaseLedger?._id || "";
         setPurchaseTypeId(purchaseType?._id || "");
-        setPurchaseLedgers(creditorsRes.data);
-        setDefaultPurchaseLedgerId(defaultsRes.data.purchaseLedger?._id || "");
-        setItems(itemsRes.data);
-      } catch (err) {
-        alert("Failed to load master data");
+        setSuppliers(supplierResponse.data);
+        setItems(itemResponse.data);
+        setCompanies(companyResponse.data);
+        setAllLedgers(balanceResponse.data);
+        setPurchaseLedgers(purchaseLedgerResponse.data);
+        setDefaultPurchaseLedgerId(defaultPurchaseId);
+        setForm((prev) => ({
+          ...prev,
+          purchaseLedger: prev.purchaseLedger || defaultPurchaseId,
+        }));
+      } catch (error) {
+        alert("Failed to load purchase master data");
       } finally {
         setLoading(false);
       }
     }
     loadMasters();
-  }, [companyId]);
+  }, [companyId, form.date]);
+
+  const company = companies.find((entry) => entry._id === companyId);
+  const currency = getCompanyCurrency(company);
+  const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
+  const ledgerMap = useMemo(
+    () => new Map(allLedgers.map((ledger) => [ledger._id, ledger])),
+    [allLedgers]
+  );
+  const supplierLedger = ledgerMap.get(form.supplierLedger);
+  const purchaseLedger = ledgerMap.get(form.purchaseLedger || defaultPurchaseLedgerId);
+
+  const lineAmount = (row) =>
+    Number((Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0)).toFixed(2));
+
+  const recalculateRow = (row, voucherDate) => {
+    if (!row.itemId) return row;
+    const item = itemMap.get(row.itemId);
+    return {
+      ...row,
+      rate: resolveItemRateByDate(item, null, voucherDate),
+    };
+  };
 
   const updateRow = (index, key, value) => {
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
-
-      if (key === "itemId" && value) {
-        const item = items.find((entry) => entry._id === value);
-        rows[index].rate = resolveItemRateByDate(item, null, prev.date);
-
-        if (index === rows.length - 1) {
-          rows.push({ itemId: "", qty: "1", rate: "", amount: "" });
-        }
+      if (key === "itemId") {
+        rows[index] = recalculateRow(rows[index], prev.date);
       }
-
-      const qty = Number(rows[index].qty || 0);
-      const rate = Number(rows[index].rate || 0);
-      rows[index].amount = (qty * rate).toFixed(2);
-
+      if (key === "actualQty" && !rows[index].billedQty) {
+        rows[index].billedQty = value;
+      }
       return { ...prev, rows };
     });
   };
 
-  const updateVoucherDate = (value) => {
-    setForm((prev) => {
-      const rows = prev.rows.map((row) => {
-        if (!row.itemId) return row;
-        const item = items.find((entry) => entry._id === row.itemId);
-        const rate = resolveItemRateByDate(item, null, value);
-        return {
-          ...row,
-          rate,
-          amount: (Number(row.qty || 0) * Number(rate || 0)).toFixed(2),
-        };
-      });
-      return { ...prev, date: value, rows };
-    });
-  };
-
-  const removeRow = (index) => {
+  const addRow = () => setForm((prev) => ({ ...prev, rows: [...prev.rows, emptyRow] }));
+  const removeRow = (index) =>
     setForm((prev) => ({
       ...prev,
       rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
-  };
 
-  const validRows = form.rows.filter((row) => row.itemId && Number(row.qty) > 0);
-  const totalAmount = validRows
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0)
-    .toFixed(2);
+  const updateDate = (value) =>
+    setForm((prev) => ({
+      ...prev,
+      date: value,
+      rows: prev.rows.map((row) => recalculateRow(row, value)),
+    }));
+
+  const validRows = form.rows.filter((row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0);
+  const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
+
+  const resetForm = () =>
+    setForm({
+      number: "",
+      date: new Date().toISOString().slice(0, 10),
+      supplierInvoiceNo: "",
+      supplierLedger: "",
+      purchaseLedger: defaultPurchaseLedgerId,
+      narration: "",
+      rows: [emptyRow],
+    });
 
   const save = async () => {
-    if (!form.supplierLedger) return alert("Please select a Supplier");
-    if (!(form.purchaseLedger || defaultPurchaseLedgerId)) {
-      return alert("Purchase ledger is missing for this company");
-    }
+    if (!form.supplierLedger) return alert("Please select a supplier");
+    if (!form.purchaseLedger && !defaultPurchaseLedgerId) return alert("Purchase ledger is missing");
     if (validRows.length === 0) return alert("Please add at least one item");
 
     const inventoryLines = validRows.map((row) => {
-      const item = items.find((entry) => entry._id === row.itemId);
+      const item = itemMap.get(row.itemId);
       return {
         itemId: item._id,
         itemName: item.name,
-        alias: item.alias || "",
-        qty: Number(row.qty),
+        qty: Number(row.billedQty || row.actualQty),
         rate: Number(row.rate),
-        amount: Number(row.amount),
-        productSnapshot: {
-          name: item.name,
-          alias: item.alias,
-          groupId: item.groupId,
-          openingQty: item.openingQty,
-          openingRate: item.openingRate,
-          prices: item.prices,
-        },
+        amount: lineAmount(row),
+        productSnapshot: { name: item.name, prices: item.prices },
       };
     });
 
-    const fullNarration = form.supplierInvoiceNo
-      ? `Inv: ${form.supplierInvoiceNo} - ${form.narration}`
-      : form.narration;
-
-    const body = {
+    await api.post(`/companies/${companyId}/vouchers`, {
       voucherTypeId: purchaseTypeId,
       number: form.number,
       date: form.date,
-      narration: fullNarration || "Purchase Entry",
+      narration: form.narration || "Purchase Voucher",
       lines: [
-        {
-          ledgerId: form.purchaseLedger || defaultPurchaseLedgerId,
-          debit: Number(totalAmount),
-          credit: 0,
-        },
-        { ledgerId: form.supplierLedger, debit: 0, credit: Number(totalAmount) },
+        { ledgerId: form.purchaseLedger || defaultPurchaseLedgerId, debit: totalAmount, credit: 0 },
+        { ledgerId: form.supplierLedger, debit: 0, credit: totalAmount },
       ],
       inventoryLines,
-    };
-
-    try {
-      await api.post(`/companies/${companyId}/vouchers`, body);
-      alert("Purchase Voucher Saved Successfully!");
-
-      setForm({
-        number: "",
-        date: new Date().toISOString().substring(0, 10),
-        supplierInvoiceNo: "",
-        supplierLedger: "",
-        purchaseLedger: "",
-        narration: "",
-        rows: [{ itemId: "", qty: "1", rate: "", amount: "" }],
-      });
-    } catch (err) {
-      alert(err.response?.data?.message || "Error saving voucher");
-    }
+    });
+    alert("Purchase voucher saved");
+    resetForm();
   };
 
   if (loading) {
-    return <div className="p-10 text-center text-gray-500">Loading purchase form...</div>;
+    return <div className="p-10 text-center text-slate-500">Loading purchase voucher...</div>;
   }
 
-  const isSupplierSelected = !!form.supplierLedger;
-
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <FileText className="w-8 h-8 text-blue-600" />
-          Purchase Voucher
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Voucher number is manual. Item rate now follows the selected voucher date.
-        </p>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div>
-              <label className="block text-sm opacity-90">Voucher No</label>
-              <input
-                className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full placeholder-white/70"
-                value={form.number}
-                onChange={(e) => setForm({ ...form, number: e.target.value })}
-                placeholder="Enter voucher no"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm opacity-90">Date</label>
-              <div className="relative mt-2">
-                <Calendar className="absolute left-3 top-3.5 w-5 h-5 text-white/70" />
-                <input
-                  type="date"
-                  className="pl-12 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full"
-                  value={form.date}
-                  onChange={(e) => updateVoucherDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm opacity-90">Supplier Invoice No</label>
-              <input
-                className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full placeholder-white/70"
-                value={form.supplierInvoiceNo}
-                onChange={(e) => setForm({ ...form, supplierInvoiceNo: e.target.value })}
-                placeholder="Optional"
-              />
-            </div>
-
-            <div className="md:col-span-1">
-              <label className="block text-sm opacity-90">
-                Supplier <span className="text-red-300">*</span>
-              </label>
-              <select
-                className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full text-white"
-                value={form.supplierLedger}
-                onChange={(e) => setForm({ ...form, supplierLedger: e.target.value })}
-              >
-                <option value="" className="text-gray-800">Select Supplier</option>
-                {purchaseLedgers.map((ledger) => (
-                  <option key={ledger._id} value={ledger._id} className="text-gray-800">
-                    {ledger.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-8">
-          <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-800">
-            <Package className="w-6 h-6 text-blue-600" />
-            Purchase Items
-          </h2>
-
-          {!isSupplierSelected && (
-            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-              <Building2 className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <p className="text-lg font-medium">Please select a supplier first to start adding items</p>
-              <p className="text-sm mt-2">Rates follow the voucher date once an item is selected.</p>
-            </div>
-          )}
-
-          {isSupplierSelected && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left p-4 font-semibold text-gray-700">Item</th>
-                    <th className="text-center p-4 w-32">Qty</th>
-                    <th className="text-center p-4 w-32">Rate</th>
-                    <th className="text-right p-4 w-40">Amount</th>
-                    <th className="w-16"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.rows.map((row, index) => (
-                    <tr key={index} className="border-b hover:bg-gray-50 transition">
-                      <td className="p-4">
-                        <select
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500"
-                          value={row.itemId}
-                          onChange={(e) => updateRow(index, "itemId", e.target.value)}
-                        >
-                          <option value="">Select Item</option>
-                          {items.map((item) => (
-                            <option key={item._id} value={item._id}>
-                              {item.name} {item.alias && `(${item.alias})`}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-
-                      <td className="p-4 text-center">
-                        <input
-                          type="number"
-                          min="1"
-                          className="w-24 text-center border border-gray-300 rounded-lg px-3 py-2"
-                          value={row.qty}
-                          onChange={(e) => updateRow(index, "qty", e.target.value)}
-                          disabled={!row.itemId}
-                        />
-                      </td>
-
-                      <td className="p-4 text-center">
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-28 text-center border border-gray-300 rounded-lg px-3 py-2"
-                          value={row.rate}
-                          onChange={(e) => updateRow(index, "rate", e.target.value)}
-                          disabled={!row.itemId}
-                        />
-                      </td>
-
-                      <td className="p-4 text-right font-semibold text-gray-800">
-                        {row.itemId ? Number(row.amount || 0).toFixed(2) : "0.00"}
-                      </td>
-
-                      <td className="p-4 text-center">
-                        {row.itemId && form.rows.length > 1 && (
-                          <button
-                            onClick={() => removeRow(index)}
-                            className="text-red-500 hover:bg-red-50 p-2 rounded-full transition"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {isSupplierSelected && validRows.length > 0 && (
-            <div className="mt-8 flex justify-end">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-8 py-6 w-96">
-                <div className="flex justify-between text-2xl font-bold text-blue-700">
-                  <span>Grand Total</span>
-                  <span>{totalAmount}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-8">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Narration (Optional)
-            </label>
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500"
-              rows="3"
-              placeholder="Purchased from supplier as per bill..."
-              value={form.narration}
-              onChange={(e) => setForm({ ...form, narration: e.target.value })}
+    <VoucherWorkspace
+      title="Purchase Voucher"
+      subtitle="Capture supplier purchases with item-level quantities, rates, and voucher-wise balances."
+      icon={FileSpreadsheet}
+      iconTone="bg-blue-50 text-blue-600"
+      onCancel={resetForm}
+      onSave={save}
+      onSaveDraft={() => alert("Draft support can be added next.")}
+      summaryTag="Purchase Voucher"
+      summaryItems={[
+        { label: "Voucher No.", value: form.number || "-" },
+        { label: "Date", value: form.date },
+        { label: "Company", value: company?.name },
+        { label: "Supplier", value: supplierLedger?.name || "-" },
+        { label: "Purchase Ledger", value: purchaseLedger?.name || "-" },
+      ]}
+      amountSummaryItems={[
+        {
+          label: "Total Amount",
+          value: formatVoucherMoney(totalAmount, currency.symbol),
+          tone: "text-emerald-600",
+          emphasis: true,
+        },
+      ]}
+      shortcuts={shortcutKeys}
+    >
+      <VoucherPanel title="Voucher Header">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
+            <input
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.number}
+              onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
-
-          <div className="mt-10 text-right">
-            <button
-              onClick={save}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold px-12 py-4 rounded-xl hover:from-blue-700 hover:to-blue-800 transform hover:scale-105 transition shadow-lg text-lg"
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
+            <input
+              type="date"
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.date}
+              onChange={(event) => updateDate(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Supplier Invoice No.
+            </label>
+            <input
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.supplierInvoiceNo}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, supplierInvoiceNo: event.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              {company?.name || "-"}
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Supplier</label>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.supplierLedger}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, supplierLedger: event.target.value }))
+              }
             >
-              Save Purchase Voucher
-            </button>
+              <option value="">Select supplier</option>
+              {suppliers.map((ledger) => (
+                <option key={ledger._id} value={ledger._id}>
+                  {ledger.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Current Balance:{" "}
+              {supplierLedger
+                ? renderBalance(
+                    supplierLedger.currentBalanceAbs,
+                    supplierLedger.currentBalanceSide,
+                    currency.symbol
+                  )
+                : "-"}
+            </p>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Purchase Ledger</label>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              value={form.purchaseLedger}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, purchaseLedger: event.target.value }))
+              }
+            >
+              <option value="">Select purchase ledger</option>
+              {purchaseLedgers.map((ledger) => (
+                <option key={ledger._id} value={ledger._id}>
+                  {ledger.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Current Balance:{" "}
+              {purchaseLedger
+                ? renderBalance(
+                    purchaseLedger.currentBalanceAbs,
+                    purchaseLedger.currentBalanceSide,
+                    currency.symbol
+                  )
+                : "-"}
+            </p>
           </div>
         </div>
-      </div>
-    </div>
+      </VoucherPanel>
+
+      <VoucherPanel title="Item Details">
+        <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">Item Name</th>
+                <th className="px-4 py-3 font-medium">Actual</th>
+                <th className="px-4 py-3 font-medium">Billed</th>
+                <th className="px-4 py-3 font-medium">Rate</th>
+                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {form.rows.map((row, index) => (
+                <tr key={index} className="border-t border-slate-100">
+                  <td className="px-4 py-4 text-slate-500">{index + 1}</td>
+                  <td className="px-4 py-4">
+                    <select
+                      className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      value={row.itemId}
+                      onChange={(event) => updateRow(index, "itemId", event.target.value)}
+                    >
+                      <option value="">Select item</option>
+                      {items.map((entry) => (
+                        <option key={entry._id} value={entry._id}>
+                          {entry.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      type="number"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      value={row.actualQty}
+                      onChange={(event) => updateRow(index, "actualQty", event.target.value)}
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      type="number"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      value={row.billedQty}
+                      onChange={(event) => updateRow(index, "billedQty", event.target.value)}
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      type="number"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      value={row.rate}
+                      onChange={(event) => updateRow(index, "rate", event.target.value)}
+                    />
+                  </td>
+                  <td className="px-4 py-4 text-right font-semibold text-slate-900">
+                    {formatVoucherMoney(lineAmount(row), currency.symbol)}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    {form.rows.length > 1 ? (
+                      <button
+                        type="button"
+                        className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                        onClick={() => removeRow(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <button
+          type="button"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          onClick={addRow}
+        >
+          <Plus className="h-4 w-4" />
+          Add New Item
+        </button>
+      </VoucherPanel>
+
+      <VoucherPanel title="Narration">
+        <textarea
+          className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          value={form.narration}
+          onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+          placeholder="Purchased from supplier as per bill."
+        />
+      </VoucherPanel>
+
+      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 text-center">
+            <p className="text-sm text-slate-500">Total Quantity</p>
+            <p className="mt-2 text-3xl font-bold text-slate-900">{totalQty} pcs</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-5 text-center">
+            <p className="text-sm text-emerald-700">Total Amount</p>
+            <p className="mt-2 text-4xl font-bold text-emerald-700">
+              {formatVoucherMoney(totalAmount, currency.symbol)}
+            </p>
+          </div>
+        </div>
+      </section>
+    </VoucherWorkspace>
   );
 }
