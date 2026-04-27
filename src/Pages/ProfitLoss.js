@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BarChart3, CalendarRange } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { formatCurrencyAmount } from "../utils/currency";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -10,7 +11,7 @@ function formatAmount(value) {
   });
 }
 
-function ProfitLossTable({ title, rows, accent }) {
+function ProfitLossTable({ title, rows, accent, company }) {
   return (
     <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between">
@@ -35,7 +36,7 @@ function ProfitLossTable({ title, rows, accent }) {
                 <td className="px-4 py-3 font-medium text-slate-800">{row.ledgerName}</td>
                 <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                  {formatAmount(row.amount)}
+                  {formatCurrencyAmount(row.amount, company)}
                 </td>
               </tr>
             ))}
@@ -130,6 +131,7 @@ export default function ProfitLoss() {
     ],
     [report.totals]
   );
+  const selectedCompany = companies.find((company) => company._id === companyId);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -200,7 +202,7 @@ export default function ProfitLoss() {
                     {card.label}
                   </div>
                   <p className="mt-4 text-2xl font-bold text-slate-900">
-                    {formatAmount(card.value)}
+                    {formatCurrencyAmount(card.value, selectedCompany)}
                   </p>
                 </article>
               ))}
@@ -211,11 +213,13 @@ export default function ProfitLoss() {
                 title="Income"
                 rows={report.incomes || []}
                 accent="bg-emerald-50 text-emerald-700"
+                company={selectedCompany}
               />
               <ProfitLossTable
                 title="Expenses"
                 rows={report.expenses || []}
                 accent="bg-amber-50 text-amber-700"
+                company={selectedCompany}
               />
             </section>
           </>

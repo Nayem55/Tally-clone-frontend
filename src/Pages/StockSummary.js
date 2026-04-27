@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Boxes, PackageSearch } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { formatCurrencyAmount } from "../utils/currency";
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -50,6 +51,7 @@ export default function StockSummary() {
   }, [report.rows, search]);
 
   const totals = report.totals || {};
+  const selectedCompany = companies.find((company) => company._id === companyId);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -105,7 +107,7 @@ export default function StockSummary() {
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">Closing Value</p>
-            <p className="mt-2 text-3xl font-bold text-amber-700">{formatNumber(totals.closingValue)}</p>
+            <p className="mt-2 text-3xl font-bold text-amber-700">{formatCurrencyAmount(totals.closingValue, selectedCompany)}</p>
           </article>
         </section>
 
@@ -149,9 +151,9 @@ export default function StockSummary() {
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {formatNumber(row.closingQty)}
                     </td>
-                    <td className="px-4 py-3 text-right">{formatNumber(row.closingRate)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingRate, selectedCompany)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {formatNumber(row.closingValue)}
+                      {formatCurrencyAmount(row.closingValue, selectedCompany)}
                     </td>
                   </tr>
                 ))}

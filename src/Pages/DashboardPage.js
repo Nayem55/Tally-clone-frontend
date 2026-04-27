@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { formatCurrencyAmount } from "../utils/currency";
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -205,7 +206,7 @@ export default function DashboardPage() {
                     </div>
                     <p className="mt-4 text-sm font-medium text-slate-500">{tile.label}</p>
                     <p className="mt-1 text-2xl font-bold text-slate-900">
-                      {formatNumber(tile.value)}
+                      {formatCurrencyAmount(tile.value, selectedCompany)}
                     </p>
                   </article>
                 );

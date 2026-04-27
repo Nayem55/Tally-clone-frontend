@@ -12,11 +12,17 @@ export default function CompanyPicker({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!value && companies.length > 0) {
+      onChange(companies[0]._id);
+      setQuery(companies[0].name);
+      return;
+    }
+
     const selected = companies.find((company) => company._id === value);
     if (selected) {
       setQuery(selected.name);
     }
-  }, [companies, value]);
+  }, [companies, value, onChange]);
 
   const filteredCompanies = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

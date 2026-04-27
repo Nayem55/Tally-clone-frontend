@@ -8,8 +8,11 @@ const defaultForm = {
   name: "",
   alias: "",
   groupId: "",
+  stockCategoryId: "",
   stockCategory: "",
+  unitId: "",
   unitOfMeasure: "",
+  godownId: "",
   description: "",
   notes: "",
   picture: "",
@@ -31,6 +34,9 @@ export default function Items() {
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [stockGroups, setStockGroups] = useState([]);
+  const [stockCategories, setStockCategories] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [godowns, setGodowns] = useState([]);
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(defaultForm);
 
@@ -48,12 +54,19 @@ export default function Items() {
   async function loadData(selectedCompanyId = companyId) {
     if (!selectedCompanyId) return;
     await api.get(`/companies/${selectedCompanyId}/masters/overview`);
-    const [groupsResponse, itemResponse] = await Promise.all([
+    const [groupsResponse, itemResponse, categoryResponse, unitsResponse, godownResponse] =
+      await Promise.all([
       api.get(`/companies/${selectedCompanyId}/chart-of-accounts/stock-groups`),
       api.get(`/companies/${selectedCompanyId}/items`),
+      api.get(`/companies/${selectedCompanyId}/stock-categories`),
+      api.get(`/companies/${selectedCompanyId}/units`),
+      api.get(`/companies/${selectedCompanyId}/godowns`),
     ]);
     setStockGroups(groupsResponse.data.filter((row) => row.type === "group"));
     setItems(itemResponse.data);
+    setStockCategories(categoryResponse.data);
+    setUnits(unitsResponse.data);
+    setGodowns(godownResponse.data);
   }
 
   useEffect(() => {
@@ -65,26 +78,17 @@ export default function Items() {
     [form.openingQty, form.openingRate]
   );
 
-  const categoryOptions = useMemo(
-    () =>
-      [...new Set(items.map((item) => item.stockCategory).filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b)
-      ),
-    [items]
-  );
+  const categoryOptions = useMemo(() => stockCategories, [stockCategories]);
 
-  const unitOptions = useMemo(
-    () =>
-      [...new Set(items.map((item) => item.unitOfMeasure).filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b)
-      ),
-    [items]
-  );
+  const unitOptions = useMemo(() => units, [units]);
 
   async function saveItem() {
     const payload = {
       ...form,
       groupId: form.groupId,
+      stockCategoryId: form.stockCategoryId,
+      unitId: form.unitId,
+      godownId: form.godownId,
       openingQty: Number(form.openingQty || 0),
       openingRate: Number(form.openingRate || 0),
       openingValue,
@@ -169,28 +173,44 @@ export default function Items() {
                 <Plus className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex gap-2">
-              <input list="stock-categories" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Stock category" value={form.stockCategory} onChange={(event) => setForm((current) => ({ ...current, stockCategory: event.target.value }))} />
-              <button type="button" className="rounded-xl border border-slate-200 px-3 text-slate-600 hover:bg-slate-50">
-                <Plus className="h-4 w-4" />
-              </button>
-              <datalist id="stock-categories">
-                {categoryOptions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-            </div>
-            <div className="flex gap-2">
-              <input list="unit-options" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Unit of measure" value={form.unitOfMeasure} onChange={(event) => setForm((current) => ({ ...current, unitOfMeasure: event.target.value }))} />
-              <button type="button" className="rounded-xl border border-slate-200 px-3 text-slate-600 hover:bg-slate-50">
-                <Plus className="h-4 w-4" />
-              </button>
-              <datalist id="unit-options">
-                {unitOptions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-            </div>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={form.stockCategoryId}
+              onChange={(event) => {
+                const selected = categoryOptions.find((option) => option._id === event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  stockCategoryId: event.target.value,
+                  stockCategory: selected?.name || "",
+                }));
+              }}
+            >
+              <option value="">Select stock category</option>
+              {categoryOptions.map((option) => (
+                <option key={option._id} value={option._id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={form.unitId}
+              onChange={(event) => {
+                const selected = unitOptions.find((option) => option._id === event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  unitId: event.target.value,
+                  unitOfMeasure: selected?.name || "",
+                }));
+              }}
+            >
+              <option value="">Select unit</option>
+              {unitOptions.map((option) => (
+                <option key={option._id} value={option._id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
           </div>
         </section>
 
@@ -225,9 +245,21 @@ export default function Items() {
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">Opening Balance</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
             <input type="number" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Opening quantity" value={form.openingQty} onChange={(event) => setForm((current) => ({ ...current, openingQty: event.target.value }))} />
             <input type="number" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Opening rate" value={form.openingRate} onChange={(event) => setForm((current) => ({ ...current, openingRate: event.target.value }))} />
+            <select
+              className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={form.godownId}
+              onChange={(event) => setForm((current) => ({ ...current, godownId: event.target.value }))}
+            >
+              <option value="">Select default godown</option>
+              {godowns.map((godown) => (
+                <option key={godown._id} value={godown._id}>
+                  {godown.name}
+                </option>
+              ))}
+            </select>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               <p className="text-xs uppercase tracking-wide text-slate-400">Opening value</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
@@ -285,8 +317,8 @@ export default function Items() {
                   <tr key={item._id} className="border-t border-slate-100">
                     <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
                     <td className="px-4 py-3 text-slate-500">{item.group?.name || "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{item.stockCategory || "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{item.unitOfMeasure || "-"}</td>
+                    <td className="px-4 py-3 text-slate-500">{item.stockCategoryMaster?.name || item.stockCategory || "-"}</td>
+                    <td className="px-4 py-3 text-slate-500">{item.unitMaster?.name || item.unitOfMeasure || "-"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {Number(item.openingValue || 0).toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
@@ -304,8 +336,11 @@ export default function Items() {
                               name: item.name,
                               alias: item.alias || "",
                               groupId: item.groupId,
+                              stockCategoryId: item.stockCategoryId || item.stockCategoryMaster?._id || "",
                               stockCategory: item.stockCategory || "",
+                              unitId: item.unitId || item.unitMaster?._id || "",
                               unitOfMeasure: item.unitOfMeasure || "",
+                              godownId: item.godownId || item.godownMaster?._id || "",
                               description: item.description || "",
                               notes: item.notes || "",
                               picture: item.picture || "",

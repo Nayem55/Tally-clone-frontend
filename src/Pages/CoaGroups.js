@@ -14,6 +14,10 @@ export default function CoaGroups() {
     async function loadCompanies() {
       const res = await api.get("/companies");
       setCompanies(res.data);
+      if (res.data.length > 0) {
+        setCompanyId((current) => current || res.data[0]._id);
+        setSearchCompany((current) => current || res.data[0].name);
+      }
     }
     loadCompanies();
   }, []);

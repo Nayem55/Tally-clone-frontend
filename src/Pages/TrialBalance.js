@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, Scale } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { formatCurrencyAmount } from "../utils/currency";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -59,6 +60,7 @@ export default function TrialBalance() {
   }, [companyId, fromDate, toDate]);
 
   const summary = useMemo(() => report.totals || {}, [report.totals]);
+  const selectedCompany = companies.find((company) => company._id === companyId);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -117,13 +119,13 @@ export default function TrialBalance() {
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-slate-600">Debit</span>
               <span className="font-semibold text-slate-900">
-                {formatAmount(summary.openingDebit)}
+                {formatCurrencyAmount(summary.openingDebit, selectedCompany)}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-slate-600">Credit</span>
               <span className="font-semibold text-slate-900">
-                {formatAmount(summary.openingCredit)}
+                {formatCurrencyAmount(summary.openingCredit, selectedCompany)}
               </span>
             </div>
           </article>
@@ -133,13 +135,13 @@ export default function TrialBalance() {
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-slate-600">Debit</span>
               <span className="font-semibold text-slate-900">
-                {formatAmount(summary.debit)}
+                {formatCurrencyAmount(summary.debit, selectedCompany)}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-slate-600">Credit</span>
               <span className="font-semibold text-slate-900">
-                {formatAmount(summary.credit)}
+                {formatCurrencyAmount(summary.credit, selectedCompany)}
               </span>
             </div>
           </article>
@@ -149,13 +151,13 @@ export default function TrialBalance() {
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-slate-600">Debit</span>
               <span className="font-semibold text-slate-900">
-                {formatAmount(summary.closingDebit)}
+                {formatCurrencyAmount(summary.closingDebit, selectedCompany)}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-slate-600">Credit</span>
               <span className="font-semibold text-slate-900">
-                {formatAmount(summary.closingCredit)}
+                {formatCurrencyAmount(summary.closingCredit, selectedCompany)}
               </span>
             </div>
           </article>
@@ -190,12 +192,12 @@ export default function TrialBalance() {
                     <tr key={row.ledgerId} className="border-t border-slate-100">
                       <td className="px-4 py-3 font-medium text-slate-800">{row.ledgerName}</td>
                       <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(row.openingDebit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(row.openingCredit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(row.debit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(row.credit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(row.closingDebit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(row.closingCredit)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingDebit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingCredit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.debit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.credit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingDebit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingCredit, selectedCompany)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -206,12 +208,12 @@ export default function TrialBalance() {
                       <td className="px-4 py-3" colSpan={2}>
                         Totals
                       </td>
-                      <td className="px-4 py-3 text-right">{formatAmount(summary.openingDebit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(summary.openingCredit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(summary.debit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(summary.credit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(summary.closingDebit)}</td>
-                      <td className="px-4 py-3 text-right">{formatAmount(summary.closingCredit)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(summary.openingDebit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(summary.openingCredit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(summary.debit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(summary.credit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(summary.closingDebit, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(summary.closingCredit, selectedCompany)}</td>
                     </tr>
                   </tfoot>
                 )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/api";
 import { Trash2, FileText, Package } from "lucide-react";
 import { resolveItemRateByDate } from "../utils/pricing";
+import { getCompanyCurrency } from "../utils/currency";
 
 export default function SalesVoucher({ companyId }) {
   const [salesTypeId, setSalesTypeId] = useState("");
@@ -10,6 +11,7 @@ export default function SalesVoucher({ companyId }) {
   const [items, setItems] = useState([]);
   const [customerPriceLevelId, setCustomerPriceLevelId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [companyCurrency, setCompanyCurrency] = useState({ symbol: "Rs" });
 
   const [form, setForm] = useState({
     number: "",
@@ -34,11 +36,12 @@ export default function SalesVoucher({ companyId }) {
     async function loadMasters() {
       setLoading(true);
       try {
-        const [vtypesRes, partyRes, itemsRes, defaultsRes] = await Promise.all([
+        const [vtypesRes, partyRes, itemsRes, defaultsRes, companiesRes] = await Promise.all([
           api.get(`/companies/${companyId}/voucher-types`),
           api.get(`/companies/${companyId}/ledgers/by-group?names=Sundry Debtors`),
           api.get(`/companies/${companyId}/items`),
           api.get(`/companies/${companyId}/ledgers/defaults`),
+          api.get("/companies"),
         ]);
 
         const salesType = vtypesRes.data.find((v) => v.name.toLowerCase() === "sales");
@@ -46,6 +49,8 @@ export default function SalesVoucher({ companyId }) {
         setSalesLedgerId(defaultsRes.data.salesLedger?._id || "");
         setPartyLedgers(partyRes.data);
         setItems(itemsRes.data);
+        const company = companiesRes.data.find((entry) => entry._id === companyId);
+        setCompanyCurrency(getCompanyCurrency(company));
       } catch (err) {
         alert("Failed to load master data");
       } finally {
@@ -346,7 +351,7 @@ export default function SalesVoucher({ companyId }) {
                       </td>
 
                       <td className="p-4 text-right font-semibold text-gray-800">
-                        Rs {row.itemId ? calculateRowAmount(row).toFixed(2) : "0.00"}
+                        {companyCurrency.symbol} {row.itemId ? calculateRowAmount(row).toFixed(2) : "0.00"}
                       </td>
 
                       <td className="p-4 text-center">
@@ -371,7 +376,7 @@ export default function SalesVoucher({ companyId }) {
               <div className="bg-green-50 border border-green-200 rounded-xl px-8 py-6 w-96">
                 <div className="flex justify-between text-2xl font-bold text-green-700">
                   <span>Grand Total</span>
-                  <span>Rs {grandTotal}</span>
+                  <span>{companyCurrency.symbol} {grandTotal}</span>
                 </div>
               </div>
             </div>

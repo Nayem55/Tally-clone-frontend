@@ -13,7 +13,12 @@ export default function PriceLevels() {
   });
 
   useEffect(() => {
-    api.get("/companies").then(res => setCompanies(res.data));
+    api.get("/companies").then(res => {
+      setCompanies(res.data);
+      if (res.data.length > 0) {
+        setCompanyId((current) => current || res.data[0]._id);
+      }
+    });
   }, []);
 
   useEffect(() => {

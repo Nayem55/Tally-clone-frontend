@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { Building2, CalendarDays, PencilLine, Upload } from "lucide-react";
 import api from "../api/api";
 
+const defaultCurrencies = [
+  { code: "BDT", symbol: "TK", name: "Bangladeshi Taka", decimalPlaces: 2 },
+  { code: "INR", symbol: "Rs", name: "Indian Rupee", decimalPlaces: 2 },
+  { code: "USD", symbol: "$", name: "US Dollar", decimalPlaces: 2 },
+  { code: "EUR", symbol: "EUR", name: "Euro", decimalPlaces: 2 },
+];
+
 const defaultForm = {
   id: "",
   name: "",
@@ -20,6 +27,7 @@ const defaultForm = {
   email: "",
   website: "",
   division: "",
+  baseCurrencyCode: "BDT",
   baseCurrencySymbol: "TK",
   formalName: "Bangladeshi Taka",
   decimalPlaces: 2,
@@ -39,6 +47,7 @@ function toDateInput(value) {
 
 export default function CompanyList() {
   const [companies, setCompanies] = useState([]);
+  const [currencies, setCurrencies] = useState(defaultCurrencies);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
 
@@ -49,6 +58,31 @@ export default function CompanyList() {
 
   useEffect(() => {
     loadCompanies();
+  }, []);
+
+  useEffect(() => {
+    async function loadReferenceCurrencies() {
+      const allCompanies = await api.get("/companies");
+      const firstCompanyId = allCompanies.data?.[0]?._id;
+      if (!firstCompanyId) return;
+      try {
+        const response = await api.get(`/companies/${firstCompanyId}/currencies`);
+        if (response.data.length > 0) {
+          setCurrencies((current) => {
+            const merged = [...current];
+            response.data.forEach((currency) => {
+              if (!merged.some((entry) => entry.code === currency.code)) {
+                merged.push(currency);
+              }
+            });
+            return merged;
+          });
+        }
+      } catch (_error) {
+        // keep defaults when no company currencies exist yet
+      }
+    }
+    loadReferenceCurrencies();
   }, []);
 
   useEffect(() => {
@@ -93,6 +127,21 @@ export default function CompanyList() {
   }
 
   function applyCompany(company) {
+    if (
+      company.baseCurrencyCode &&
+      !currencies.some((currency) => currency.code === company.baseCurrencyCode)
+    ) {
+      setCurrencies((current) => [
+        ...current,
+        {
+          code: company.baseCurrencyCode,
+          symbol: company.baseCurrencySymbol,
+          name: company.formalName,
+          decimalPlaces: company.decimalPlaces || 2,
+        },
+      ]);
+    }
+
     setForm({
       ...defaultForm,
       ...company,
@@ -113,6 +162,17 @@ export default function CompanyList() {
       onChange: (event) =>
         setForm((current) => ({ ...current, [name]: event.target.value })),
     };
+  }
+
+  function applyCurrency(code) {
+    const selected = currencies.find((currency) => currency.code === code);
+    setForm((current) => ({
+      ...current,
+      baseCurrencyCode: selected?.code || code,
+      baseCurrencySymbol: selected?.symbol || current.baseCurrencySymbol,
+      formalName: selected?.name || current.formalName,
+      decimalPlaces: Number(selected?.decimalPlaces || current.decimalPlaces || 2),
+    }));
   }
 
   return (
@@ -186,6 +246,17 @@ export default function CompanyList() {
               <h2 className="text-lg font-semibold text-slate-900">Company Details</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Division" {...field("division", form.division)} />
+                <select
+                  className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  value={form.baseCurrencyCode}
+                  onChange={(event) => applyCurrency(event.target.value)}
+                >
+                  {currencies.map((currency) => (
+                    <option key={currency.code} value={currency.code}>
+                      {currency.code} - {currency.name}
+                    </option>
+                  ))}
+                </select>
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Base Currency Symbol" {...field("baseCurrencySymbol", form.baseCurrencySymbol)} />
                 <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Formal Name" {...field("formalName", form.formalName)} />
                 <select className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.decimalPlaces} onChange={(event) => setForm((current) => ({ ...current, decimalPlaces: Number(event.target.value) }))}>
