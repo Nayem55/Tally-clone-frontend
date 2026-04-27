@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import api from "../api/api";
 
 export default function ContraVoucher({ companyId }) {
-  const [voucherTypes, setVoucherTypes] = useState([]);
   const [contraTypeId, setContraTypeId] = useState("");
 
   const [ledgers, setLedgers] = useState([]);
@@ -25,7 +24,6 @@ export default function ContraVoucher({ companyId }) {
       const contra = vtypes.data.find(
         (v) => v.name.toLowerCase() === "contra"
       );
-      setVoucherTypes(vtypes.data);
       setContraTypeId(contra?._id || "");
 
       const l = await api.get(`/companies/${companyId}/ledgers`);
@@ -34,24 +32,6 @@ export default function ContraVoucher({ companyId }) {
 
     loadMasters();
   }, [companyId]);
-
-  // ---------------------- AUTO NUMBER ----------------------
-  useEffect(() => {
-    if (!companyId || !contraTypeId) return;
-
-    async function loadNextNumber() {
-      try {
-        const res = await api.get(
-          `/companies/${companyId}/vouchers/next-number?voucherTypeId=${contraTypeId}`
-        );
-        setForm((prev) => ({ ...prev, number: res.data.nextNumber }));
-      } catch (err) {
-        console.error("Failed to fetch next voucher number");
-      }
-    }
-
-    loadNextNumber();
-  }, [companyId, contraTypeId]);
 
   // ---------------------- SAVE VOUCHER ----------------------
   const save = async () => {
@@ -74,13 +54,9 @@ export default function ContraVoucher({ companyId }) {
       await api.post(`/companies/${companyId}/vouchers`, body);
       alert("Contra Voucher Saved!");
 
-      // Load new voucher number automatically after save
-      const nextNo = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${contraTypeId}`
-      );
       setForm((prev) => ({
         ...prev,
-        number: nextNo.data.nextNumber,
+        number: "",
         mainLedger: "",
         secondLedger: "",
         amount: "",
@@ -102,7 +78,9 @@ export default function ContraVoucher({ companyId }) {
           <input
             className="border p-2"
             value={form.number}
-            readOnly
+            onChange={(e) =>
+              setForm({ ...form, number: e.target.value })
+            }
           />
         </div>
 

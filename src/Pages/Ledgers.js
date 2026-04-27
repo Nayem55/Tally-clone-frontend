@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, PencilLine, Plus, Trash2 } from "lucide-react";
+import { BookOpen, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 
@@ -19,6 +19,7 @@ export default function Ledgers() {
   const [ledgers, setLedgers] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
   const [form, setForm] = useState(defaultForm);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function loadCompanies() {
@@ -34,11 +35,14 @@ export default function Ledgers() {
 
   async function loadMasters(selectedCompanyId = companyId) {
     if (!selectedCompanyId) return;
-    const overview = await api.get(`/companies/${selectedCompanyId}/masters/overview`);
+    const [overview, ledgerResponse, priceLevelResponse] = await Promise.all([
+      api.get(`/companies/${selectedCompanyId}/masters/overview`),
+      api.get(`/companies/${selectedCompanyId}/ledgers`),
+      api.get(`/companies/${selectedCompanyId}/price-levels`),
+    ]);
     setGroups(overview.data.groups);
-    setPriceLevels(overview.data.priceLevels);
-    const ledgerResponse = await api.get(`/companies/${selectedCompanyId}/ledgers`);
     setLedgers(ledgerResponse.data);
+    setPriceLevels(priceLevelResponse.data);
   }
 
   useEffect(() => {
@@ -48,6 +52,11 @@ export default function Ledgers() {
   const sortedGroups = useMemo(
     () => [...groups].sort((left, right) => left.name.localeCompare(right.name)),
     [groups]
+  );
+
+  const priceLevelById = useMemo(
+    () => new Map(priceLevels.map((level) => [String(level._id), level])),
+    [priceLevels]
   );
 
   async function saveLedger() {
@@ -73,6 +82,16 @@ export default function Ledgers() {
       alert(error.response?.data?.message || "Unable to save ledger");
     }
   }
+
+  const filteredLedgers = useMemo(
+    () =>
+      ledgers.filter((ledger) =>
+        `${ledger.name} ${ledger.group?.name || ""}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase())
+      ),
+    [ledgers, search]
+  );
 
   async function deleteLedger(ledgerId) {
     if (!window.confirm("Delete this ledger?")) return;
@@ -201,8 +220,17 @@ export default function Ledgers() {
           </article>
 
           <article className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
-            <div className="border-b border-slate-200 px-6 py-4">
+            <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
               <h2 className="text-lg font-semibold text-slate-900">Existing Ledgers</h2>
+              <div className="relative w-full max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-10 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Search ledger..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -216,7 +244,7 @@ export default function Ledgers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ledgers.map((ledger) => (
+                  {filteredLedgers.map((ledger) => (
                     <tr key={ledger._id} className="border-t border-slate-100">
                       <td className="px-4 py-3 font-medium text-slate-800">{ledger.name}</td>
                       <td className="px-4 py-3 text-slate-500">{ledger.group?.name || "-"}</td>
@@ -228,7 +256,8 @@ export default function Ledgers() {
                         {ledger.openingDrCr}
                       </td>
                       <td className="px-4 py-3 text-slate-500">
-                        {priceLevels.find((level) => level._id === ledger.priceLevelId)?.name ||
+                        {priceLevelById.get(String(ledger.priceLevelId))?.name ||
+                          priceLevelById.get(String(ledger.priceLevelId))?.code ||
                           "-"}
                       </td>
                       <td className="px-4 py-3">
@@ -263,9 +292,9 @@ export default function Ledgers() {
                 </tbody>
               </table>
 
-              {ledgers.length === 0 && (
+              {filteredLedgers.length === 0 && (
                 <div className="p-10 text-center text-sm text-slate-500">
-                  No ledgers found for this company yet.
+                  No ledgers matched this view.
                 </div>
               )}
             </div>

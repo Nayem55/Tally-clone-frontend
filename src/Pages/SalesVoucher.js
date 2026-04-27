@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
 import { Trash2, FileText, Package } from "lucide-react";
+import { resolveItemRateByDate } from "../utils/pricing";
 
 export default function SalesVoucher({ companyId }) {
   const [salesTypeId, setSalesTypeId] = useState("");
   const [salesLedgerId, setSalesLedgerId] = useState("");
-  const [partyLedgers, setPartyLedgers] = useState([]); // Customers (Sundry Debtors)
+  const [partyLedgers, setPartyLedgers] = useState([]);
   const [items, setItems] = useState([]);
   const [customerPriceLevelId, setCustomerPriceLevelId] = useState(null);
-  console.log(partyLedgers)
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
@@ -28,7 +28,6 @@ export default function SalesVoucher({ companyId }) {
     ],
   });
 
-  // Load master data
   useEffect(() => {
     if (!companyId) return;
 
@@ -53,72 +52,59 @@ export default function SalesVoucher({ companyId }) {
         setLoading(false);
       }
     }
+
     loadMasters();
   }, [companyId]);
 
-  // Auto voucher number
-  useEffect(() => {
-    if (!companyId || !salesTypeId) return;
-    api
-      .get(`/companies/${companyId}/vouchers/next-number?voucherTypeId=${salesTypeId}`)
-      .then((res) => setForm((prev) => ({ ...prev, number: res.data.nextNumber })));
-  }, [companyId, salesTypeId]);
-
-  // Update customer price level when party changes
   useEffect(() => {
     if (!form.partyLedger) {
       setCustomerPriceLevelId(null);
       return;
     }
-    const ledger = partyLedgers.find((l) => l._id === form.partyLedger);
+    const ledger = partyLedgers.find((entry) => entry._id === form.partyLedger);
     setCustomerPriceLevelId(ledger?.priceLevelId || null);
   }, [form.partyLedger, partyLedgers]);
 
-  // Get best price based on customer price level
-  const getBestPriceForCustomer = (item, priceLevelId) => {
-    if (!item) return 0;
-    if (priceLevelId) {
-      const match = item.prices?.find((p) => p.priceLevelId === priceLevelId);
-      if (match) return match.rate;
-    }
-    const mrp = item.prices?.find(
-      (p) => p.levelName?.toLowerCase() === "mrp" || p.label?.toLowerCase() === "mrp"
-    );
-    if (mrp) return mrp.rate;
-    if (item.openingRate) return item.openingRate;
-    if (item.prices?.length) return item.prices[0].rate;
-    return 0;
-  };
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      rows: prev.rows.map((row) => recalculateRowRate(row, prev.date)),
+    }));
+  }, [customerPriceLevelId]);
 
-  // Calculate row amount after discount
   const calculateRowAmount = (row) => {
     const qty = Number(row.qty || 0);
     const rate = Number(row.rate || 0);
     let amount = qty * rate;
 
     if (row.discountValue) {
-      const val = Number(row.discountValue);
+      const value = Number(row.discountValue);
       if (row.discountType === "percent") {
-        amount -= amount * (val / 100);
+        amount -= amount * (value / 100);
       } else {
-        amount -= val;
+        amount -= value;
       }
     }
     return Number(amount.toFixed(2));
   };
 
-  // Update row + auto-add new row on item select
+  const recalculateRowRate = (row, voucherDate) => {
+    if (!row.itemId) return row;
+    const item = items.find((entry) => entry._id === row.itemId);
+    const rate = resolveItemRateByDate(item, customerPriceLevelId, voucherDate);
+    const next = { ...row, rate };
+    next.amount = calculateRowAmount(next);
+    return next;
+  };
+
   const updateRow = (index, key, value) => {
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
 
       if (key === "itemId" && value) {
-        const item = items.find((i) => i._id === value);
-        const autoRate = getBestPriceForCustomer(item, customerPriceLevelId);
-        rows[index].rate = autoRate;
+        rows[index] = recalculateRowRate(rows[index], prev.date);
 
-        // Auto-add new empty row if this is the last filled row
         if (index === rows.length - 1) {
           rows.push({
             itemId: "",
@@ -129,40 +115,48 @@ export default function SalesVoucher({ companyId }) {
             discountValue: "",
           });
         }
+      } else {
+        rows[index].amount = calculateRowAmount(rows[index]);
       }
 
-      rows[index].amount = calculateRowAmount(rows[index]);
       return { ...prev, rows };
     });
   };
 
-  // Remove row
-  const removeRow = (index) => {
+  const updateVoucherDate = (value) => {
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.filter((_, i) => i !== index),
+      date: value,
+      rows: prev.rows.map((row) => recalculateRowRate(row, value)),
     }));
   };
 
-  // Only valid rows (with item selected)
-  const validRows = form.rows.filter((r) => r.itemId);
-  const grandTotal = validRows.reduce((sum, r) => sum + calculateRowAmount(r), 0).toFixed(2);
+  const removeRow = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
+    }));
+  };
 
-  // Save voucher
+  const validRows = form.rows.filter((row) => row.itemId);
+  const grandTotal = validRows
+    .reduce((sum, row) => sum + calculateRowAmount(row), 0)
+    .toFixed(2);
+
   const save = async () => {
     if (!form.partyLedger) return alert("Please select a Customer");
     if (!salesLedgerId) return alert("Sales ledger is missing for this company");
     if (validRows.length === 0) return alert("Please add at least one item");
 
-    const inventoryLines = validRows.map((r) => {
-      const item = items.find((i) => i._id === r.itemId);
+    const inventoryLines = validRows.map((row) => {
+      const item = items.find((entry) => entry._id === row.itemId);
       return {
         itemId: item._id,
         itemName: item.name,
-        qty: Number(r.qty),
-        rate: Number(r.rate),
-        discount: Number(r.discountValue || 0),
-        amount: Number(r.amount),
+        qty: Number(row.qty),
+        rate: Number(row.rate),
+        discount: Number(row.discountValue || 0),
+        amount: Number(calculateRowAmount(row)),
         productSnapshot: { name: item.name, prices: item.prices },
       };
     });
@@ -173,9 +167,7 @@ export default function SalesVoucher({ companyId }) {
       date: form.date,
       narration: form.narration || "Sales Invoice",
       lines: [
-        // Customer (Party) → Debited
         { ledgerId: form.partyLedger, debit: Number(grandTotal), credit: 0 },
-        // Sales Ledger (Fixed) → Credited
         { ledgerId: salesLedgerId, debit: 0, credit: Number(grandTotal) },
       ],
       inventoryLines,
@@ -185,12 +177,8 @@ export default function SalesVoucher({ companyId }) {
       await api.post(`/companies/${companyId}/vouchers`, body);
       alert("Sales Invoice Saved Successfully!");
 
-      const next = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${salesTypeId}`
-      );
-
       setForm({
-        number: next.data.nextNumber,
+        number: "",
         date: new Date().toISOString().substring(0, 10),
         partyLedger: "",
         narration: "",
@@ -218,24 +206,25 @@ export default function SalesVoucher({ companyId }) {
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-3 text-gray-800">
           <FileText className="w-8 h-8 text-green-600" />
           Sales Voucher
         </h1>
-        <p className="text-gray-600 mt-1">Customer debited • Sales account credited automatically</p>
+        <p className="text-gray-600 mt-1">
+          Voucher number is manual. Item rate now follows the voucher date and customer price level.
+        </p>
       </div>
 
       <div className="bg-white shadow-xl rounded-2xl border border-gray-200 overflow-hidden">
-        {/* Top Bar */}
         <div className="p-6 bg-gradient-to-r from-green-600 to-emerald-700 text-white grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm opacity-90">Invoice No</label>
             <input
               className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full placeholder-white/70"
               value={form.number}
-              readOnly
+              onChange={(e) => setForm({ ...form, number: e.target.value })}
+              placeholder="Enter invoice no"
             />
           </div>
 
@@ -245,7 +234,7 @@ export default function SalesVoucher({ companyId }) {
               type="date"
               className="mt-2 bg-white/20 border border-white/30 rounded-lg px-4 py-3 w-full"
               value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              onChange={(e) => updateVoucherDate(e.target.value)}
             />
           </div>
 
@@ -259,16 +248,15 @@ export default function SalesVoucher({ companyId }) {
               onChange={(e) => setForm({ ...form, partyLedger: e.target.value })}
             >
               <option value="" className="text-gray-800">Select Customer</option>
-              {partyLedgers.map((l) => (
-                <option key={l._id} value={l._id} className="text-gray-800">
-                  {l.name}
+              {partyLedgers.map((ledger) => (
+                <option key={ledger._id} value={ledger._id} className="text-gray-800">
+                  {ledger.name}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Items Section */}
         <div className="p-8">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-800">
             <Package className="w-6 h-6 text-green-600" />
@@ -278,7 +266,7 @@ export default function SalesVoucher({ companyId }) {
           {!isCustomerSelected && (
             <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
               <p className="text-lg font-medium">Please select a customer to begin</p>
-              <p className="text-sm mt-2">Auto pricing based on customer price level • Sales A/c credited automatically</p>
+              <p className="text-sm mt-2">Rate will follow the selected voucher date and the customer price level.</p>
             </div>
           )}
 
@@ -296,18 +284,18 @@ export default function SalesVoucher({ companyId }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {form.rows.map((row, i) => (
-                    <tr key={i} className="border-b hover:bg-gray-50 transition">
+                  {form.rows.map((row, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50 transition">
                       <td className="p-4">
                         <select
                           className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-green-500"
                           value={row.itemId}
-                          onChange={(e) => updateRow(i, "itemId", e.target.value)}
+                          onChange={(e) => updateRow(index, "itemId", e.target.value)}
                         >
                           <option value="">Select Item</option>
-                          {items.map((it) => (
-                            <option key={it._id} value={it._id}>
-                              {it.name} {it.alias && `(${it.alias})`}
+                          {items.map((item) => (
+                            <option key={item._id} value={item._id}>
+                              {item.name} {item.alias && `(${item.alias})`}
                             </option>
                           ))}
                         </select>
@@ -319,7 +307,7 @@ export default function SalesVoucher({ companyId }) {
                           min="1"
                           className="w-24 text-center border border-gray-300 rounded-lg px-3 py-2"
                           value={row.qty}
-                          onChange={(e) => updateRow(i, "qty", e.target.value)}
+                          onChange={(e) => updateRow(index, "qty", e.target.value)}
                           disabled={!row.itemId}
                         />
                       </td>
@@ -330,7 +318,7 @@ export default function SalesVoucher({ companyId }) {
                           step="0.01"
                           className="w-28 text-center border border-gray-300 rounded-lg px-3 py-2"
                           value={row.rate}
-                          onChange={(e) => updateRow(i, "rate", e.target.value)}
+                          onChange={(e) => updateRow(index, "rate", e.target.value)}
                           disabled={!row.itemId}
                         />
                       </td>
@@ -340,10 +328,10 @@ export default function SalesVoucher({ companyId }) {
                           <select
                             className="border border-gray-300 rounded px-2 py-2 text-sm"
                             value={row.discountType}
-                            onChange={(e) => updateRow(i, "discountType", e.target.value)}
+                            onChange={(e) => updateRow(index, "discountType", e.target.value)}
                             disabled={!row.itemId}
                           >
-                            <option value="fixed">₹</option>
+                            <option value="fixed">Rs</option>
                             <option value="percent">%</option>
                           </select>
                           <input
@@ -351,20 +339,20 @@ export default function SalesVoucher({ companyId }) {
                             placeholder="0"
                             className="w-24 border border-gray-300 rounded px-3 py-2 text-sm"
                             value={row.discountValue}
-                            onChange={(e) => updateRow(i, "discountValue", e.target.value)}
+                            onChange={(e) => updateRow(index, "discountValue", e.target.value)}
                             disabled={!row.itemId}
                           />
                         </div>
                       </td>
 
                       <td className="p-4 text-right font-semibold text-gray-800">
-                        ₹{row.itemId ? calculateRowAmount(row).toFixed(2) : "0.00"}
+                        Rs {row.itemId ? calculateRowAmount(row).toFixed(2) : "0.00"}
                       </td>
 
                       <td className="p-4 text-center">
                         {row.itemId && form.rows.length > 1 && (
                           <button
-                            onClick={() => removeRow(i)}
+                            onClick={() => removeRow(index)}
                             className="text-red-500 hover:bg-red-50 p-2 rounded-full transition"
                           >
                             <Trash2 className="w-5 h-5" />
@@ -378,19 +366,17 @@ export default function SalesVoucher({ companyId }) {
             </div>
           )}
 
-          {/* Grand Total */}
           {isCustomerSelected && validRows.length > 0 && (
             <div className="mt-8 flex justify-end">
               <div className="bg-green-50 border border-green-200 rounded-xl px-8 py-6 w-96">
                 <div className="flex justify-between text-2xl font-bold text-green-700">
                   <span>Grand Total</span>
-                  <span>₹{grandTotal}</span>
+                  <span>Rs {grandTotal}</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Narration */}
           <div className="mt-8">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Narration (Optional)
@@ -404,7 +390,6 @@ export default function SalesVoucher({ companyId }) {
             />
           </div>
 
-          {/* Save Button */}
           <div className="mt-10 text-right">
             <button
               onClick={save}

@@ -15,9 +15,9 @@ import {
   Layers,
   Tag,
   DollarSign,
+  PenSquare,
 } from "lucide-react";
 
-// Helper to safely check if any child link is active
 const hasActiveChild = (children, location) => {
   return React.Children.toArray(children).some((child) => {
     if (React.isValidElement(child) && child.props && child.props.to) {
@@ -38,11 +38,11 @@ function MenuSection({ title, icon: Icon, children }) {
     <div className="text-slate-700">
       <button
         onClick={() => setManuallyOpen(!manuallyOpen)}
-        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-all
-          ${isChildActive 
-            ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-200" 
+        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-all ${
+          isChildActive
+            ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-200"
             : "hover:bg-slate-100/80"
-          }`}
+        }`}
       >
         <div className="flex items-center gap-3">
           <Icon size={18} className={isChildActive ? "text-blue-600" : "text-slate-500"} />
@@ -87,10 +87,7 @@ export default function Sidebar() {
     }`;
 
   return (
-    // Key Fix: sticky + top-0 + h-screen → perfect sticky sidebar
     <div className="w-72 h-screen bg-white border-r border-slate-200 shadow-xl flex flex-col sticky top-0 z-50">
-      
-      {/* Header - Always visible */}
       <div className="p-6 border-b border-slate-200 bg-white">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -103,10 +100,8 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Scrollable Navigation Area */}
       <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
         <nav className="space-y-1">
-
           <Link to="/" className={linkClass("/")}>
             <Home size={20} />
             <span>Dashboard</span>
@@ -134,16 +129,30 @@ export default function Sidebar() {
           </Link>
 
           <MenuSection title="Chart of Accounts" icon={Layers}>
-            <Link to="/coa/groups" className={subLinkClass("/coa/groups")}>Groups</Link>
-            <Link to="/coa/ledgers" className={subLinkClass("/coa/ledgers")}>Ledgers</Link>
-            <Link to="/coa/stock-items" className={subLinkClass("/coa/stock-items")}>Stock Items</Link>
-            <Link to="/coa/stock-groups" className={subLinkClass("/coa/stock-groups")}>Stock Groups</Link>
+            <Link to="/coa/groups" className={subLinkClass("/coa/groups")}>
+              Groups
+            </Link>
+            <Link to="/coa/ledgers" className={subLinkClass("/coa/ledgers")}>
+              Ledgers
+            </Link>
+            <Link to="/coa/stock-items" className={subLinkClass("/coa/stock-items")}>
+              Stock Items
+            </Link>
+            <Link to="/coa/stock-groups" className={subLinkClass("/coa/stock-groups")}>
+              Stock Groups
+            </Link>
           </MenuSection>
 
           <MenuSection title="Inventory" icon={Package}>
-            <Link to="/items" className={subLinkClass("/items")}>Create Item</Link>
-            <Link to="/alter-item" className={subLinkClass("/alter-item")}>Alter Item Prices</Link>
-            <Link to="/stock-summary" className={subLinkClass("/stock-summary")}>Stock Summary</Link>
+            <Link to="/items" className={subLinkClass("/items")}>
+              Create Item
+            </Link>
+            <Link to="/alter-item" className={subLinkClass("/alter-item")}>
+              Alter Item Prices
+            </Link>
+            <Link to="/stock-summary" className={subLinkClass("/stock-summary")}>
+              Stock Summary
+            </Link>
           </MenuSection>
 
           <div className="pt-6 pb-2">
@@ -154,7 +163,12 @@ export default function Sidebar() {
 
           <Link to="/vouchers" className={linkClass("/vouchers")}>
             <FileText size={20} />
-            <span>Vouchers</span>
+            <span>Voucher Register</span>
+          </Link>
+
+          <Link to="/voucher-entry" className={linkClass("/voucher-entry")}>
+            <PenSquare size={20} />
+            <span>Voucher Entry</span>
           </Link>
 
           <Link to="/purchase" className={linkClass("/purchase")}>
@@ -178,17 +192,20 @@ export default function Sidebar() {
             <span>Trial Balance</span>
           </Link>
 
+          <Link to="/profit-loss" className={linkClass("/profit-loss")}>
+            <BarChart3 size={20} />
+            <span>Profit &amp; Loss</span>
+          </Link>
+
           <Link to="/pricelevel" className={linkClass("/pricelevel")}>
             <Tag size={20} />
             <span>Price Levels</span>
           </Link>
-
         </nav>
       </div>
 
-      {/* Optional: Footer (pinned at bottom) */}
       <div className="p-4 border-t border-slate-200 bg-slate-50 text-xs text-slate-500">
-        <p>© 2025 AccuBooks</p>
+        <p>&copy; 2025 AccuBooks</p>
         <p className="mt-1">Version 2.1.0</p>
       </div>
     </div>

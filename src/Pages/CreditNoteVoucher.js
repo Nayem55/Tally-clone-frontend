@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
+import { resolveItemRateByDate } from "../utils/pricing";
 
 export default function CreditNoteVoucher({ companyId }) {
   const [creditTypeId, setCreditTypeId] = useState("");
@@ -41,26 +42,15 @@ export default function CreditNoteVoucher({ companyId }) {
     loadMasters();
   }, [companyId]);
 
-  // -------- AUTO NUMBER --------
-  useEffect(() => {
-    if (!companyId || !creditTypeId) return;
-
-    async function loadNo() {
-      try {
-        const res = await api.get(
-          `/companies/${companyId}/vouchers/next-number?voucherTypeId=${creditTypeId}`
-        );
-        setForm((prev) => ({ ...prev, number: res.data.nextNumber || "" }));
-      } catch {}
-    }
-
-    loadNo();
-  }, [companyId, creditTypeId]);
-
   // -------- ROW HANDLER --------
   const updateRow = (i, key, value) => {
     const rows = [...form.rows];
     rows[i][key] = value;
+
+    if (key === "itemId" && value) {
+      const item = items.find((entry) => entry._id === value);
+      rows[i].rate = resolveItemRateByDate(item, null, form.date);
+    }
 
     if (key === "qty" || key === "rate") {
       const q = Number(rows[i].qty || 0);
@@ -69,6 +59,20 @@ export default function CreditNoteVoucher({ companyId }) {
     }
 
     setForm({ ...form, rows });
+  };
+
+  const updateVoucherDate = (value) => {
+    const rows = form.rows.map((row) => {
+      if (!row.itemId) return row;
+      const item = items.find((entry) => entry._id === row.itemId);
+      const rate = resolveItemRateByDate(item, null, value);
+      return {
+        ...row,
+        rate,
+        amount: (Number(row.qty || 0) * Number(rate || 0)).toFixed(2),
+      };
+    });
+    setForm({ ...form, date: value, rows });
   };
 
   const addRow = () => {
@@ -151,9 +155,7 @@ export default function CreditNoteVoucher({ companyId }) {
             type="date"
             className="border p-2 w-40"
             value={form.date}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, date: e.target.value }))
-            }
+            onChange={(e) => updateVoucherDate(e.target.value)}
           />
         </div>
       </div>

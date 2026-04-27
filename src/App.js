@@ -3,6 +3,7 @@ import CompanyList from "./Pages/CompanyList";
 import Groups from "./Pages/Groups";
 import Ledgers from "./Pages/Ledgers";
 import VoucherList from "./Pages/VoucherList";
+import VoucherRegister from "./Pages/VoucherRegister";
 import VoucherCreate from "./Pages/VoucherCreate";
 import TrialBalance from "./Pages/TrialBalance";
 import DashboardPage from "./Pages/DashboardPage";
@@ -16,12 +17,12 @@ import CoaStockGroups from "./Pages/CoaStockGroups";
 import PriceLevels from "./Pages/PriceLevels";
 import AlterItemPrices from "./Pages/AlterItemPrices";
 import StockSummary from "./Pages/StockSummary";
-
+import ProfitLoss from "./Pages/ProfitLoss";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Navbar/>
+      <Navbar />
       <div className="flex">
         <Sidebar />
         <div className="flex-1 bg-gray-50 min-h-screen">
@@ -33,11 +34,13 @@ export default function App() {
             <Route path="/alter-item" element={<AlterItemPrices />} />
             <Route path="/stock-summary" element={<StockSummary />} />
             <Route path="/ledgers" element={<Ledgers />} />
-            <Route path="/vouchers" element={<VoucherList />} />
+            <Route path="/vouchers" element={<VoucherRegister />} />
+            <Route path="/voucher-entry" element={<VoucherList />} />
             <Route path="/voucher-create" element={<VoucherCreate />} />
             <Route path="/purchase" element={<VoucherList initialVoucherName="Purchase" />} />
             <Route path="/sales" element={<VoucherList initialVoucherName="Sales" />} />
             <Route path="/trial-balance" element={<TrialBalance />} />
+            <Route path="/profit-loss" element={<ProfitLoss />} />
             <Route path="/coa/groups" element={<CoaGroups />} />
             <Route path="/coa/ledgers" element={<CoaLedgers />} />
             <Route path="/coa/stock-items" element={<CoaStockItems />} />

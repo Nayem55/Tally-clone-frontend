@@ -33,20 +33,6 @@ export default function ReceiptVoucher({ companyId }) {
     loadMasters();
   }, [companyId]);
 
-  // ---------------- AUTO VOUCHER NUMBER ----------------
-  useEffect(() => {
-    if (!companyId || !receiptTypeId) return;
-
-    async function loadNext() {
-      const res = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${receiptTypeId}`
-      );
-      setForm(prev => ({ ...prev, number: res.data.nextNumber }));
-    }
-
-    loadNext();
-  }, [companyId, receiptTypeId]);
-
   // ---------------- ADD ROW ----------------
   const addCreditRow = () => {
     setForm(prev => ({
@@ -102,13 +88,8 @@ export default function ReceiptVoucher({ companyId }) {
       await api.post(`/companies/${companyId}/vouchers`, body);
       alert("Receipt Voucher Saved!");
 
-      // Reset + Load next number
-      const next = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${receiptTypeId}`
-      );
-
       setForm({
-        number: next.data.nextNumber,
+        number: "",
         date: new Date().toISOString().substring(0, 10),
         receiptLedger: "",
         narration: "",
@@ -127,7 +108,11 @@ export default function ReceiptVoucher({ companyId }) {
       <div className="flex gap-4 mb-4">
         <div>
           <label>Voucher No</label>
-          <input className="border p-2" value={form.number} readOnly />
+          <input
+            className="border p-2"
+            value={form.number}
+            onChange={e => setForm({ ...form, number: e.target.value })}
+          />
         </div>
         <div>
           <label>Date</label>

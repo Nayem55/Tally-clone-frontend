@@ -31,20 +31,6 @@ export default function JournalVoucher({ companyId }) {
     loadMasters();
   }, [companyId]);
 
-  // ---------------- AUTO VOUCHER NO ----------------
-  useEffect(() => {
-    if (!companyId || !journalTypeId) return;
-
-    async function loadNext() {
-      const res = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${journalTypeId}`
-      );
-      setForm((prev) => ({ ...prev, number: res.data.nextNumber }));
-    }
-
-    loadNext();
-  }, [companyId, journalTypeId]);
-
   // ---------------- ADD ROW HANDLERS ----------------
   const addDebitRow = () => {
     setForm((prev) => ({
@@ -123,13 +109,8 @@ export default function JournalVoucher({ companyId }) {
       await api.post(`/companies/${companyId}/vouchers`, body);
       alert("Journal Voucher Saved!");
 
-      // Reset form + load next number
-      const next = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${journalTypeId}`
-      );
-
       setForm({
-        number: next.data.nextNumber,
+        number: "",
         date: new Date().toISOString().substring(0, 10),
         narration: "",
         debitLines: [{ ledgerId: "", amount: "" }],
@@ -148,7 +129,13 @@ export default function JournalVoucher({ companyId }) {
       <div className="flex gap-4 mb-4">
         <div>
           <label>Voucher No</label>
-          <input className="border p-2" value={form.number} readOnly />
+          <input
+            className="border p-2"
+            value={form.number}
+            onChange={(e) =>
+              setForm({ ...form, number: e.target.value })
+            }
+          />
         </div>
 
         <div>

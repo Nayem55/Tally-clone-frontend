@@ -33,20 +33,6 @@ export default function PaymentVoucher({ companyId }) {
     loadMasters();
   }, [companyId]);
 
-  // ------------------- Load Next Voucher No -------------------
-  useEffect(() => {
-    if (!companyId || !paymentTypeId) return;
-
-    async function loadNext() {
-      const res = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${paymentTypeId}`
-      );
-      setForm(prev => ({ ...prev, number: res.data.nextNumber }));
-    }
-
-    loadNext();
-  }, [companyId, paymentTypeId]);
-
   // ------------------- Add New Debit Row -------------------
   const addDebitRow = () => {
     setForm(prev => ({
@@ -102,13 +88,8 @@ export default function PaymentVoucher({ companyId }) {
       await api.post(`/companies/${companyId}/vouchers`, body);
       alert("Payment Voucher Saved!");
 
-      // Reset + load new number
-      const next = await api.get(
-        `/companies/${companyId}/vouchers/next-number?voucherTypeId=${paymentTypeId}`
-      );
-
       setForm({
-        number: next.data.nextNumber,
+        number: "",
         date: new Date().toISOString().substring(0, 10),
         paymentLedger: "",
         narration: "",
@@ -127,7 +108,11 @@ export default function PaymentVoucher({ companyId }) {
       <div className="flex gap-4 mb-4">
         <div>
           <label>Voucher No</label>
-          <input className="border p-2" value={form.number} readOnly />
+          <input
+            className="border p-2"
+            value={form.number}
+            onChange={e => setForm({ ...form, number: e.target.value })}
+          />
         </div>
         <div>
           <label>Date</label>
