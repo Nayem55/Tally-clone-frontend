@@ -26,6 +26,7 @@ import MasterDataPage from "./Pages/MasterDataPage";
 import CashFlowPage from "./Pages/CashFlowPage";
 import OutstandingReportPage from "./Pages/OutstandingReportPage";
 import InventoryVoucherPage from "./Pages/InventoryVoucherPage";
+import StockGroupSummaryPage from "./Pages/StockGroupSummaryPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -370,7 +371,7 @@ function AppShell() {
             />
 
             <Route path="/reports/inventory-books/stock-item" element={<CoaStockItems />} />
-            <Route path="/reports/inventory-books/stock-group-summary" element={<CoaStockGroups />} />
+            <Route path="/reports/inventory-books/stock-group-summary" element={<StockGroupSummaryPage />} />
             <Route path="/reports/inventory-books/movement-analysis" element={Placeholder("Inventory Movement Analysis", "Inventory movement books will be added here when deeper stock voucher coverage is enabled.")} />
             <Route path="/reports/inventory-books/godown-summary" element={Placeholder("Godown Summary", "Godown-wise stock summary is scaffolded for future warehouse-level reporting.")} />
             <Route path="/reports/inventory-books/batch-summary" element={Placeholder("Inventory Batch Summary", "Batch-wise stock reporting is reserved here for a later inventory enhancement.")} />
