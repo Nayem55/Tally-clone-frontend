@@ -27,6 +27,12 @@ import CashFlowPage from "./Pages/CashFlowPage";
 import OutstandingReportPage from "./Pages/OutstandingReportPage";
 import InventoryVoucherPage from "./Pages/InventoryVoucherPage";
 import StockGroupSummaryPage from "./Pages/StockGroupSummaryPage";
+import PosVoucherPage from "./Pages/PosVoucherPage";
+import CustomerBehaviourOverviewPage from "./Pages/CustomerBehaviourOverviewPage";
+import ProductCustomerReportPage from "./Pages/ProductCustomerReportPage";
+import CustomerDimensionReportPage from "./Pages/CustomerDimensionReportPage";
+import StockItemDetailPage from "./Pages/StockItemDetailPage";
+import InventoryMovementAnalysisPage from "./Pages/InventoryMovementAnalysisPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -264,6 +270,7 @@ function AppShell() {
             <Route path="/transactions/accounting/receipt" element={<VoucherList initialVoucherName="Receipt" />} />
             <Route path="/transactions/accounting/journal" element={<VoucherList initialVoucherName="Journal" />} />
             <Route path="/transactions/accounting/sales" element={<VoucherList initialVoucherName="Sales" />} />
+            <Route path="/transactions/accounting/pos-voucher" element={<PosVoucherPage />} />
             <Route path="/transactions/accounting/purchase" element={<VoucherList initialVoucherName="Purchase" />} />
             <Route path="/transactions/accounting/credit-note" element={<VoucherList initialVoucherName="Credit Note" />} />
             <Route path="/transactions/accounting/debit-note" element={<VoucherList initialVoucherName="Debit Note" />} />
@@ -370,9 +377,9 @@ function AppShell() {
               }
             />
 
-            <Route path="/reports/inventory-books/stock-item" element={<CoaStockItems />} />
+            <Route path="/reports/inventory-books/stock-item" element={<StockItemDetailPage />} />
             <Route path="/reports/inventory-books/stock-group-summary" element={<StockGroupSummaryPage />} />
-            <Route path="/reports/inventory-books/movement-analysis" element={Placeholder("Inventory Movement Analysis", "Inventory movement books will be added here when deeper stock voucher coverage is enabled.")} />
+            <Route path="/reports/inventory-books/movement-analysis" element={<InventoryMovementAnalysisPage />} />
             <Route path="/reports/inventory-books/godown-summary" element={Placeholder("Godown Summary", "Godown-wise stock summary is scaffolded for future warehouse-level reporting.")} />
             <Route path="/reports/inventory-books/batch-summary" element={Placeholder("Inventory Batch Summary", "Batch-wise stock reporting is reserved here for a later inventory enhancement.")} />
 
@@ -393,6 +400,16 @@ function AppShell() {
             <Route path="/reports/more/analysis/ratio-analysis" element={Placeholder("Analysis - Ratio Analysis", "Advanced analytical ratios can grow from the existing financial statement data.")} />
             <Route path="/reports/more/analysis/cash-funds-flow" element={Placeholder("Analysis - Cash/Funds Flow", "Cash and funds flow analysis is scaffolded here for a later reporting expansion.")} />
             <Route path="/reports/more/analysis/performance-analysis" element={Placeholder("Performance Analysis", "Performance analysis can be added here once comparative periods and ratio models are finalized.")} />
+            <Route path="/reports/customer-behaviour/overview" element={<CustomerBehaviourOverviewPage />} />
+            <Route path="/reports/customer-behaviour/product-wise" element={<ProductCustomerReportPage />} />
+            <Route
+              path="/reports/customer-behaviour/stock-group-wise"
+              element={<CustomerDimensionReportPage title="Stock Group-wise Customer Report" endpoint="stock-group-wise" labelKey="groupName" />}
+            />
+            <Route
+              path="/reports/customer-behaviour/category-wise"
+              element={<CustomerDimensionReportPage title="Stock Category-wise Customer Report" endpoint="category-wise" labelKey="categoryName" />}
+            />
 
             <Route path="/utilities/import-data" element={Placeholder("Import Data", "Utility routing is ready for structured import of masters and transactions.")} />
             <Route path="/utilities/export-data" element={Placeholder("Export Data", "Export utilities can be added here for reports and master data extraction.")} />

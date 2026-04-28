@@ -1,10 +1,51 @@
-import { useEffect, useMemo, useState } from "react";
-import { BarChart3, CalendarRange } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { BarChart3, CalendarRange, ChevronDown, ChevronRight } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
 
-function ProfitLossTable({ title, rows, accent, company }) {
+function groupRowsByGroupName(rows) {
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const key = row.groupName || "Ungrouped";
+    const current = grouped.get(key) || {
+      groupName: key,
+      amount: 0,
+      ledgers: [],
+    };
+    current.amount += Number(row.amount || 0);
+    current.ledgers.push(row);
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()]
+    .map((row) => ({
+      ...row,
+      amount: Number(row.amount || 0),
+      ledgers: row.ledgers.sort((left, right) =>
+        left.ledgerName.localeCompare(right.ledgerName)
+      ),
+    }))
+    .sort((left, right) => left.groupName.localeCompare(right.groupName));
+}
+
+function ProfitLossTable({
+  title,
+  rows,
+  accent,
+  company,
+  companyId,
+  fromDate,
+  toDate,
+  expandedGroups,
+  onToggleGroup,
+  expandedLedgers,
+  onToggleLedger,
+}) {
+  const groupedRows = useMemo(() => groupRowsByGroupName(rows), [rows]);
+
   return (
     <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between">
@@ -18,25 +59,88 @@ function ProfitLossTable({ title, rows, accent, company }) {
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
-              <th className="px-4 py-3 font-medium">Ledger</th>
-              <th className="px-4 py-3 font-medium">Group</th>
+              <th className="px-4 py-3 font-medium">Particulars</th>
+              <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 text-right font-medium">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.ledgerId} className="border-t border-slate-100">
-                <td className="px-4 py-3 font-medium text-slate-800">{row.ledgerName}</td>
-                <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
-                <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                  {formatCurrencyAmount(row.amount, company)}
-                </td>
-              </tr>
-            ))}
+            {groupedRows.map((group) => {
+              const groupKey = `${title}-${group.groupName}`;
+              const groupOpen = expandedGroups[groupKey];
+
+              return (
+                <Fragment key={groupKey}>
+                  <tr className="border-t border-slate-100 bg-slate-50/70">
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 font-semibold text-slate-800"
+                        onClick={() => onToggleGroup(groupKey)}
+                      >
+                        {groupOpen ? (
+                          <ChevronDown className="h-4 w-4 text-blue-600" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                        )}
+                        {group.groupName}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">Group Total</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      {formatCurrencyAmount(group.amount, company)}
+                    </td>
+                  </tr>
+
+                  {groupOpen &&
+                    group.ledgers.map((row) => {
+                      const ledgerKey = `${groupKey}-${row.ledgerId}`;
+                      const ledgerOpen = expandedLedgers[ledgerKey];
+
+                      return (
+                        <Fragment key={ledgerKey}>
+                          <tr className="border-t border-slate-100">
+                            <td className="px-4 py-3 font-medium text-slate-800">
+                              <div className="flex items-center gap-2 pl-6">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-2"
+                                  onClick={() => onToggleLedger(ledgerKey)}
+                                >
+                                  {ledgerOpen ? (
+                                    <ChevronDown className="h-4 w-4 text-blue-600" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                                  )}
+                                  <span>{row.ledgerName}</span>
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">Ledger</td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                              {formatCurrencyAmount(row.amount, company)}
+                            </td>
+                          </tr>
+                          {ledgerOpen && (
+                            <LedgerDrilldownRow
+                              companyId={companyId}
+                              ledgerId={row.ledgerId}
+                              fromDate={fromDate}
+                              toDate={toDate}
+                              company={company}
+                              colSpan={3}
+                            />
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
 
-        {rows.length === 0 && (
+        {groupedRows.length === 0 && (
           <div className="p-8 text-center text-sm text-slate-500">No rows found.</div>
         )}
       </div>
@@ -59,6 +163,8 @@ export default function ProfitLoss() {
   const [toDate, setToDate] = useState(monthEnd);
   const [report, setReport] = useState({ incomes: [], expenses: [], totals: {} });
   const [loading, setLoading] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedLedgers, setExpandedLedgers] = useState({});
 
   useEffect(() => {
     async function loadCompanies() {
@@ -130,6 +236,14 @@ export default function ProfitLoss() {
     [report.totals]
   );
   const selectedCompany = companies.find((company) => company._id === companyId);
+
+  function toggleGroup(key) {
+    setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function toggleLedger(key) {
+    setExpandedLedgers((current) => ({ ...current, [key]: !current[key] }));
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -255,12 +369,26 @@ export default function ProfitLoss() {
                 rows={report.incomes || []}
                 accent="bg-emerald-50 text-emerald-700"
                 company={selectedCompany}
+                companyId={companyId}
+                fromDate={fromDate}
+                toDate={toDate}
+                expandedGroups={expandedGroups}
+                onToggleGroup={toggleGroup}
+                expandedLedgers={expandedLedgers}
+                onToggleLedger={toggleLedger}
               />
               <ProfitLossTable
                 title="Expenses"
                 rows={report.expenses || []}
                 accent="bg-amber-50 text-amber-700"
                 company={selectedCompany}
+                companyId={companyId}
+                fromDate={fromDate}
+                toDate={toDate}
+                expandedGroups={expandedGroups}
+                onToggleGroup={toggleGroup}
+                expandedLedgers={expandedLedgers}
+                onToggleLedger={toggleLedger}
               />
             </section>
           </>

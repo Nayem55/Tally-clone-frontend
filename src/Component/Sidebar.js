@@ -19,6 +19,18 @@ import {
 const menuTree = [
   { label: "Dashboard", to: "/", icon: Home },
   {
+    label: "Company",
+    icon: Building2,
+    children: [
+      { label: "Create Company", to: "/company/create" },
+      { label: "Alter Company", to: "/company/alter" },
+      { label: "Select Company", to: "/company/select" },
+      { label: "Shut Company", to: "/company/shut" },
+      { label: "Backup", to: "/company/backup" },
+      { label: "Restore", to: "/company/restore" },
+    ],
+  },
+  {
     label: "Masters",
     icon: FolderOpen,
     children: [
@@ -65,13 +77,8 @@ const menuTree = [
     children: [
       { label: "Groups", to: "/chart-of-accounts/groups" },
       { label: "Ledgers", to: "/chart-of-accounts/ledgers" },
-      { label: "Voucher Types", to: "/chart-of-accounts/voucher-types" },
-      { label: "Currencies", to: "/chart-of-accounts/currencies" },
-      { label: "Cost Centres", to: "/chart-of-accounts/cost-centres" },
       { label: "Stock Groups", to: "/chart-of-accounts/stock-groups" },
-      { label: "Stock Categories", to: "/chart-of-accounts/stock-categories" },
       { label: "Stock Items", to: "/chart-of-accounts/stock-items" },
-      { label: "Units", to: "/chart-of-accounts/units" },
     ],
   },
   {
@@ -86,6 +93,7 @@ const menuTree = [
           { label: "Receipt", to: "/transactions/accounting/receipt" },
           { label: "Journal", to: "/transactions/accounting/journal" },
           { label: "Sales", to: "/transactions/accounting/sales" },
+          { label: "POS Voucher", to: "/transactions/accounting/pos-voucher" },
           { label: "Purchase", to: "/transactions/accounting/purchase" },
           { label: "Credit Note", to: "/transactions/accounting/credit-note" },
           { label: "Debit Note", to: "/transactions/accounting/debit-note" },
@@ -95,38 +103,53 @@ const menuTree = [
         label: "Inventory Vouchers",
         children: [
           { label: "Receipt Note", to: "/transactions/inventory/receipt-note" },
-          { label: "Delivery Note", to: "/transactions/inventory/delivery-note" },
-          { label: "Rejections In", to: "/transactions/inventory/rejections-in" },
-          { label: "Rejections Out", to: "/transactions/inventory/rejections-out" },
-          { label: "Stock Journal", to: "/transactions/inventory/stock-journal" },
-          { label: "Physical Stock", to: "/transactions/inventory/physical-stock" },
+          {
+            label: "Delivery Note",
+            to: "/transactions/inventory/delivery-note",
+          },
+          {
+            label: "Rejections In",
+            to: "/transactions/inventory/rejections-in",
+          },
+          {
+            label: "Rejections Out",
+            to: "/transactions/inventory/rejections-out",
+          },
+          {
+            label: "Stock Journal",
+            to: "/transactions/inventory/stock-journal",
+          },
+          {
+            label: "Physical Stock",
+            to: "/transactions/inventory/physical-stock",
+          },
         ],
       },
       { label: "Alter Vouchers", to: "/transactions/alter-vouchers" },
     ],
   },
-  {
-    label: "Banking",
-    icon: Landmark,
-    children: [
-      {
-        label: "Banking Activities",
-        children: [
-          { label: "Cheque Printing", to: "/banking/activities/cheque-printing" },
-          { label: "Deposit Slip", to: "/banking/activities/deposit-slip" },
-          { label: "Payment Advice", to: "/banking/activities/payment-advice" },
-          { label: "Bank Reconciliation", to: "/banking/activities/bank-reconciliation" },
-        ],
-      },
-      {
-        label: "Import Bank Data",
-        children: [
-          { label: "Bank Statement", to: "/banking/import/bank-statement" },
-          { label: "Auto Reconciliation", to: "/banking/import/auto-reconciliation" },
-        ],
-      },
-    ],
-  },
+  // {
+  //   label: "Banking",
+  //   icon: Landmark,
+  //   children: [
+  //     {
+  //       label: "Banking Activities",
+  //       children: [
+  //         { label: "Cheque Printing", to: "/banking/activities/cheque-printing" },
+  //         { label: "Deposit Slip", to: "/banking/activities/deposit-slip" },
+  //         { label: "Payment Advice", to: "/banking/activities/payment-advice" },
+  //         { label: "Bank Reconciliation", to: "/banking/activities/bank-reconciliation" },
+  //       ],
+  //     },
+  //     {
+  //       label: "Import Bank Data",
+  //       children: [
+  //         { label: "Bank Statement", to: "/banking/import/bank-statement" },
+  //         { label: "Auto Reconciliation", to: "/banking/import/auto-reconciliation" },
+  //       ],
+  //     },
+  //   ],
+  // },
   {
     label: "Reports",
     icon: BarChart3,
@@ -142,53 +165,109 @@ const menuTree = [
         ],
       },
       {
-        label: "Inventory Reports",
-        children: [
-          { label: "Stock Summary", to: "/reports/inventory/stock-summary" },
-          { label: "Stock Ageing", to: "/reports/inventory/stock-ageing" },
-          { label: "Movement Analysis", to: "/reports/inventory/movement-analysis" },
-          { label: "Reorder Status", to: "/reports/inventory/reorder-status" },
-          { label: "Batch Summary", to: "/reports/inventory/batch-summary" },
-        ],
-      },
-      { label: "Ratio Analysis", to: "/reports/ratio-analysis" },
-      { label: "Day Book", to: "/reports/day-book" },
-      {
-        label: "Account Books",
-        children: [
-          { label: "Cash Book", to: "/reports/account-books/cash-book" },
-          { label: "Bank Book", to: "/reports/account-books/bank-book" },
-          { label: "Ledger", to: "/reports/account-books/ledger" },
-          { label: "Group Summary", to: "/reports/account-books/group-summary" },
-          { label: "Sales Register", to: "/reports/account-books/sales-register" },
-          { label: "Purchase Register", to: "/reports/account-books/purchase-register" },
-          { label: "Journal Register", to: "/reports/account-books/journal-register" },
-          { label: "Debit Note Register", to: "/reports/account-books/debit-note-register" },
-          { label: "Credit Note Register", to: "/reports/account-books/credit-note-register" },
-        ],
-      },
-      {
         label: "Inventory Books",
         children: [
           { label: "Stock Item", to: "/reports/inventory-books/stock-item" },
-          { label: "Stock Group Summary", to: "/reports/inventory-books/stock-group-summary" },
-          { label: "Movement Analysis", to: "/reports/inventory-books/movement-analysis" },
-          { label: "Godown Summary", to: "/reports/inventory-books/godown-summary" },
-          { label: "Batch Summary", to: "/reports/inventory-books/batch-summary" },
+          {
+            label: "Stock Group Summary",
+            to: "/reports/inventory-books/stock-group-summary",
+          },
+          {
+            label: "Movement Analysis",
+            to: "/reports/inventory-books/movement-analysis",
+          },
+          {
+            label: "Godown Summary",
+            to: "/reports/inventory-books/godown-summary",
+          },
+          {
+            label: "Batch Summary",
+            to: "/reports/inventory-books/batch-summary",
+          },
+        ],
+      },
+      // {
+      //   label: "Inventory Reports",
+      //   children: [
+      //     { label: "Stock Summary", to: "/reports/inventory/stock-summary" },
+      //     { label: "Stock Ageing", to: "/reports/inventory/stock-ageing" },
+      //     { label: "Movement Analysis", to: "/reports/inventory/movement-analysis" },
+      //     { label: "Reorder Status", to: "/reports/inventory/reorder-status" },
+      //     { label: "Batch Summary", to: "/reports/inventory/batch-summary" },
+      //   ],
+      // },
+      {
+        label: "Account Books",
+        children: [
+          {
+            label: "Sales Register",
+            to: "/reports/account-books/sales-register",
+          },
+          {
+            label: "Purchase Register",
+            to: "/reports/account-books/purchase-register",
+          },
+          {
+            label: "Journal Register",
+            to: "/reports/account-books/journal-register",
+          },
+          {
+            label: "Debit Note Register",
+            to: "/reports/account-books/debit-note-register",
+          },
+          {
+            label: "Credit Note Register",
+            to: "/reports/account-books/credit-note-register",
+          },
+        ],
+      },
+      { label: "Day Book", to: "/reports/day-book" },
+
+      {
+        label: "Customer Behaviour",
+        children: [
+          { label: "Overview", to: "/reports/customer-behaviour/overview" },
+          {
+            label: "Product-wise",
+            to: "/reports/customer-behaviour/product-wise",
+          },
+          {
+            label: "Stock Group-wise",
+            to: "/reports/customer-behaviour/stock-group-wise",
+          },
+          {
+            label: "Category-wise",
+            to: "/reports/customer-behaviour/category-wise",
+          },
         ],
       },
       {
         label: "Display More Reports",
         children: [
-          { label: "Trial Balance (Detailed)", to: "/reports/more/trial-balance-detailed" },
-          { label: "Day Book (Filtered)", to: "/reports/more/day-book-filtered" },
-          { label: "Cash Flow (Detailed)", to: "/reports/more/cash-flow-detailed" },
+          {
+            label: "Trial Balance (Detailed)",
+            to: "/reports/more/trial-balance-detailed",
+          },
+          {
+            label: "Day Book (Filtered)",
+            to: "/reports/more/day-book-filtered",
+          },
+          {
+            label: "Cash Flow (Detailed)",
+            to: "/reports/more/cash-flow-detailed",
+          },
           { label: "Fund Flow", to: "/reports/more/fund-flow" },
           {
             label: "Receivables & Payables",
             children: [
-              { label: "Bills Receivable", to: "/reports/more/receivables/bills-receivable" },
-              { label: "Bills Payable", to: "/reports/more/receivables/bills-payable" },
+              {
+                label: "Bills Receivable",
+                to: "/reports/more/receivables/bills-receivable",
+              },
+              {
+                label: "Bills Payable",
+                to: "/reports/more/receivables/bills-payable",
+              },
               {
                 label: "Outstanding Receivables",
                 to: "/reports/more/receivables/outstanding-receivables",
@@ -202,12 +281,18 @@ const menuTree = [
           {
             label: "Exception Reports",
             children: [
-              { label: "Negative Stock", to: "/reports/more/exceptions/negative-stock" },
+              {
+                label: "Negative Stock",
+                to: "/reports/more/exceptions/negative-stock",
+              },
               {
                 label: "Overdue Receivables",
                 to: "/reports/more/exceptions/overdue-receivables",
               },
-              { label: "Overdue Payables", to: "/reports/more/exceptions/overdue-payables" },
+              {
+                label: "Overdue Payables",
+                to: "/reports/more/exceptions/overdue-payables",
+              },
               {
                 label: "Memorandum Vouchers",
                 to: "/reports/more/exceptions/memorandum-vouchers",
@@ -230,8 +315,14 @@ const menuTree = [
           {
             label: "Analysis Reports",
             children: [
-              { label: "Ratio Analysis", to: "/reports/more/analysis/ratio-analysis" },
-              { label: "Cash/Funds Flow", to: "/reports/more/analysis/cash-funds-flow" },
+              {
+                label: "Ratio Analysis",
+                to: "/reports/more/analysis/ratio-analysis",
+              },
+              {
+                label: "Cash/Funds Flow",
+                to: "/reports/more/analysis/cash-funds-flow",
+              },
               {
                 label: "Performance Analysis",
                 to: "/reports/more/analysis/performance-analysis",
@@ -254,18 +345,6 @@ const menuTree = [
       { label: "Split Company Data", to: "/utilities/split-company-data" },
     ],
   },
-  {
-    label: "Company",
-    icon: Building2,
-    children: [
-      { label: "Create Company", to: "/company/create" },
-      { label: "Alter Company", to: "/company/alter" },
-      { label: "Select Company", to: "/company/select" },
-      { label: "Shut Company", to: "/company/shut" },
-      { label: "Backup", to: "/company/backup" },
-      { label: "Restore", to: "/company/restore" },
-    ],
-  },
 ];
 
 function hasActiveNode(node, pathname) {
@@ -276,7 +355,14 @@ function hasActiveNode(node, pathname) {
   return (node.children || []).some((child) => hasActiveNode(child, pathname));
 }
 
-function TreeNode({ node, depth = 0, pathname, openKeys, setOpenKeys, nodeKey }) {
+function TreeNode({
+  node,
+  depth = 0,
+  pathname,
+  openKeys,
+  setOpenKeys,
+  nodeKey,
+}) {
   const active = hasActiveNode(node, pathname);
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
   const isOpen = hasChildren && (openKeys[nodeKey] ?? active);
@@ -308,12 +394,18 @@ function TreeNode({ node, depth = 0, pathname, openKeys, setOpenKeys, nodeKey })
           }))
         }
         className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
-          active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-100"
+          active
+            ? "bg-blue-50 text-blue-700"
+            : "text-slate-700 hover:bg-slate-100"
         }`}
         style={{ marginLeft: depth === 0 ? 0 : depth * 10 }}
       >
         <span>{node.label}</span>
-        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        {isOpen ? (
+          <ChevronDown className="h-4 w-4" />
+        ) : (
+          <ChevronRight className="h-4 w-4" />
+        )}
       </button>
 
       {isOpen ? (
@@ -345,7 +437,7 @@ export default function Sidebar() {
         ...section,
         icon: section.icon || ScrollText,
       })),
-    []
+    [],
   );
 
   return (
@@ -357,7 +449,9 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900">AccuBooks</h1>
-            <p className="text-xs text-slate-500">Tally-style Accounting System</p>
+            <p className="text-xs text-slate-500">
+              Tally-style Accounting System
+            </p>
           </div>
         </div>
       </div>
@@ -420,7 +514,9 @@ export default function Sidebar() {
           <ShieldCheck className="h-4 w-4 text-emerald-600" />
           Accounting workspace
         </div>
-        <p className="mt-1">Tally-style sidebar with working masters, vouchers, and reports.</p>
+        <p className="mt-1">
+          Tally-style sidebar with working masters, vouchers, and reports.
+        </p>
       </div>
     </aside>
   );

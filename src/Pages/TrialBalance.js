@@ -1,15 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Scale } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { CalendarRange, ChevronDown, ChevronRight, Scale } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
-
-function formatAmount(value) {
-  return Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export default function TrialBalance() {
   const today = new Date();
@@ -24,8 +18,10 @@ export default function TrialBalance() {
   const [companyId, setCompanyId] = useState("");
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
-  const [report, setReport] = useState({ rows: [], totals: null });
+  const [report, setReport] = useState({ rows: [], totals: null, tree: [] });
   const [loading, setLoading] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedLedgers, setExpandedLedgers] = useState({});
 
   useEffect(() => {
     async function loadCompanies() {
@@ -61,6 +57,132 @@ export default function TrialBalance() {
 
   const summary = useMemo(() => report.totals || {}, [report.totals]);
   const selectedCompany = companies.find((company) => company._id === companyId);
+
+  function toggleGroup(groupId) {
+    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
+  }
+
+  function toggleLedger(ledgerId) {
+    setExpandedLedgers((current) => ({ ...current, [ledgerId]: !current[ledgerId] }));
+  }
+
+  function renderLedgerRow(ledger, level) {
+    const ledgerOpen = expandedLedgers[String(ledger.id)];
+
+    return (
+      <Fragment key={`ledger-${ledger.id}`}>
+        <tr className="border-t border-slate-100">
+          <td className="px-4 py-3 font-medium text-slate-800">
+            <div
+              className="flex items-center gap-2"
+              style={{ paddingLeft: `${level * 20}px` }}
+            >
+              <button
+                type="button"
+                className="flex items-center gap-2"
+                onClick={() => toggleLedger(String(ledger.id))}
+              >
+                {ledgerOpen ? (
+                  <ChevronDown className="h-4 w-4 text-blue-600" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                )}
+                <span>{ledger.name}</span>
+              </button>
+            </div>
+          </td>
+          <td className="px-4 py-3 text-slate-500">{ledger.groupName || "-"}</td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(ledger.totals?.openingDebit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(ledger.totals?.openingCredit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(ledger.totals?.debit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(ledger.totals?.credit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(ledger.totals?.closingDebit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(ledger.totals?.closingCredit, selectedCompany)}
+          </td>
+        </tr>
+        {ledgerOpen && (
+          <LedgerDrilldownRow
+            companyId={companyId}
+            ledgerId={ledger.id}
+            fromDate={fromDate}
+            toDate={toDate}
+            company={selectedCompany}
+            colSpan={8}
+            mode="inventory"
+          />
+        )}
+      </Fragment>
+    );
+  }
+
+  function renderGroupRows(nodes, level = 0) {
+    return nodes.flatMap((node) => {
+      const groupOpen = expandedGroups[String(node.id)];
+      const rows = [
+        <tr
+          key={`group-${node.id}`}
+          className={`border-t border-slate-100 ${level === 0 ? "bg-slate-50/80" : "bg-white"}`}
+        >
+          <td className="px-4 py-3 font-semibold text-slate-900">
+            <div
+              className="flex items-center gap-2"
+              style={{ paddingLeft: `${level * 20}px` }}
+            >
+              <button
+                type="button"
+                className="flex items-center gap-2"
+                onClick={() => toggleGroup(String(node.id))}
+              >
+                {groupOpen ? (
+                  <ChevronDown className="h-4 w-4 text-blue-600" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                )}
+                <span>{node.name}</span>
+              </button>
+            </div>
+          </td>
+          <td className="px-4 py-3 text-slate-500">{node.nature || "-"}</td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(node.totals?.openingDebit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(node.totals?.openingCredit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(node.totals?.debit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(node.totals?.credit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(node.totals?.closingDebit, selectedCompany)}
+          </td>
+          <td className="px-4 py-3 text-right">
+            {formatCurrencyAmount(node.totals?.closingCredit, selectedCompany)}
+          </td>
+        </tr>,
+      ];
+
+      if (groupOpen) {
+        rows.push(...(node.ledgers || []).map((ledger) => renderLedgerRow(ledger, level + 1)));
+        rows.push(...renderGroupRows(node.children || [], level + 1));
+      }
+
+      return rows;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -188,21 +310,10 @@ export default function TrialBalance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {report.rows.map((row) => (
-                    <tr key={row.ledgerId} className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-medium text-slate-800">{row.ledgerName}</td>
-                      <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingDebit, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingCredit, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.debit, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.credit, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingDebit, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingCredit, selectedCompany)}</td>
-                    </tr>
-                  ))}
+                  {renderGroupRows(report.tree || [])}
                 </tbody>
 
-                {report.rows.length > 0 && (
+                {(report.tree || []).length > 0 && (
                   <tfoot className="bg-slate-50">
                     <tr className="border-t border-slate-200 font-semibold text-slate-900">
                       <td className="px-4 py-3" colSpan={2}>
@@ -219,9 +330,9 @@ export default function TrialBalance() {
                 )}
               </table>
 
-              {report.rows.length === 0 && (
+              {(report.tree || []).length === 0 && (
                 <div className="p-10 text-center text-sm text-slate-500">
-                  No ledger balances found for the selected period.
+                  No trial balance rows found for the selected period.
                 </div>
               )}
             </div>
