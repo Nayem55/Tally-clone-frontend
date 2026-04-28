@@ -1,18 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  BarChart3,
-  Boxes,
+  ArrowLeftRight,
+  Banknote,
   Building2,
-  FileText,
+  CalendarDays,
+  ChevronDown,
+  CreditCard,
   Landmark,
+  LayoutGrid,
   Package,
+  Receipt,
+  ShoppingBag,
+  ShoppingCart,
+  UserSquare2,
   Wallet,
 } from "lucide-react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+
+function formatLocalDate(value = new Date()) {
+  return value.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    weekday: "long",
+  });
+}
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -21,383 +34,562 @@ function formatNumber(value) {
   });
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("en-GB");
+function DashboardCompanySwitcher({ companies, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+  const selected = companies.find((company) => company._id === value);
+
+  useEffect(() => {
+    function handleClick(event) {
+      if (!wrapperRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        className="flex items-center gap-2 rounded-xl px-2 py-1 text-[22px] font-medium text-slate-500 hover:bg-slate-100"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected?.name || "Select Company"}</span>
+        <ChevronDown className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+          {companies.map((company) => (
+            <button
+              key={company._id}
+              type="button"
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${
+                company._id === value
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-700 hover:bg-slate-50"
+              }`}
+              onClick={() => {
+                onChange(company._id);
+                setOpen(false);
+              }}
+            >
+              <span className="font-medium">{company.name}</span>
+              <Building2 className="h-4 w-4 opacity-60" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
-const masterCards = [
-  { key: "groupsCount", label: "Groups", icon: Boxes, accent: "bg-sky-50 text-sky-700" },
-  { key: "ledgersCount", label: "Ledgers", icon: Landmark, accent: "bg-emerald-50 text-emerald-700" },
-  { key: "itemsCount", label: "Stock Items", icon: Package, accent: "bg-amber-50 text-amber-700" },
-  { key: "vouchersCount", label: "Vouchers", icon: FileText, accent: "bg-violet-50 text-violet-700" },
-];
+function DashboardMetricCard({ title, icon: Icon, value, subtitle, tone }) {
+  return (
+    <article className="rounded-[18px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+      <div className="flex items-start gap-4">
+        <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${tone}`}>
+          <Icon className="h-7 w-7" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[14px] font-medium text-slate-700">{title}</p>
+          <p className="mt-2 truncate text-[18px] font-bold leading-none text-slate-900">
+            {value}
+          </p>
+          <p className="mt-2 text-[13px] text-slate-400">{subtitle}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PanelShell({ title, right, children, className = "" }) {
+  return (
+    <article className={`rounded-[18px] border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06)] ${className}`}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-[16px] font-semibold text-slate-900">{title}</h3>
+        {right}
+      </div>
+      {children}
+    </article>
+  );
+}
+
+function YearChip() {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-[12px] font-medium text-slate-500">
+      This Year
+    </div>
+  );
+}
+
+function SummaryList({ headerLeft = "Particulars", headerRight = "Closing Balance", rows }) {
+  return (
+    <>
+      <div className="mb-3 flex items-center justify-between text-[12px] text-slate-400">
+        <span>{headerLeft}</span>
+        <span>{headerRight}</span>
+      </div>
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-3 text-[14px]">
+            <span className="text-slate-700">{row.label}</span>
+            <span className="font-semibold text-slate-900">{row.value}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function TrendChart({ series, color }) {
+  const width = 430;
+  const height = 165;
+  const max = Math.max(...series.map((point) => Number(point.value || 0)), 1);
+  const stepX = width / Math.max(series.length - 1, 1);
+  const points = series
+    .map((point, index) => {
+      const x = index * stepX;
+      const y = height - (Number(point.value || 0) / max) * 128 - 18;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const areaPoints = `0,${height} ${points} ${width},${height}`;
+  const gridLines = [0, 10, 20, 30, 40];
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height + 34}`} className="h-[210px] w-full">
+      <defs>
+        <linearGradient id={`trend-${color.replace("#", "")}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.16" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {gridLines.map((line) => {
+        const y = height - (line / 40) * 128 - 18;
+        return (
+          <g key={line}>
+            <line x1="18" x2={width} y1={y} y2={y} stroke="#eef2f7" strokeWidth="1" />
+            <text x="0" y={y + 4} className="fill-slate-400 text-[11px]">
+              {line === 0 ? "0" : `${line}M`}
+            </text>
+          </g>
+        );
+      })}
+      <polyline fill={`url(#trend-${color.replace("#", "")})`} stroke="none" points={areaPoints} />
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        points={points}
+      />
+      {series.map((point, index) => {
+        const x = index * stepX;
+        const y = height - (Number(point.value || 0) / max) * 128 - 18;
+        return <circle key={`${point.label}-${index}`} cx={x} cy={y} r="3" fill={color} />;
+      })}
+      {series.map((point, index) => (
+        <text
+          key={`label-${point.label}`}
+          x={index * stepX}
+          y={height + 20}
+          textAnchor="middle"
+          className="fill-slate-500 text-[11px]"
+        >
+          {point.label}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+function QuickShortcutsCard() {
+  const shortcuts = [
+    { key: "F2", label: "Period", icon: CalendarDays, tone: "bg-blue-50 text-blue-600" },
+    { key: "F3", label: "Company", icon: Building2, tone: "bg-cyan-50 text-cyan-600" },
+    { key: "F4", label: "Contra", icon: ArrowLeftRight, tone: "bg-teal-50 text-teal-600" },
+    { key: "F5", label: "Payment", icon: Wallet, tone: "bg-emerald-50 text-emerald-600" },
+    { key: "F6", label: "Receipt", icon: CreditCard, tone: "bg-green-50 text-green-600" },
+    { key: "F7", label: "Journal", icon: Receipt, tone: "bg-violet-50 text-violet-600" },
+    { key: "F8", label: "Sales", icon: ShoppingCart, tone: "bg-amber-50 text-amber-600" },
+    { key: "F9", label: "Purchase", icon: ShoppingBag, tone: "bg-rose-50 text-rose-600" },
+  ];
+
+  return (
+    <PanelShell title="Quick Shortcuts" className="row-span-2">
+      <div className="grid grid-cols-4 gap-3">
+        {shortcuts.map((shortcut) => {
+          const Icon = shortcut.icon;
+          return (
+            <div
+              key={shortcut.key}
+              className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-4 text-center"
+            >
+              <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${shortcut.tone}`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="mt-3 text-[14px] font-semibold text-blue-700">{shortcut.key}</p>
+              <p className="mt-1 text-[13px] text-slate-700">{shortcut.label}</p>
+            </div>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-[14px] font-semibold text-blue-700"
+      >
+        View All Shortcuts
+      </button>
+    </PanelShell>
+  );
+}
+
+function ActionButton({ children, className = "" }) {
+  return (
+    <button
+      type="button"
+      className={`rounded-2xl px-5 py-4 text-[16px] font-semibold shadow-[0_1px_3px_rgba(15,23,42,0.06)] ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function DashboardPage() {
   const [companies, setCompanies] = useState([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [companyId, setCompanyId] = useState("");
   const [dashboard, setDashboard] = useState(null);
-  const [profitLoss, setProfitLoss] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
       if (response.data.length > 0) {
-        setSelectedCompanyId((current) => current || response.data[0]._id);
+        setCompanyId((current) => current || response.data[0]._id);
       }
     }
-
     loadCompanies();
   }, []);
 
   useEffect(() => {
     async function loadDashboard() {
-      if (!selectedCompanyId) return;
-      setLoading(true);
-      try {
-        const [dashboardResponse, profitLossResponse] = await Promise.all([
-          api.get(`/companies/${selectedCompanyId}/reports/dashboard`),
-          api.get(`/companies/${selectedCompanyId}/reports/profit-loss`),
-        ]);
-        setDashboard(dashboardResponse.data);
-        setProfitLoss(profitLossResponse.data);
-      } finally {
-        setLoading(false);
-      }
+      if (!companyId) return;
+      const response = await api.get(`/companies/${companyId}/reports/dashboard`);
+      setDashboard(response.data);
     }
-
     loadDashboard();
-  }, [selectedCompanyId]);
+  }, [companyId]);
 
   const selectedCompany = useMemo(
-    () => companies.find((company) => company._id === selectedCompanyId),
-    [companies, selectedCompanyId]
+    () => companies.find((company) => company._id === companyId),
+    [companies, companyId]
   );
 
-  const summaryTiles = useMemo(() => {
-    if (!dashboard) return [];
-    return [
-      {
-        label: "Sales",
-        value: dashboard.salesTotal,
-        icon: ArrowUpRight,
-        accent: "bg-emerald-50 text-emerald-700",
-      },
-      {
-        label: "Purchases",
-        value: dashboard.purchaseTotal,
-        icon: ArrowDownLeft,
-        accent: "bg-amber-50 text-amber-700",
-      },
-      {
-        label: "Cash / Bank",
-        value: dashboard.cashBankBalance,
-        icon: Wallet,
-        accent: "bg-blue-50 text-blue-700",
-      },
-      {
-        label: "Receivables",
-        value: dashboard.receivables,
-        icon: Landmark,
-        accent: "bg-violet-50 text-violet-700",
-      },
-      {
-        label: "Payables",
-        value: dashboard.payables,
-        icon: FileText,
-        accent: "bg-rose-50 text-rose-700",
-      },
-      {
-        label: "Gross Profit",
-        value: dashboard.grossProfit,
-        icon: BarChart3,
-        accent: "bg-cyan-50 text-cyan-700",
-      },
-      {
-        label: "Net Profit",
-        value: dashboard.netProfit,
-        icon: BarChart3,
-        accent: "bg-indigo-50 text-indigo-700",
-      },
-    ];
-  }, [dashboard]);
-
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-900 to-slate-800 p-8 text-white shadow-2xl">
-          <div className="grid gap-6 lg:grid-cols-[1.25fr_0.9fr]">
-            <div>
-              <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-100">
-                <BarChart3 className="h-3.5 w-3.5" />
-                Accounting summary
-              </p>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Business position in one screen
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm text-slate-200">
-                Track stock, receivables, payables, profits, and recent postings in a denser Tally-style dashboard.
-              </p>
+    <div className="min-h-screen bg-[#f8fafc] px-6 py-7">
+      <div className="mx-auto max-w-[1520px] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-700">
+              <LayoutGrid className="h-6 w-6" />
             </div>
-
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
-              <CompanyPicker
+            <div className="flex items-center gap-3">
+              <h1 className="text-[24px] font-semibold text-slate-900">Dashboard</h1>
+              <DashboardCompanySwitcher
                 companies={companies}
-                value={selectedCompanyId}
-                onChange={setSelectedCompanyId}
-                label="Working Company"
+                value={companyId}
+                onChange={setCompanyId}
               />
-              {selectedCompany && (
-                <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <Building2 className="h-4 w-4 text-blue-200" />
-                    {selectedCompany.name}
-                  </div>
-                  <p className="mt-2 text-xs text-slate-200">
-                    Financial year: {selectedCompany.financialYearFrom || "Not set"} to{" "}
-                    {selectedCompany.financialYearTo || "Not set"}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
-        </section>
 
-        {loading && (
-          <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-500 shadow">
-            Loading company dashboard...
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+            <div className="flex items-center gap-3 text-slate-700">
+              <CalendarDays className="h-5 w-5 text-slate-500" />
+              <span className="text-[15px] font-medium">{formatLocalDate()}</span>
+            </div>
           </div>
-        )}
+        </div>
 
-        {!loading && dashboard && (
+        {dashboard && (
           <>
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {masterCards.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <article
-                    key={card.key}
-                    className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
-                  >
-                    <div className={`inline-flex rounded-xl p-3 ${card.accent}`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <p className="mt-4 text-sm font-medium text-slate-500">{card.label}</p>
-                    <p className="mt-1 text-3xl font-bold text-slate-900">
-                      {formatNumber(dashboard[card.key])}
-                    </p>
-                  </article>
-                );
-              })}
+            <section className="grid gap-4 xl:grid-cols-5">
+              <DashboardMetricCard
+                title="Cash Balance"
+                icon={Wallet}
+                value={formatCurrencyAmount(dashboard.cashInHandBalance, selectedCompany)}
+                subtitle="Closing Balance"
+                tone="bg-emerald-50 text-emerald-600"
+              />
+              <DashboardMetricCard
+                title="Bank Balance"
+                icon={Landmark}
+                value={formatCurrencyAmount(dashboard.bankBalance, selectedCompany)}
+                subtitle="Closing Balance"
+                tone="bg-violet-50 text-violet-600"
+              />
+              <DashboardMetricCard
+                title="Inventory Value"
+                icon={Package}
+                value={formatCurrencyAmount(dashboard.stockValue, selectedCompany)}
+                subtitle="Closing Stock Value"
+                tone="bg-blue-50 text-blue-600"
+              />
+              <DashboardMetricCard
+                title="Receivables"
+                icon={UserSquare2}
+                value={formatCurrencyAmount(dashboard.receivables, selectedCompany)}
+                subtitle="Total Outstanding"
+                tone="bg-amber-50 text-amber-600"
+              />
+              <DashboardMetricCard
+                title="Payables"
+                icon={Banknote}
+                value={formatCurrencyAmount(dashboard.payables, selectedCompany)}
+                subtitle="Total Outstanding"
+                tone="bg-rose-50 text-rose-600"
+              />
             </section>
 
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {summaryTiles.map((tile) => {
-                const Icon = tile.icon;
-                return (
-                  <article
-                    key={tile.label}
-                    className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
-                  >
-                    <div className={`inline-flex rounded-xl p-3 ${tile.accent}`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <p className="mt-4 text-sm font-medium text-slate-500">{tile.label}</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-900">
-                      {formatCurrencyAmount(tile.value, selectedCompany)}
-                    </p>
-                  </article>
-                );
-              })}
+            <section className="grid gap-4 xl:grid-cols-[1.18fr_1.18fr_0.9fr_0.62fr]">
+              <PanelShell title="Sales Trend" right={<YearChip />}>
+                <TrendChart series={dashboard.salesTrend || []} color="#2a7be4" />
+              </PanelShell>
+
+              <PanelShell title="Purchase Trend" right={<YearChip />}>
+                <TrendChart series={dashboard.purchaseTrend || []} color="#18b981" />
+              </PanelShell>
+
+              <PanelShell title="Cash In/Out Flow" right={<YearChip />}>
+                <div className="mb-3 text-center text-[13px] text-slate-500">For Primary</div>
+                <SummaryList
+                  headerLeft=""
+                  headerRight=""
+                  rows={[
+                    {
+                      label: "Net Inflow",
+                      value: formatCurrencyAmount(dashboard.cashFlow?.netInflow, selectedCompany),
+                    },
+                    {
+                      label: "Total Inflow",
+                      value: formatCurrencyAmount(dashboard.cashFlow?.totalInflow, selectedCompany),
+                    },
+                    {
+                      label: "Total Outflow",
+                      value: formatCurrencyAmount(dashboard.cashFlow?.totalOutflow, selectedCompany),
+                    },
+                  ]}
+                />
+                <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3">
+                  <div className="flex items-center justify-between text-[14px]">
+                    <span className="text-emerald-700">Net Cash Flow</span>
+                    <span className="font-bold text-emerald-800">
+                      {formatCurrencyAmount(dashboard.cashFlow?.netInflow, selectedCompany)}
+                    </span>
+                  </div>
+                </div>
+              </PanelShell>
+
+              <PanelShell title="Top Groups / Ledgers" right={<YearChip />}>
+                <div className="mb-3 text-center text-[13px] text-slate-500">
+                  For Bank Accounts (Ledger-wise)
+                </div>
+                <SummaryList
+                  rows={(dashboard.topBankLedgers || []).map((row) => ({
+                    label: row.ledgerName,
+                    value: formatCurrencyAmount(row.closingBalance, selectedCompany),
+                  }))}
+                />
+                <button
+                  type="button"
+                  className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] font-semibold text-blue-700"
+                >
+                  View All
+                </button>
+              </PanelShell>
             </section>
 
-            <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-900">Trading Details</h2>
-                  <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                    Current view
-                  </span>
-                </div>
+            <section className="grid gap-4 xl:grid-cols-[0.92fr_0.92fr_1.06fr_1.08fr]">
+              <PanelShell title="Assets / Liabilities" right={<YearChip />}>
+                <SummaryList
+                  rows={[
+                    {
+                      label: "Current Assets",
+                      value: formatCurrencyAmount(
+                        dashboard.assetsLiabilities?.currentAssets,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: "Current Liabilities",
+                      value: formatCurrencyAmount(
+                        dashboard.assetsLiabilities?.currentLiabilities,
+                        selectedCompany
+                      ),
+                    },
+                  ]}
+                />
+              </PanelShell>
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm text-slate-500">Direct Income</p>
-                    <p className="mt-2 text-2xl font-bold text-slate-900">
-                      {formatNumber(profitLoss?.totals?.grossIncome)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm text-slate-500">Direct Expense</p>
-                    <p className="mt-2 text-2xl font-bold text-slate-900">
-                      {formatNumber(profitLoss?.totals?.grossExpense)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-blue-50 p-4">
-                    <p className="text-sm text-blue-700">Gross Profit</p>
-                    <p className="mt-2 text-2xl font-bold text-blue-900">
-                      {formatNumber(profitLoss?.totals?.grossProfit)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-indigo-50 p-4">
-                    <p className="text-sm text-indigo-700">Net Profit</p>
-                    <p className="mt-2 text-2xl font-bold text-indigo-900">
-                      {formatNumber(profitLoss?.totals?.netProfit)}
-                    </p>
-                  </div>
-                </div>
+              <PanelShell title="Receivables / Payables" right={<YearChip />}>
+                <SummaryList
+                  headerRight="Pending Amount"
+                  rows={[
+                    {
+                      label: "Receivables",
+                      value: formatCurrencyAmount(
+                        dashboard.receivablesPayables?.receivables,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: "Payables",
+                      value: formatCurrencyAmount(
+                        dashboard.receivablesPayables?.payables,
+                        selectedCompany
+                      ),
+                    },
+                  ]}
+                />
+              </PanelShell>
 
-                <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Particulars</th>
-                        <th className="px-4 py-3 text-right font-medium">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-4 py-3 text-slate-700">Sales Accounts</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatNumber(dashboard.salesTotal)}
-                        </td>
-                      </tr>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-4 py-3 text-slate-700">Purchase Accounts</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatNumber(dashboard.purchaseTotal)}
-                        </td>
-                      </tr>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-4 py-3 text-slate-700">Cash / Bank</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatNumber(dashboard.cashBankBalance)}
-                        </td>
-                      </tr>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-4 py-3 text-slate-700">Receivables</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatNumber(dashboard.receivables)}
-                        </td>
-                      </tr>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-4 py-3 text-slate-700">Payables</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatNumber(dashboard.payables)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </article>
+              <PanelShell title="Inventory Summary" right={<YearChip />}>
+                <div className="mb-3 text-center text-[13px] text-slate-500">For Primary</div>
+                <SummaryList
+                  headerRight="Value"
+                  rows={[
+                    {
+                      label: `Closing Stock   (${formatNumber(
+                        dashboard.inventorySummary?.closingStockQty
+                      )})`,
+                      value: formatCurrencyAmount(
+                        dashboard.inventorySummary?.closingStockValue,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: `Outwards   (${formatNumber(
+                        dashboard.inventorySummary?.outwardQty
+                      )})`,
+                      value: formatCurrencyAmount(
+                        dashboard.inventorySummary?.outwardValue,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: `Inwards   (${formatNumber(
+                        dashboard.inventorySummary?.inwardQty
+                      )})`,
+                      value: formatCurrencyAmount(
+                        dashboard.inventorySummary?.inwardValue,
+                        selectedCompany
+                      ),
+                    },
+                  ]}
+                />
+              </PanelShell>
 
-              <div className="space-y-6">
-                <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-slate-900">Inventory Details</h2>
-                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                      Closing snapshot
-                    </span>
-                  </div>
+              <QuickShortcutsCard />
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl bg-emerald-50 p-4">
-                      <p className="text-sm font-medium text-emerald-700">Stock Value</p>
-                      <p className="mt-2 text-3xl font-bold text-emerald-900">
-                        {formatNumber(dashboard.stockValue)}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-amber-50 p-4">
-                      <p className="text-sm font-medium text-amber-700">Stock Quantity</p>
-                      <p className="mt-2 text-3xl font-bold text-amber-900">
-                        {formatNumber(dashboard.stockQuantity)}
-                      </p>
-                    </div>
-                  </div>
-                </article>
+              <PanelShell title="Accounting Ratios" right={<YearChip />}>
+                <SummaryList
+                  headerRight="Value"
+                  rows={[
+                    {
+                      label: "Inventory Turnover",
+                      value: formatNumber(dashboard.accountingRatios?.inventoryTurnover),
+                    },
+                    {
+                      label: "Debt/Equity Ratio",
+                      value: `${formatNumber(dashboard.accountingRatios?.debtEquityRatio)} : 1`,
+                    },
+                    {
+                      label: "Receivable Turnover in Days",
+                      value: `${formatNumber(
+                        dashboard.accountingRatios?.receivableTurnoverDays
+                      )} Days`,
+                    },
+                    {
+                      label: "Return on Investment %",
+                      value: `${formatNumber(
+                        dashboard.accountingRatios?.returnOnInvestment
+                      )} %`,
+                    },
+                  ]}
+                />
+              </PanelShell>
 
-                <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-slate-900">Recent Vouchers</h2>
-                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                      Latest entries
-                    </span>
-                  </div>
+              <PanelShell title="Cash/Bank Accounts" right={<YearChip />}>
+                <SummaryList
+                  rows={[
+                    {
+                      label: "Cash-in-Hand",
+                      value: formatCurrencyAmount(
+                        dashboard.cashBankAccounts?.cashInHand,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: "Bank Accounts",
+                      value: formatCurrencyAmount(
+                        dashboard.cashBankAccounts?.bankAccounts,
+                        selectedCompany
+                      ),
+                    },
+                  ]}
+                />
+              </PanelShell>
 
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-slate-500">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Voucher</th>
-                          <th className="px-4 py-3 font-medium">No.</th>
-                          <th className="px-4 py-3 font-medium">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dashboard.recentVouchers.map((voucher) => (
-                          <tr key={voucher._id} className="border-t border-slate-100">
-                            <td className="px-4 py-3 font-medium text-slate-800">
-                              {voucher.voucherName}
-                            </td>
-                            <td className="px-4 py-3 text-slate-700">{voucher.number || "-"}</td>
-                            <td className="px-4 py-3 text-slate-500">{formatDate(voucher.date)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              <PanelShell title="Trading Details" right={<YearChip />}>
+                <SummaryList
+                  headerRight="Amount"
+                  rows={[
+                    {
+                      label: "Gross Profit",
+                      value: formatCurrencyAmount(
+                        dashboard.tradingDetails?.grossProfit,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: "Net Loss",
+                      value: formatCurrencyAmount(
+                        dashboard.tradingDetails?.netLoss,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: "Sales Accounts",
+                      value: formatCurrencyAmount(
+                        dashboard.tradingDetails?.salesAccounts,
+                        selectedCompany
+                      ),
+                    },
+                    {
+                      label: "Purchase Accounts",
+                      value: formatCurrencyAmount(
+                        dashboard.tradingDetails?.purchaseAccounts,
+                        selectedCompany
+                      ),
+                    },
+                  ]}
+                />
+              </PanelShell>
+            </section>
 
-                    {dashboard.recentVouchers.length === 0 && (
-                      <div className="p-8 text-center text-sm text-slate-500">
-                        No vouchers posted yet.
-                      </div>
-                    )}
-                  </div>
-                </article>
-
-                <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-slate-900">Top Stock Items</h2>
-                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                      Quick list
-                    </span>
-                  </div>
-
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-slate-500">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Item</th>
-                          <th className="px-4 py-3 text-right font-medium">Qty</th>
-                          <th className="px-4 py-3 text-right font-medium">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dashboard.stockItems.map((item) => (
-                          <tr key={item.itemId} className="border-t border-slate-100">
-                            <td className="px-4 py-3 font-medium text-slate-800">
-                              {item.itemName}
-                            </td>
-                            <td className="px-4 py-3 text-right text-slate-700">
-                              {formatNumber(item.closingQty)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                              {formatNumber(item.closingValue)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {dashboard.stockItems.length === 0 && (
-                      <div className="p-8 text-center text-sm text-slate-500">
-                        No stock items found for this company yet.
-                      </div>
-                    )}
-                  </div>
-                </article>
-              </div>
+            <section className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.15fr]">
+              <ActionButton className="bg-blue-600 text-white">+ Create Voucher</ActionButton>
+              <ActionButton className="bg-emerald-50 text-emerald-700">
+                Bank Reconciliation
+              </ActionButton>
+              <ActionButton className="bg-violet-50 text-violet-700">Stock Summary</ActionButton>
+              <ActionButton className="border border-slate-200 bg-white text-slate-700">
+                Configure Dashboard
+              </ActionButton>
             </section>
           </>
         )}
