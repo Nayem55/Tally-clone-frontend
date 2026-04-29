@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Save, X } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { voucherShortcuts } from "../utils/shortcuts";
+import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
 
 export function formatVoucherMoney(value, symbol = "") {
   const amount = Number(value || 0).toLocaleString("en-IN", {
@@ -42,8 +43,9 @@ export default function VoucherWorkspace({
 }) {
   const Icon = icon;
   const containerRef = useRef(null);
-  const navigate = useNavigate();
+  const confirmButtonRef = useRef(null);
   const location = useLocation();
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   const mergedShortcuts = useMemo(() => {
     const incomingByLabel = new Map(shortcuts.map((item) => [item.label, item]));
@@ -57,51 +59,38 @@ export default function VoucherWorkspace({
     });
   }, [shortcuts, location.pathname]);
 
+  useVoucherShortcuts({
+    shortcuts: mergedShortcuts,
+    containerRef,
+    onAddRow,
+    onSaveRequest: () => setShowSaveConfirm(true),
+  });
+
+  function confirmSave() {
+    setShowSaveConfirm(false);
+    onSave?.();
+  }
+
   useEffect(() => {
-    function handleKeyboard(event) {
-      const activeTag = document.activeElement?.tagName?.toLowerCase();
-      const isTypingContext =
-        activeTag === "input" || activeTag === "textarea" || document.activeElement?.isContentEditable;
+    if (!showSaveConfirm) return undefined;
 
-      const match = mergedShortcuts.find(
-        (shortcut) =>
-          shortcut.primary === event.key ||
-          (event.altKey && shortcut.alternate && shortcut.alternate.toLowerCase() === event.key.toLowerCase())
-      );
+    const focusTimer = window.setTimeout(() => {
+      confirmButtonRef.current?.focus();
+    }, 10);
 
-      if (!match) return;
-
-      if (match.focusTarget) {
+    function handleConfirmKeys(event) {
+      if (event.key === "Escape") {
         event.preventDefault();
-        const target = containerRef.current?.querySelector(match.focusTarget);
-        target?.focus();
-        return;
-      }
-
-      if (match.action === "addRow" && onAddRow) {
-        event.preventDefault();
-        onAddRow();
-        return;
-      }
-
-      if (match.action === "saveVoucher" && onSave) {
-        event.preventDefault();
-        if (window.confirm("Save this voucher now?")) {
-          onSave();
-        }
-        return;
-      }
-
-      if (match.route) {
-        if (isTypingContext && !event.altKey && !String(event.key).startsWith("F")) return;
-        event.preventDefault();
-        navigate(match.route);
+        setShowSaveConfirm(false);
       }
     }
 
-    window.addEventListener("keydown", handleKeyboard);
-    return () => window.removeEventListener("keydown", handleKeyboard);
-  }, [mergedShortcuts, navigate, onAddRow, onSave]);
+    window.addEventListener("keydown", handleConfirmKeys);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleConfirmKeys);
+    };
+  }, [showSaveConfirm]);
 
   function focusRelativeField(currentTarget, direction) {
     const fields = Array.from(
@@ -175,7 +164,7 @@ export default function VoucherWorkspace({
               <button
                 type="button"
                 className="inline-flex items-center gap-2 bg-[#1463ff] px-6 py-2.5 text-[14px] font-semibold text-white"
-                onClick={onSave}
+                onClick={() => setShowSaveConfirm(true)}
               >
                 <Check className="h-4 w-4" />
                 Save Voucher
@@ -242,6 +231,42 @@ export default function VoucherWorkspace({
           </aside>
         </div>
       </div>
+
+      {showSaveConfirm ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/40 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_80px_rgba(15,23,42,0.28)]">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <Check className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xl font-semibold text-slate-900">Save voucher?</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  We are ready to post this voucher. Once saved, it will update the connected stock and accounting reports.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setShowSaveConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-[#1463ff] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0f57eb]"
+                ref={confirmButtonRef}
+                onClick={confirmSave}
+              >
+                Confirm Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

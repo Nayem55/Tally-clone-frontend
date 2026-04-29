@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CreditCard,
@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
+import { voucherShortcuts } from "../utils/shortcuts";
 import { getCompanyCurrency } from "../utils/currency";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { formatDateForInput } from "../utils/voucherDates";
@@ -37,6 +39,7 @@ const emptyRow = {
 };
 
 export default function PosVoucherPage() {
+  const containerRef = useRef(null);
   const { companies, companyId } = useActiveCompany();
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
@@ -144,6 +147,10 @@ export default function PosVoucherPage() {
       ],
     }));
     setSearchTerm("");
+  };
+
+  const addRow = () => {
+    setForm((current) => ({ ...current, rows: [...current.rows, emptyRow] }));
   };
 
   const updateRow = (index, field, value) => {
@@ -264,8 +271,15 @@ export default function PosVoucherPage() {
     setCustomerSuggestions([]);
   };
 
+  useVoucherShortcuts({
+    shortcuts: voucherShortcuts,
+    containerRef,
+    onAddRow: addRow,
+    onSave: submit,
+  });
+
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1500px] space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -292,6 +306,7 @@ export default function PosVoucherPage() {
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
                 <input
+                  data-voucher-date="true"
                   type="date"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                   value={form.date}

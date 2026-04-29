@@ -13,12 +13,12 @@ export const voucherShortcuts = [
 
 export const sidebarParentShortcuts = [
   { key: "d", label: "Dashboard", route: "/" },
-  { key: "o", label: "Company", scope: "Company" },
-  { key: "c", label: "Create", scope: "Masters/Create", openKey: "Masters/Create" },
-  { key: "l", label: "Alter", scope: "Masters/Alter", openKey: "Masters/Alter" },
-  { key: "a", label: "Chart of Accounts", scope: "Chart of Accounts" },
+  { key: "y", label: "Company", scope: "Company" },
+  { key: "g", label: "Create", scope: "Masters/Create", openKey: "Masters/Create" },
+  { key: "m", label: "Alter", scope: "Masters/Alter", openKey: "Masters/Alter" },
+  { key: "h", label: "Chart of Accounts", scope: "Chart of Accounts" },
   {
-    key: "v",
+    key: "j",
     label: "Accounting Vouchers",
     scope: "Transactions (Vouchers)/Accounting Vouchers",
     openKey: "Transactions (Vouchers)/Accounting Vouchers",
@@ -31,13 +31,13 @@ export const sidebarParentShortcuts = [
   },
   { key: "e", label: "Alter Vouchers", route: "/transactions/alter-vouchers" },
   {
-    key: "f",
+    key: "b",
     label: "Financial Statements",
     scope: "Reports/Financial Statements",
     openKey: "Reports/Financial Statements",
   },
   {
-    key: "b",
+    key: "n",
     label: "Inventory Books",
     scope: "Reports/Inventory Books",
     openKey: "Reports/Inventory Books",
@@ -49,7 +49,7 @@ export const sidebarParentShortcuts = [
     openKey: "Reports/Account Books",
   },
   {
-    key: "h",
+    key: "w",
     label: "Customer Behaviour",
     scope: "Reports/Customer Behaviour",
     openKey: "Reports/Customer Behaviour",

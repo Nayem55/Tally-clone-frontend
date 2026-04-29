@@ -121,8 +121,8 @@ export default function ShortcutReferencePage() {
               <h1 className="text-3xl font-bold text-slate-900">All Short Keys</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 Use this page as the keyboard map for the whole accounting workspace. Sidebar navigation uses
-                `Ctrl + key` to choose a parent area and `Alt + key` to jump into a child page. Voucher screens
-                keep the fast function-key flow for data entry.
+                `Ctrl + key` to choose a parent area, `Alt + key` to jump into a child page, and `Ctrl + Shift + L`
+                to open the jump-search from anywhere. Voucher screens keep the fast function-key flow for data entry.
               </p>
             </div>
           </div>
@@ -132,7 +132,7 @@ export default function ShortcutReferencePage() {
           <ShortcutCard
             title="Sidebar Navigation"
             icon={PanelLeftOpen}
-            subtitle="Press a parent shortcut first. Expand any parent card below to see the matching child shortcuts."
+            subtitle="Press Ctrl with a parent key first. Expand any parent card below to see the matching child shortcuts."
           >
             <div className="space-y-3">
               {parentRows.map((shortcut) => {

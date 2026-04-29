@@ -34,6 +34,7 @@ import CustomerDimensionReportPage from "./Pages/CustomerDimensionReportPage";
 import StockItemDetailPage from "./Pages/StockItemDetailPage";
 import InventoryMovementAnalysisPage from "./Pages/InventoryMovementAnalysisPage";
 import ShortcutReferencePage from "./Pages/ShortcutReferencePage";
+import CommandSearchModal from "./Component/CommandSearchModal";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -43,6 +44,7 @@ function AppShell() {
   return (
     <>
       <Navbar />
+      <CommandSearchModal />
       <div className="flex">
         <Sidebar />
         <main className="min-h-screen flex-1 bg-slate-100">
