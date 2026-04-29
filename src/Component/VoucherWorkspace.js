@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useRef } from "react";
 import { Check, ChevronDown, Save, X } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export function formatVoucherMoney(value, symbol = "") {
   const amount = Number(value || 0).toLocaleString("en-IN", {
@@ -13,11 +15,22 @@ export function renderBalance(value, side, symbol = "") {
   return `${formatVoucherMoney(value, symbol)} ${side || ""}`.trim();
 }
 
+const shortcutRoutes = [
+  { primary: "F2", alternate: "D", label: "Date", focusTarget: "[data-voucher-date='true']" },
+  { primary: "F4", alternate: "C", label: "Contra", route: "/transactions/accounting/contra" },
+  { primary: "F5", alternate: "M", label: "Payment", route: "/transactions/accounting/payment" },
+  { primary: "F6", alternate: "R", label: "Receipt", route: "/transactions/accounting/receipt" },
+  { primary: "F7", alternate: "J", label: "Journal", route: "/transactions/accounting/journal" },
+  { primary: "F8", alternate: "S", label: "Sales", route: "/transactions/accounting/sales" },
+  { primary: "F9", alternate: "P", label: "Purchase", route: "/transactions/accounting/purchase" },
+  { primary: "F10", alternate: "O", label: "Other Vouchers", route: "/transactions/alter-vouchers" },
+];
+
 function InfoCard({ title, children }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      <div className="mt-4">{children}</div>
+    <section className="border border-[#b9c8da] bg-[#eef5ff] p-3 shadow-sm">
+      <h3 className="text-[14px] font-semibold text-[#214b91]">{title}</h3>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
@@ -37,26 +50,110 @@ export default function VoucherWorkspace({
   children,
 }) {
   const Icon = icon;
+  const containerRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const mergedShortcuts = useMemo(() => {
+    const incomingByLabel = new Map(shortcuts.map((item) => [item.label, item]));
+    return shortcutRoutes.map((shortcut) => {
+      const incoming = incomingByLabel.get(shortcut.label);
+      return {
+        ...shortcut,
+        ...(incoming || {}),
+        active: incoming?.active || location.pathname === shortcut.route,
+      };
+    });
+  }, [shortcuts, location.pathname]);
+
+  useEffect(() => {
+    function handleKeyboard(event) {
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      const isTypingContext =
+        activeTag === "input" || activeTag === "textarea" || document.activeElement?.isContentEditable;
+
+      const match = mergedShortcuts.find(
+        (shortcut) =>
+          shortcut.primary === event.key ||
+          (event.altKey && shortcut.alternate && shortcut.alternate.toLowerCase() === event.key.toLowerCase())
+      );
+
+      if (!match) return;
+
+      if (match.focusTarget) {
+        event.preventDefault();
+        const target = containerRef.current?.querySelector(match.focusTarget);
+        target?.focus();
+        return;
+      }
+
+      if (match.route) {
+        if (isTypingContext && !event.altKey && !String(event.key).startsWith("F")) return;
+        event.preventDefault();
+        navigate(match.route);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, [mergedShortcuts, navigate]);
+
+  function focusRelativeField(currentTarget, direction) {
+    const fields = Array.from(
+      containerRef.current?.querySelectorAll("[data-vnav='true']") || []
+    ).filter((node) => !node.disabled && node.offsetParent !== null);
+    const currentIndex = fields.indexOf(currentTarget);
+    if (currentIndex === -1) return;
+    const nextIndex = currentIndex + direction;
+    if (nextIndex >= 0 && nextIndex < fields.length) {
+      fields[nextIndex].focus();
+      fields[nextIndex].select?.();
+    }
+  }
+
+  function handleContainerKeyDown(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const tag = target.tagName.toLowerCase();
+    if (tag === "textarea" && event.key === "Enter") return;
+    if (!target.closest("[data-vnav='true']")) return;
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      focusRelativeField(target, 1);
+      return;
+    }
+
+    if (
+      event.key === "Backspace" &&
+      "value" in target &&
+      String(target.value || "") === ""
+    ) {
+      event.preventDefault();
+      focusRelativeField(target, -1);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-start gap-4">
-              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${iconTone}`}>
-                <Icon className="h-7 w-7" />
+    <div className="min-h-screen bg-[#f1f1f1] px-0 py-0" ref={containerRef} onKeyDown={handleContainerKeyDown}>
+      <div className="mx-auto max-w-full">
+        <section className="border-b border-[#a6bfdc] bg-[#f7fbff] px-3 py-2">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-start gap-3">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${iconTone}`}>
+                <Icon className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
-                <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+                <h1 className="text-[28px] font-semibold text-[#1f2f55]">{title}</h1>
+                <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
                 onClick={onCancel}
               >
                 <X className="h-4 w-4" />
@@ -64,7 +161,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
                 onClick={onSaveDraft}
               >
                 <Save className="h-4 w-4" />
@@ -72,7 +169,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                className="inline-flex items-center gap-2 bg-[#1463ff] px-6 py-2.5 text-[14px] font-semibold text-white"
                 onClick={onSave}
               >
                 <Check className="h-4 w-4" />
@@ -83,23 +180,21 @@ export default function VoucherWorkspace({
           </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_270px]">
-          <div className="space-y-6">{children}</div>
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_250px]">
+          <div className="space-y-4 bg-[#f8f8f8] p-3">{children}</div>
 
-          <aside className="space-y-6">
+          <aside className="border-l border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3">
             <InfoCard title="Voucher Summary">
-              <div className="space-y-4 text-sm">
+              <div className="space-y-2 text-[13px]">
                 {summaryTag ? (
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Type</span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      {summaryTag}
-                    </span>
+                    <span className="text-slate-600">Type</span>
+                    <span className="font-semibold text-[#214b91]">{summaryTag}</span>
                   </div>
                 ) : null}
                 {summaryItems.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">{item.label}</span>
+                  <div key={item.label} className="flex items-start justify-between gap-3">
+                    <span className="text-slate-600">{item.label}</span>
                     <span className="text-right font-medium text-slate-900">{item.value || "-"}</span>
                   </div>
                 ))}
@@ -107,10 +202,10 @@ export default function VoucherWorkspace({
             </InfoCard>
 
             <InfoCard title="Amount Summary">
-              <div className="space-y-4 text-sm">
+              <div className="space-y-2 text-[13px]">
                 {amountSummaryItems.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-3">
-                    <span className={item.emphasis ? "font-semibold text-slate-800" : "text-slate-500"}>
+                  <div key={item.label} className="flex items-start justify-between gap-3">
+                    <span className={item.emphasis ? "font-semibold text-slate-800" : "text-slate-600"}>
                       {item.label}
                     </span>
                     <span className={`text-right font-semibold ${item.tone || "text-slate-900"}`}>
@@ -121,19 +216,20 @@ export default function VoucherWorkspace({
               </div>
             </InfoCard>
 
-            <InfoCard title="Shortcuts">
-              <div className="space-y-3">
-                {shortcuts.map((shortcut) => (
+            <InfoCard title="Short Keys">
+              <div className="space-y-2">
+                {mergedShortcuts.map((shortcut) => (
                   <div
-                    key={shortcut.key}
-                    className={`flex items-center justify-between rounded-xl border px-3 py-3 text-sm ${
+                    key={shortcut.label}
+                    className={`flex items-center justify-between border px-3 py-2 text-[13px] ${
                       shortcut.active
-                        ? "border-blue-200 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-white text-slate-700"
+                        ? "border-[#8eb5ff] bg-white text-[#1957d2]"
+                        : "border-[#c4d7ec] bg-[#f7fbff] text-slate-700"
                     }`}
                   >
-                    <span className="font-semibold">{shortcut.key}</span>
+                    <span className="font-semibold">{shortcut.primary}</span>
                     <span>{shortcut.label}</span>
+                    <span className="text-[11px] text-slate-400">Alt+{shortcut.alternate}</span>
                   </div>
                 ))}
               </div>
@@ -147,9 +243,9 @@ export default function VoucherWorkspace({
 
 export function VoucherPanel({ title, children, className = "" }) {
   return (
-    <section className={`rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 ${className}`}>
-      <h2 className="text-xl font-bold text-slate-900">{title}</h2>
-      <div className="mt-5">{children}</div>
+    <section className={`border border-[#bccfe3] bg-white p-4 shadow-sm ${className}`}>
+      <h2 className="text-[16px] font-semibold text-[#1f2f55]">{title}</h2>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }

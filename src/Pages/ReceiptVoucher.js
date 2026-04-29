@@ -6,7 +6,10 @@ import VoucherWorkspace, {
   formatVoucherMoney,
   renderBalance,
 } from "../Component/VoucherWorkspace";
+import SearchableSelect from "../Component/SearchableSelect";
+import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/voucherDates";
 
 const shortcutKeys = [
   { key: "F4", label: "Contra" },
@@ -15,7 +18,10 @@ const shortcutKeys = [
   { key: "F7", label: "Journal" },
   { key: "F8", label: "Sales" },
   { key: "F9", label: "Purchase" },
+  { key: "F10", label: "Other Vouchers" },
 ];
+
+const emptyRow = { ledgerId: "", amount: "", narration: "" };
 
 export default function ReceiptVoucher({ companyId }) {
   const [receiptTypeId, setReceiptTypeId] = useState("");
@@ -23,9 +29,9 @@ export default function ReceiptVoucher({ companyId }) {
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateForInput(new Date()),
     receiptLedger: "",
-    rows: [{ ledgerId: "", amount: "", narration: "" }],
+    rows: [emptyRow],
     narration: "",
   });
 
@@ -50,54 +56,56 @@ export default function ReceiptVoucher({ companyId }) {
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
-  const ledgerMap = useMemo(
-    () => new Map(ledgers.map((ledger) => [ledger._id, ledger])),
+  const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+  const ledgerOptions = useMemo(
+    () =>
+      ledgers.map((ledger) => ({
+        value: ledger._id,
+        label: ledger.name,
+        meta: ledger.groupName || ledger.parentGroupName || "",
+      })),
     [ledgers]
   );
   const receiptLedger = ledgerMap.get(form.receiptLedger);
+  const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
+  const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  const updateRow = (index, key, value) => {
+  function updateRow(index, key, value) {
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       return { ...prev, rows };
     });
-  };
+  }
 
-  const addRow = () =>
-    setForm((prev) => ({
-      ...prev,
-      rows: [...prev.rows, { ledgerId: "", amount: "", narration: "" }],
-    }));
-  const removeRow = (index) =>
+  function addRow() {
+    setForm((prev) => ({ ...prev, rows: [...prev.rows, emptyRow] }));
+  }
+
+  function removeRow(index) {
     setForm((prev) => ({
       ...prev,
       rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
+  }
 
-  const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
-  const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-
-  const resetForm = () =>
+  function resetForm() {
     setForm({
       number: "",
-      date: new Date().toISOString().slice(0, 10),
+      date: formatDateForInput(new Date()),
       receiptLedger: "",
-      rows: [{ ledgerId: "", amount: "", narration: "" }],
+      rows: [emptyRow],
       narration: "",
     });
+  }
 
-  const save = async () => {
+  async function save() {
     if (!receiptTypeId) return alert("Receipt voucher type missing");
     if (!form.receiptLedger) return alert("Please select the account to receive into");
     if (validRows.length === 0) return alert("Please add at least one receipt row");
 
     const lines = [
-      {
-        ledgerId: form.receiptLedger,
-        debit: totalAmount,
-        credit: 0,
-      },
+      { ledgerId: form.receiptLedger, debit: totalAmount, credit: 0 },
       ...validRows.map((row) => ({
         ledgerId: row.ledgerId,
         debit: 0,
@@ -114,12 +122,12 @@ export default function ReceiptVoucher({ companyId }) {
     });
     alert("Receipt voucher saved");
     resetForm();
-  };
+  }
 
   return (
     <VoucherWorkspace
       title="Receipt Voucher"
-      subtitle="Record incoming receipts into cash or bank with clear ledger-wise settlement rows."
+      subtitle="Fast incoming receipt entry with searchable ledgers and typeable date control."
       icon={ArrowDownCircle}
       iconTone="bg-sky-50 text-sky-600"
       onCancel={resetForm}
@@ -129,7 +137,6 @@ export default function ReceiptVoucher({ companyId }) {
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
         { label: "Date", value: form.date },
-        { label: "Company", value: company?.name },
         { label: "Receipt Into", value: receiptLedger?.name || "-" },
       ]}
       amountSummaryItems={[
@@ -147,44 +154,35 @@ export default function ReceiptVoucher({ companyId }) {
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              data-vnav="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.number}
               onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
-            <input
-              type="date"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <TallyDateInput
+              data-voucher-date="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.date}
-              onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
+              onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="border border-[#c8d2de] bg-[#edf4ff] px-2 py-1.5 text-[14px] text-slate-700">
               {company?.name || "-"}
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Receive Into (Account)
-            </label>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Receive Into</label>
+            <SearchableSelect
+              options={ledgerOptions}
               value={form.receiptLedger}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, receiptLedger: event.target.value }))
-              }
-            >
-              <option value="">Select cash / bank ledger</option>
-              {ledgers.map((ledger) => (
-                <option key={ledger._id} value={ledger._id}>
-                  {ledger.name}
-                </option>
-              ))}
-            </select>
+              onChange={(newValue) => setForm((prev) => ({ ...prev, receiptLedger: newValue }))}
+              placeholder="Search cash / bank ledger"
+            />
             <p className="mt-2 text-xs text-slate-500">
               Current Balance:{" "}
               {receiptLedger
@@ -200,9 +198,9 @@ export default function ReceiptVoucher({ companyId }) {
       </VoucherPanel>
 
       <VoucherPanel title="Receipt Details">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-hidden border border-[#bccfe3]">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
                 <th className="px-4 py-3 font-medium">Received From (Account)</th>
@@ -218,18 +216,12 @@ export default function ReceiptVoucher({ companyId }) {
                   <tr key={index} className="border-t border-slate-100">
                     <td className="px-4 py-4 text-slate-500">{index + 1}</td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      <SearchableSelect
+                        options={ledgerOptions}
                         value={row.ledgerId}
-                        onChange={(event) => updateRow(index, "ledgerId", event.target.value)}
-                      >
-                        <option value="">Select ledger</option>
-                        {ledgers.map((entry) => (
-                          <option key={entry._id} value={entry._id}>
-                            {entry.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "ledgerId", newValue)}
+                        placeholder="Search received-from ledger"
+                      />
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {ledger
@@ -243,15 +235,17 @@ export default function ReceiptVoucher({ companyId }) {
                     </td>
                     <td className="px-4 py-4">
                       <input
+                        data-vnav="true"
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3 text-right"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.amount}
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
                       />
                     </td>
                     <td className="px-4 py-4">
                       <input
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.narration}
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
@@ -260,7 +254,7 @@ export default function ReceiptVoucher({ companyId }) {
                       {form.rows.length > 1 ? (
                         <button
                           type="button"
-                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          className="rounded p-2 text-rose-500 hover:bg-rose-50"
                           onClick={() => removeRow(index)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -276,7 +270,7 @@ export default function ReceiptVoucher({ companyId }) {
 
         <button
           type="button"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          className="mt-4 inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
           onClick={addRow}
         >
           <Plus className="h-4 w-4" />
@@ -286,7 +280,8 @@ export default function ReceiptVoucher({ companyId }) {
 
       <VoucherPanel title="Narration">
         <textarea
-          className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          data-vnav="true"
+          className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
           onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
           placeholder="Receipt against customer dues."

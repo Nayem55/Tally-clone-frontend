@@ -6,8 +6,11 @@ import VoucherWorkspace, {
   formatVoucherMoney,
   renderBalance,
 } from "../Component/VoucherWorkspace";
+import SearchableSelect from "../Component/SearchableSelect";
+import TallyDateInput from "../Component/TallyDateInput";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/voucherDates";
 
 const shortcutKeys = [
   { key: "F5", label: "Payment" },
@@ -37,7 +40,7 @@ export default function SalesVoucher({ companyId }) {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateForInput(new Date()),
     partyLedger: "",
     salesLedger: "",
     priceLevelId: "",
@@ -112,6 +115,22 @@ export default function SalesVoucher({ companyId }) {
   const partyLedger = ledgerMap.get(form.partyLedger) || partyLedgers.find((row) => row._id === form.partyLedger);
   const activePriceLevelId = form.priceLevelId || partyLedger?.priceLevelId || "";
   const salesLedger = ledgerMap.get(form.salesLedger || salesLedgerId);
+  const partyOptions = useMemo(
+    () => partyLedgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
+    [partyLedgers]
+  );
+  const salesLedgerOptions = useMemo(
+    () => salesLedgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
+    [salesLedgers]
+  );
+  const priceLevelOptions = useMemo(
+    () => priceLevels.map((level) => ({ value: level._id, label: level.name || level.code })),
+    [priceLevels]
+  );
+  const itemOptions = useMemo(
+    () => items.map((item) => ({ value: item._id, label: item.name })),
+    [items]
+  );
 
   const lineAmount = (row) => {
     const qty = Number(row.billedQty || row.actualQty || 0);
@@ -187,7 +206,7 @@ export default function SalesVoucher({ companyId }) {
   const resetForm = () =>
     setForm({
       number: "",
-      date: new Date().toISOString().slice(0, 10),
+      date: formatDateForInput(new Date()),
       partyLedger: "",
       salesLedger: salesLedgerId,
       priceLevelId: "",
@@ -270,18 +289,19 @@ export default function SalesVoucher({ companyId }) {
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              data-vnav="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.number}
               onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
-            <input
-              type="date"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <TallyDateInput
+              data-voucher-date="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.date}
-              onChange={(event) => updateDate(event.target.value)}
+              onChange={updateDate}
             />
           </div>
           <div>
@@ -292,33 +312,21 @@ export default function SalesVoucher({ companyId }) {
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Price Level</label>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <SearchableSelect
+              options={[{ value: "", label: "Party Default / Not Applicable" }, ...priceLevelOptions]}
               value={form.priceLevelId}
-              onChange={(event) => updatePriceLevel(event.target.value)}
-            >
-              <option value="">Party Default / Not Applicable</option>
-              {priceLevels.map((level) => (
-                <option key={level._id} value={level._id}>
-                  {level.name || level.code}
-                </option>
-              ))}
-            </select>
+              onChange={updatePriceLevel}
+              placeholder="Search price level"
+            />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Party A/c Name</label>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <SearchableSelect
+              options={partyOptions}
               value={form.partyLedger}
-              onChange={(event) => setForm((prev) => ({ ...prev, partyLedger: event.target.value }))}
-            >
-              <option value="">Select customer</option>
-              {partyLedgers.map((ledger) => (
-                <option key={ledger._id} value={ledger._id}>
-                  {ledger.name}
-                </option>
-              ))}
-            </select>
+              onChange={(newValue) => setForm((prev) => ({ ...prev, partyLedger: newValue }))}
+              placeholder="Search customer"
+            />
             <p className="mt-2 text-xs text-slate-500">
               Current Balance:{" "}
               {partyLedger
@@ -332,18 +340,12 @@ export default function SalesVoucher({ companyId }) {
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Sales Ledger</label>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <SearchableSelect
+              options={salesLedgerOptions}
               value={form.salesLedger}
-              onChange={(event) => setForm((prev) => ({ ...prev, salesLedger: event.target.value }))}
-            >
-              <option value="">Select sales ledger</option>
-              {salesLedgers.map((ledger) => (
-                <option key={ledger._id} value={ledger._id}>
-                  {ledger.name}
-                </option>
-              ))}
-            </select>
+              onChange={(newValue) => setForm((prev) => ({ ...prev, salesLedger: newValue }))}
+              placeholder="Search sales ledger"
+            />
             <p className="mt-2 text-xs text-slate-500">
               Current Balance:{" "}
               {salesLedger
@@ -380,18 +382,12 @@ export default function SalesVoucher({ companyId }) {
                   <tr key={index} className="border-t border-slate-100">
                     <td className="px-4 py-4 text-slate-500">{index + 1}</td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      <SearchableSelect
+                        options={itemOptions}
                         value={row.itemId}
-                        onChange={(event) => updateRow(index, "itemId", event.target.value)}
-                      >
-                        <option value="">Select item</option>
-                        {items.map((entry) => (
-                          <option key={entry._id} value={entry._id}>
-                            {entry.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "itemId", newValue)}
+                        placeholder="Search item"
+                      />
                       <p className="mt-2 text-xs text-slate-500">
                         Stock: {Number(item?.openingQty || item?.currentQty || 0).toLocaleString("en-IN")} pcs
                       </p>
@@ -399,7 +395,8 @@ export default function SalesVoucher({ companyId }) {
                     <td className="px-4 py-4">
                       <input
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.actualQty}
                         onChange={(event) => updateRow(index, "actualQty", event.target.value)}
                       />
@@ -407,7 +404,8 @@ export default function SalesVoucher({ companyId }) {
                     <td className="px-4 py-4">
                       <input
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.billedQty}
                         onChange={(event) => updateRow(index, "billedQty", event.target.value)}
                       />
@@ -415,7 +413,8 @@ export default function SalesVoucher({ companyId }) {
                     <td className="px-4 py-4">
                       <input
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.rate}
                         onChange={(event) => updateRow(index, "rate", event.target.value)}
                       />
@@ -423,7 +422,8 @@ export default function SalesVoucher({ companyId }) {
                     <td className="px-4 py-4">
                       <input
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.discountPercent}
                         onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
                       />
@@ -472,7 +472,8 @@ export default function SalesVoucher({ companyId }) {
               <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
               <input
                 type="number"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                data-vnav="true"
+                className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                 value={form.discountAmount}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, discountAmount: event.target.value }))
@@ -485,7 +486,8 @@ export default function SalesVoucher({ companyId }) {
           <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
           <input
             type="number"
-            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            data-vnav="true"
+            className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
             value={form.additionalCharges}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, additionalCharges: event.target.value }))
@@ -496,7 +498,8 @@ export default function SalesVoucher({ companyId }) {
 
       <VoucherPanel title="Narration">
         <textarea
-          className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          data-vnav="true"
+          className="min-h-28 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
           onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
           placeholder="Sold to customer as per invoice."

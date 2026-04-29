@@ -6,7 +6,10 @@ import VoucherWorkspace, {
   formatVoucherMoney,
   renderBalance,
 } from "../Component/VoucherWorkspace";
+import SearchableSelect from "../Component/SearchableSelect";
+import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/voucherDates";
 
 const shortcutKeys = [
   { key: "F4", label: "Contra" },
@@ -18,18 +21,19 @@ const shortcutKeys = [
   { key: "F10", label: "Other Vouchers" },
 ];
 
+const emptyRow = { ledgerId: "", amount: "", narration: "" };
+
 export default function PaymentVoucher({ companyId }) {
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateForInput(new Date()),
     paymentLedger: "",
-    rows: [{ ledgerId: "", amount: "", narration: "" }],
+    rows: [emptyRow],
     narration: "",
     referenceNo: "",
-    tags: "",
   });
 
   useEffect(() => {
@@ -53,49 +57,51 @@ export default function PaymentVoucher({ companyId }) {
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
-  const ledgerMap = useMemo(
-    () => new Map(ledgers.map((ledger) => [ledger._id, ledger])),
+  const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+  const ledgerOptions = useMemo(
+    () =>
+      ledgers.map((ledger) => ({
+        value: ledger._id,
+        label: ledger.name,
+        meta: ledger.groupName || ledger.parentGroupName || "",
+      })),
     [ledgers]
   );
+  const paymentLedger = ledgerMap.get(form.paymentLedger);
+  const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
+  const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  const updateRow = (index, key, value) => {
+  function updateRow(index, key, value) {
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       return { ...prev, rows };
     });
-  };
+  }
 
-  const addRow = () => {
-    setForm((prev) => ({
-      ...prev,
-      rows: [...prev.rows, { ledgerId: "", amount: "", narration: "" }],
-    }));
-  };
+  function addRow() {
+    setForm((prev) => ({ ...prev, rows: [...prev.rows, emptyRow] }));
+  }
 
-  const removeRow = (index) => {
+  function removeRow(index) {
     setForm((prev) => ({
       ...prev,
       rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
-  };
+  }
 
-  const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
-  const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const paymentLedger = ledgerMap.get(form.paymentLedger);
-
-  const resetForm = () =>
+  function resetForm() {
     setForm({
       number: "",
-      date: new Date().toISOString().slice(0, 10),
+      date: formatDateForInput(new Date()),
       paymentLedger: "",
-      rows: [{ ledgerId: "", amount: "", narration: "" }],
+      rows: [emptyRow],
       narration: "",
       referenceNo: "",
-      tags: "",
     });
+  }
 
-  const save = async () => {
+  async function save() {
     if (!paymentTypeId) return alert("Payment voucher type missing");
     if (!form.paymentLedger) return alert("Please select the account to pay from");
     if (validRows.length === 0) return alert("Please add at least one payment row");
@@ -106,11 +112,7 @@ export default function PaymentVoucher({ companyId }) {
         debit: Number(row.amount),
         credit: 0,
       })),
-      {
-        ledgerId: form.paymentLedger,
-        debit: 0,
-        credit: totalAmount,
-      },
+      { ledgerId: form.paymentLedger, debit: 0, credit: totalAmount },
     ];
 
     await api.post(`/companies/${companyId}/vouchers`, {
@@ -119,20 +121,16 @@ export default function PaymentVoucher({ companyId }) {
       date: form.date,
       narration: form.narration,
       referenceNo: form.referenceNo,
-      tags: form.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
       lines,
     });
     alert("Payment voucher saved");
     resetForm();
-  };
+  }
 
   return (
     <VoucherWorkspace
       title="Payment Voucher"
-      subtitle="Record outgoing payments from cash or bank accounts with clearer voucher control."
+      subtitle="Fast outgoing payment entry with searchable ledgers and keyboard-only movement."
       icon={HandCoins}
       iconTone="bg-emerald-50 text-emerald-600"
       onCancel={resetForm}
@@ -142,11 +140,14 @@ export default function PaymentVoucher({ companyId }) {
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
         { label: "Date", value: form.date },
-        { label: "Company", value: company?.name },
         { label: "Pay From", value: paymentLedger?.name || "-" },
       ]}
       amountSummaryItems={[
-        { label: "Total Amount", value: formatVoucherMoney(totalAmount, currency.symbol), emphasis: true },
+        {
+          label: "Total Amount",
+          value: formatVoucherMoney(totalAmount, currency.symbol),
+          emphasis: true,
+        },
       ]}
       shortcuts={shortcutKeys}
     >
@@ -155,44 +156,35 @@ export default function PaymentVoucher({ companyId }) {
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              data-vnav="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.number}
               onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
-            <input
-              type="date"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <TallyDateInput
+              data-voucher-date="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.date}
-              onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
+              onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="border border-[#c8d2de] bg-[#edf4ff] px-2 py-1.5 text-[14px] text-slate-700">
               {company?.name || "-"}
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Pay From (Account)
-            </label>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Pay From</label>
+            <SearchableSelect
+              options={ledgerOptions}
               value={form.paymentLedger}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, paymentLedger: event.target.value }))
-              }
-            >
-              <option value="">Select cash / bank ledger</option>
-              {ledgers.map((ledger) => (
-                <option key={ledger._id} value={ledger._id}>
-                  {ledger.name}
-                </option>
-              ))}
-            </select>
+              onChange={(newValue) => setForm((prev) => ({ ...prev, paymentLedger: newValue }))}
+              placeholder="Search cash / bank ledger"
+            />
             <p className="mt-2 text-xs text-slate-500">
               Current Balance:{" "}
               {paymentLedger
@@ -208,9 +200,9 @@ export default function PaymentVoucher({ companyId }) {
       </VoucherPanel>
 
       <VoucherPanel title="Payment Details">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-hidden border border-[#bccfe3]">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
                 <th className="px-4 py-3 font-medium">Paid To (Account)</th>
@@ -226,18 +218,12 @@ export default function PaymentVoucher({ companyId }) {
                   <tr key={index} className="border-t border-slate-100">
                     <td className="px-4 py-4 text-slate-500">{index + 1}</td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      <SearchableSelect
+                        options={ledgerOptions}
                         value={row.ledgerId}
-                        onChange={(event) => updateRow(index, "ledgerId", event.target.value)}
-                      >
-                        <option value="">Select ledger</option>
-                        {ledgers.map((entry) => (
-                          <option key={entry._id} value={entry._id}>
-                            {entry.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "ledgerId", newValue)}
+                        placeholder="Search paid-to ledger"
+                      />
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {ledger
@@ -251,15 +237,17 @@ export default function PaymentVoucher({ companyId }) {
                     </td>
                     <td className="px-4 py-4">
                       <input
+                        data-vnav="true"
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3 text-right"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.amount}
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
                       />
                     </td>
                     <td className="px-4 py-4">
                       <input
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.narration}
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
@@ -268,7 +256,7 @@ export default function PaymentVoucher({ companyId }) {
                       {form.rows.length > 1 ? (
                         <button
                           type="button"
-                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          className="rounded p-2 text-rose-500 hover:bg-rose-50"
                           onClick={() => removeRow(index)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -284,88 +272,32 @@ export default function PaymentVoucher({ companyId }) {
 
         <button
           type="button"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          className="mt-4 inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
           onClick={addRow}
         >
           <Plus className="h-4 w-4" />
           Add New Row
         </button>
+      </VoucherPanel>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VoucherPanel title="Narration">
           <textarea
-            className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+            data-vnav="true"
+            className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
             value={form.narration}
             onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
             placeholder="Payment for goods purchased."
           />
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-5">
-            <p className="text-sm font-medium text-emerald-700">Total Amount</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-700">
-              {formatVoucherMoney(totalAmount, currency.symbol)}
-            </p>
-          </div>
-        </div>
-      </VoucherPanel>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <VoucherPanel title="Voucher Options">
-          <div className="space-y-4 text-sm text-slate-600">
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
-              Post-Dated
-            </label>
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
-              Optional Voucher
-            </label>
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" defaultChecked />
-              Calculate Interest
-            </label>
-          </div>
         </VoucherPanel>
-
-        <VoucherPanel title="More Options">
-          <div className="space-y-4 text-sm text-slate-600">
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
-              Add Attachment
-            </label>
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
-              Enable Auto Narration
-            </label>
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
-              Print After Saving
-            </label>
-          </div>
-        </VoucherPanel>
-
-        <VoucherPanel title="Tags & Reference">
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Reference No.
-              </label>
-              <input
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                value={form.referenceNo}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, referenceNo: event.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Tags</label>
-              <input
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                value={form.tags}
-                onChange={(event) => setForm((prev) => ({ ...prev, tags: event.target.value }))}
-                placeholder="urgent, vendor-payment"
-              />
-            </div>
-          </div>
+        <VoucherPanel title="Reference">
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Reference No.</label>
+          <input
+            data-vnav="true"
+            className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+            value={form.referenceNo}
+            onChange={(event) => setForm((prev) => ({ ...prev, referenceNo: event.target.value }))}
+          />
         </VoucherPanel>
       </div>
     </VoucherWorkspace>

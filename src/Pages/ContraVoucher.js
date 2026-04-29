@@ -6,7 +6,10 @@ import VoucherWorkspace, {
   formatVoucherMoney,
   renderBalance,
 } from "../Component/VoucherWorkspace";
+import SearchableSelect from "../Component/SearchableSelect";
+import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/voucherDates";
 
 const shortcutKeys = [
   { key: "F4", label: "Contra", active: true },
@@ -18,14 +21,16 @@ const shortcutKeys = [
   { key: "F10", label: "Other Vouchers" },
 ];
 
+const emptyRow = { creditLedgerId: "", debitLedgerId: "", amount: "", narration: "" };
+
 export default function ContraVoucher({ companyId }) {
   const [contraTypeId, setContraTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
-    rows: [{ creditLedgerId: "", debitLedgerId: "", amount: "", narration: "" }],
+    date: formatDateForInput(new Date()),
+    rows: [emptyRow],
     narration: "",
   });
 
@@ -50,47 +55,51 @@ export default function ContraVoucher({ companyId }) {
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
-  const ledgerMap = useMemo(
-    () => new Map(ledgers.map((ledger) => [ledger._id, ledger])),
+  const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+  const ledgerOptions = useMemo(
+    () =>
+      ledgers.map((ledger) => ({
+        value: ledger._id,
+        label: ledger.name,
+        meta: ledger.groupName || ledger.parentGroupName || "",
+      })),
     [ledgers]
   );
-
-  const updateRow = (index, key, value) => {
-    setForm((prev) => {
-      const rows = [...prev.rows];
-      rows[index] = { ...rows[index], [key]: value };
-      return { ...prev, rows };
-    });
-  };
-
-  const addRow = () => {
-    setForm((prev) => ({
-      ...prev,
-      rows: [...prev.rows, { creditLedgerId: "", debitLedgerId: "", amount: "", narration: "" }],
-    }));
-  };
-
-  const removeRow = (index) => {
-    setForm((prev) => ({
-      ...prev,
-      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
-    }));
-  };
 
   const validRows = form.rows.filter(
     (row) => row.creditLedgerId && row.debitLedgerId && Number(row.amount) > 0
   );
   const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  const resetForm = () =>
+  function updateRow(index, key, value) {
+    setForm((prev) => {
+      const rows = [...prev.rows];
+      rows[index] = { ...rows[index], [key]: value };
+      return { ...prev, rows };
+    });
+  }
+
+  function addRow() {
+    setForm((prev) => ({ ...prev, rows: [...prev.rows, emptyRow] }));
+  }
+
+  function removeRow(index) {
+    setForm((prev) => ({
+      ...prev,
+      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
+    }));
+  }
+
+  function resetForm() {
     setForm({
       number: "",
-      date: new Date().toISOString().slice(0, 10),
-      rows: [{ creditLedgerId: "", debitLedgerId: "", amount: "", narration: "" }],
+      date: formatDateForInput(new Date()),
+      rows: [emptyRow],
       narration: "",
     });
+  }
 
-  const save = async () => {
+  async function save() {
     if (!contraTypeId) return alert("Contra voucher type missing");
     if (validRows.length === 0) return alert("Please add at least one contra row");
 
@@ -108,12 +117,12 @@ export default function ContraVoucher({ companyId }) {
     });
     alert("Contra voucher saved");
     resetForm();
-  };
+  }
 
   return (
     <VoucherWorkspace
       title="Contra Voucher"
-      subtitle="Transfer between cash and bank accounts with proper debit and credit posting."
+      subtitle="Keyboard-first cash and bank transfer entry with searchable ledger selection."
       icon={ArrowRightLeft}
       iconTone="bg-violet-50 text-violet-600"
       onCancel={resetForm}
@@ -121,6 +130,7 @@ export default function ContraVoucher({ companyId }) {
       onSaveDraft={() => alert("Draft support can be added next.")}
       summaryTag="Contra Voucher"
       summaryItems={[
+        { label: "Voucher No.", value: form.number || "-" },
         { label: "Company", value: company?.name },
         { label: "Date", value: form.date },
       ]}
@@ -141,27 +151,28 @@ export default function ContraVoucher({ companyId }) {
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              data-vnav="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.number}
               onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Date</label>
-            <input
-              type="date"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <TallyDateInput
+              data-voucher-date="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.date}
-              onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
+              onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="border border-[#c8d2de] bg-[#edf4ff] px-2 py-1.5 text-[14px] text-slate-700">
               {company?.name || "-"}
             </div>
           </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-center">
+          <div className="border border-[#bddfc2] bg-[#eef9ef] px-4 py-4 text-center">
             <p className="text-sm font-medium text-emerald-700">Total Amount</p>
             <p className="mt-2 text-3xl font-bold text-emerald-700">
               {formatVoucherMoney(totalAmount, currency.symbol)}
@@ -172,9 +183,9 @@ export default function ContraVoucher({ companyId }) {
       </VoucherPanel>
 
       <VoucherPanel title="Voucher Details">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-hidden border border-[#bccfe3]">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
                 <th className="px-4 py-3 font-medium">Account (Credit)</th>
@@ -192,18 +203,12 @@ export default function ContraVoucher({ companyId }) {
                   <tr key={index} className="border-t border-slate-100">
                     <td className="px-4 py-4 text-slate-500">{index + 1}</td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      <SearchableSelect
+                        options={ledgerOptions}
                         value={row.creditLedgerId}
-                        onChange={(event) => updateRow(index, "creditLedgerId", event.target.value)}
-                      >
-                        <option value="">Select Account</option>
-                        {ledgers.map((ledger) => (
-                          <option key={ledger._id} value={ledger._id}>
-                            {ledger.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "creditLedgerId", newValue)}
+                        placeholder="Search account"
+                      />
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {creditLedger
@@ -216,18 +221,12 @@ export default function ContraVoucher({ companyId }) {
                       </p>
                     </td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                      <SearchableSelect
+                        options={ledgerOptions}
                         value={row.debitLedgerId}
-                        onChange={(event) => updateRow(index, "debitLedgerId", event.target.value)}
-                      >
-                        <option value="">Select Contra Account</option>
-                        {ledgers.map((ledger) => (
-                          <option key={ledger._id} value={ledger._id}>
-                            {ledger.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "debitLedgerId", newValue)}
+                        placeholder="Search contra account"
+                      />
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {debitLedger
@@ -241,15 +240,17 @@ export default function ContraVoucher({ companyId }) {
                     </td>
                     <td className="px-4 py-4">
                       <input
+                        data-vnav="true"
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3 text-right"
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.amount}
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
                       />
                     </td>
                     <td className="px-4 py-4">
                       <input
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.narration}
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
@@ -258,7 +259,7 @@ export default function ContraVoucher({ companyId }) {
                       {form.rows.length > 1 ? (
                         <button
                           type="button"
-                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          className="rounded p-2 text-rose-500 hover:bg-rose-50"
                           onClick={() => removeRow(index)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -274,24 +275,18 @@ export default function ContraVoucher({ companyId }) {
 
         <button
           type="button"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          className="mt-4 inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
           onClick={addRow}
         >
           <Plus className="h-4 w-4" />
           Add New Row
         </button>
-
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-right">
-          <span className="text-sm text-slate-500">Total</span>
-          <span className="ml-3 text-xl font-bold text-emerald-700">
-            {formatVoucherMoney(totalAmount, currency.symbol)}
-          </span>
-        </div>
       </VoucherPanel>
 
       <VoucherPanel title="Narration">
         <textarea
-          className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          data-vnav="true"
+          className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
           onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
           placeholder="Cash deposited into bank account."

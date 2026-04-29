@@ -6,7 +6,10 @@ import VoucherWorkspace, {
   formatVoucherMoney,
   renderBalance,
 } from "../Component/VoucherWorkspace";
+import SearchableSelect from "../Component/SearchableSelect";
+import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/voucherDates";
 
 const shortcutKeys = [
   { key: "F4", label: "Contra" },
@@ -18,17 +21,18 @@ const shortcutKeys = [
   { key: "F10", label: "Other Vouchers" },
 ];
 
+const emptyRow = { fromLedgerId: "", toLedgerId: "", amount: "", narration: "" };
+
 export default function JournalVoucher({ companyId }) {
   const [journalTypeId, setJournalTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateForInput(new Date()),
     narration: "",
     referenceNo: "",
-    tags: "",
-    rows: [{ ledgerId: "", side: "debit", amount: "", narration: "" }],
+    rows: [emptyRow],
   });
 
   useEffect(() => {
@@ -52,62 +56,67 @@ export default function JournalVoucher({ companyId }) {
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
-  const ledgerMap = useMemo(
-    () => new Map(ledgers.map((ledger) => [ledger._id, ledger])),
+  const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+  const ledgerOptions = useMemo(
+    () =>
+      ledgers.map((ledger) => ({
+        value: ledger._id,
+        label: ledger.name,
+        meta: ledger.groupName || ledger.parentGroupName || "",
+      })),
     [ledgers]
   );
+  const validRows = form.rows.filter(
+    (row) => row.fromLedgerId && row.toLedgerId && Number(row.amount) > 0
+  );
+  const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  const updateRow = (index, key, value) => {
+  function updateRow(index, key, value) {
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       return { ...prev, rows };
     });
-  };
+  }
 
-  const addRow = () => {
-    setForm((prev) => ({
-      ...prev,
-      rows: [...prev.rows, { ledgerId: "", side: "debit", amount: "", narration: "" }],
-    }));
-  };
+  function addRow() {
+    setForm((prev) => ({ ...prev, rows: [...prev.rows, emptyRow] }));
+  }
 
-  const removeRow = (index) => {
+  function removeRow(index) {
     setForm((prev) => ({
       ...prev,
       rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
-  };
+  }
 
-  const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
-  const totalDebit = validRows
-    .filter((row) => row.side === "debit")
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const totalCredit = validRows
-    .filter((row) => row.side === "credit")
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const difference = Math.abs(totalDebit - totalCredit);
-
-  const resetForm = () =>
+  function resetForm() {
     setForm({
       number: "",
-      date: new Date().toISOString().slice(0, 10),
+      date: formatDateForInput(new Date()),
       narration: "",
       referenceNo: "",
-      tags: "",
-      rows: [{ ledgerId: "", side: "debit", amount: "", narration: "" }],
+      rows: [emptyRow],
     });
+  }
 
-  const save = async () => {
+  async function save() {
     if (!journalTypeId) return alert("Journal voucher type missing");
-    if (validRows.length === 0) return alert("Please add at least one journal row");
-    if (totalDebit !== totalCredit) return alert("Debit and credit totals must match");
+    if (validRows.length === 0) {
+      return alert("Add at least one complete From -> To journal row.");
+    }
 
-    const lines = validRows.map((row) => ({
-      ledgerId: row.ledgerId,
-      debit: row.side === "debit" ? Number(row.amount) : 0,
-      credit: row.side === "credit" ? Number(row.amount) : 0,
-    }));
+    const incompleteTarget = form.rows.some(
+      (row) => row.fromLedgerId && Number(row.amount) > 0 && !row.toLedgerId
+    );
+    if (incompleteTarget) {
+      return alert("This journal is still unbalanced. Please add another 'To' ledger.");
+    }
+
+    const lines = validRows.flatMap((row) => [
+      { ledgerId: row.fromLedgerId, debit: Number(row.amount), credit: 0 },
+      { ledgerId: row.toLedgerId, debit: 0, credit: Number(row.amount) },
+    ]);
 
     await api.post(`/companies/${companyId}/vouchers`, {
       voucherTypeId: journalTypeId,
@@ -115,20 +124,16 @@ export default function JournalVoucher({ companyId }) {
       date: form.date,
       narration: form.narration,
       referenceNo: form.referenceNo,
-      tags: form.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
       lines,
     });
     alert("Journal voucher saved");
     resetForm();
-  };
+  }
 
   return (
     <VoucherWorkspace
       title="Journal Voucher"
-      subtitle="Post manual adjustments with balanced debit and credit rows, ledger-wise."
+      subtitle="Use From and To ledgers for balanced entries so debit and credit always stay in sync."
       icon={BookText}
       iconTone="bg-purple-50 text-purple-600"
       onCancel={resetForm}
@@ -141,121 +146,124 @@ export default function JournalVoucher({ companyId }) {
         { label: "Company", value: company?.name },
       ]}
       amountSummaryItems={[
-        { label: "Total Debit", value: formatVoucherMoney(totalDebit, currency.symbol) },
-        { label: "Total Credit", value: formatVoucherMoney(totalCredit, currency.symbol) },
+        { label: "Total Debit", value: formatVoucherMoney(totalAmount, currency.symbol) },
+        { label: "Total Credit", value: formatVoucherMoney(totalAmount, currency.symbol) },
         {
-          label: "Difference",
-          value: formatVoucherMoney(difference, currency.symbol),
-          tone: difference === 0 ? "text-emerald-600" : "text-rose-600",
+          label: "Status",
+          value: validRows.length > 0 ? "Balanced" : "Add complete rows",
+          tone: validRows.length > 0 ? "text-emerald-600" : "text-amber-600",
           emphasis: true,
         },
       ]}
       shortcuts={shortcutKeys}
     >
       <VoucherPanel title="Voucher Header">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              data-vnav="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.number}
               onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
-            <input
-              type="date"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+            <TallyDateInput
+              data-voucher-date="true"
+              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.date}
-              onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
+              onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="border border-[#c8d2de] bg-[#edf4ff] px-2 py-1.5 text-[14px] text-slate-700">
               {company?.name || "-"}
             </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Reference No.</label>
+            <input
+              data-vnav="true"
+              className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              value={form.referenceNo}
+              onChange={(event) => setForm((prev) => ({ ...prev, referenceNo: event.target.value }))}
+            />
           </div>
         </div>
       </VoucherPanel>
 
       <VoucherPanel title="Journal Details">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-hidden border border-[#bccfe3]">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Particulars</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 text-right font-medium">Debit</th>
-                <th className="px-4 py-3 text-right font-medium">Credit</th>
+                <th className="px-4 py-3 font-medium">From (Debit)</th>
+                <th className="px-4 py-3 font-medium">To (Credit)</th>
+                <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Narration</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {form.rows.map((row, index) => {
-                const ledger = ledgerMap.get(row.ledgerId);
-                const isDebit = row.side === "debit";
+                const fromLedger = ledgerMap.get(row.fromLedgerId);
+                const toLedger = ledgerMap.get(row.toLedgerId);
                 return (
                   <tr key={index} className="border-t border-slate-100">
                     <td className="px-4 py-4 text-slate-500">{index + 1}</td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
-                        value={row.ledgerId}
-                        onChange={(event) => updateRow(index, "ledgerId", event.target.value)}
-                      >
-                        <option value="">Select ledger</option>
-                        {ledgers.map((entry) => (
-                          <option key={entry._id} value={entry._id}>
-                            {entry.name}
-                          </option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={ledgerOptions}
+                        value={row.fromLedgerId}
+                        onChange={(newValue) => updateRow(index, "fromLedgerId", newValue)}
+                        placeholder="Search debit ledger"
+                      />
                       <p className="mt-2 text-xs text-slate-500">
                         Cur. Balance:{" "}
-                        {ledger
+                        {fromLedger
                           ? renderBalance(
-                              ledger.currentBalanceAbs,
-                              ledger.currentBalanceSide,
+                              fromLedger.currentBalanceAbs,
+                              fromLedger.currentBalanceSide,
                               currency.symbol
                             )
                           : "-"}
                       </p>
                     </td>
                     <td className="px-4 py-4">
-                      <select
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
-                        value={row.side}
-                        onChange={(event) => updateRow(index, "side", event.target.value)}
-                      >
-                        <option value="debit">Dr</option>
-                        <option value="credit">Cr</option>
-                      </select>
+                      <SearchableSelect
+                        options={ledgerOptions}
+                        value={row.toLedgerId}
+                        onChange={(newValue) => updateRow(index, "toLedgerId", newValue)}
+                        placeholder="Search credit ledger"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        Cur. Balance:{" "}
+                        {toLedger
+                          ? renderBalance(
+                              toLedger.currentBalanceAbs,
+                              toLedger.currentBalanceSide,
+                              currency.symbol
+                            )
+                          : "-"}
+                      </p>
                     </td>
                     <td className="px-4 py-4">
                       <input
+                        data-vnav="true"
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3 text-right"
-                        value={isDebit ? row.amount : ""}
+                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]"
+                        value={row.amount}
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
-                        disabled={!isDebit}
                       />
                     </td>
                     <td className="px-4 py-4">
                       <input
-                        type="number"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3 text-right"
-                        value={!isDebit ? row.amount : ""}
-                        onChange={(event) => updateRow(index, "amount", event.target.value)}
-                        disabled={isDebit}
-                      />
-                    </td>
-                    <td className="px-4 py-4">
-                      <input
-                        className="w-full rounded-xl border border-slate-200 px-3 py-3"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                         value={row.narration}
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
@@ -264,7 +272,7 @@ export default function JournalVoucher({ companyId }) {
                       {form.rows.length > 1 ? (
                         <button
                           type="button"
-                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          className="rounded p-2 text-rose-500 hover:bg-rose-50"
                           onClick={() => removeRow(index)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -280,70 +288,23 @@ export default function JournalVoucher({ companyId }) {
 
         <button
           type="button"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          className="mt-4 inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
           onClick={addRow}
         >
           <Plus className="h-4 w-4" />
-          Add New Row
+          Add Another To/From Row
         </button>
-
-        <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 md:grid-cols-3">
-          <div>
-            <p>Total Debit</p>
-            <p className="mt-1 text-xl font-bold text-emerald-700">
-              {formatVoucherMoney(totalDebit, currency.symbol)}
-            </p>
-          </div>
-          <div>
-            <p>Total Credit</p>
-            <p className="mt-1 text-xl font-bold text-emerald-700">
-              {formatVoucherMoney(totalCredit, currency.symbol)}
-            </p>
-          </div>
-          <div>
-            <p>Status</p>
-            <p className={`mt-1 text-xl font-bold ${difference === 0 ? "text-emerald-700" : "text-rose-700"}`}>
-              {difference === 0 ? "Balanced" : "Unbalanced"}
-            </p>
-          </div>
-        </div>
       </VoucherPanel>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-        <VoucherPanel title="Narration">
-          <textarea
-            className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-            value={form.narration}
-            onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
-            placeholder="Advance adjusted."
-          />
-        </VoucherPanel>
-        <VoucherPanel title="Tags & Reference">
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Reference No.
-              </label>
-              <input
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                value={form.referenceNo}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, referenceNo: event.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Tags</label>
-              <input
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                value={form.tags}
-                onChange={(event) => setForm((prev) => ({ ...prev, tags: event.target.value }))}
-                placeholder="adjustment, transfer"
-              />
-            </div>
-          </div>
-        </VoucherPanel>
-      </div>
+      <VoucherPanel title="Narration">
+        <textarea
+          data-vnav="true"
+          className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+          value={form.narration}
+          onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+          placeholder="Advance adjusted."
+        />
+      </VoucherPanel>
     </VoucherWorkspace>
   );
 }
