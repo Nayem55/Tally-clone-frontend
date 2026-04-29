@@ -346,8 +346,8 @@ export default function SalesVoucher({ companyId }) {
       </VoucherPanel>
 
       <VoucherPanel title="Item Details">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
-          <table className="min-w-full text-sm">
+        <div className="overflow-visible rounded-2xl border border-slate-200">
+          <table className="min-w-full text-sm table-head">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
@@ -365,8 +365,8 @@ export default function SalesVoucher({ companyId }) {
                 const item = itemMap.get(row.itemId);
                 return (
                   <tr key={index} className="border-t border-slate-100">
-                    <td className="px-4 py-4 text-slate-500">{index + 1}</td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 align-top">
                       <SearchableSelect
                         options={itemOptions}
                         value={row.itemId}
@@ -377,7 +377,7 @@ export default function SalesVoucher({ companyId }) {
                         Stock: {Number(item?.openingQty || item?.currentQty || 0).toLocaleString("en-IN")} pcs
                       </p>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <input
                         type="number"
                         data-vnav="true"
@@ -386,7 +386,7 @@ export default function SalesVoucher({ companyId }) {
                         onChange={(event) => updateRow(index, "actualQty", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <input
                         type="number"
                         data-vnav="true"
@@ -395,7 +395,7 @@ export default function SalesVoucher({ companyId }) {
                         onChange={(event) => updateRow(index, "billedQty", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <input
                         type="number"
                         data-vnav="true"
@@ -404,7 +404,7 @@ export default function SalesVoucher({ companyId }) {
                         onChange={(event) => updateRow(index, "rate", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <input
                         type="number"
                         data-vnav="true"
@@ -413,10 +413,10 @@ export default function SalesVoucher({ companyId }) {
                         onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-900">
+                    <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
                       {formatVoucherMoney(lineAmount(row), currency.symbol)}
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className="px-4 py-4 align-top text-right">
                       {form.rows.length > 1 ? (
                         <button
                           type="button"

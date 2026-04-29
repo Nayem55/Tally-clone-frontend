@@ -13,6 +13,9 @@ import { formatDateForInput } from "../utils/voucherDates";
 
 const emptyRow = { ledgerId: "", amount: "", narration: "" };
 
+const inputClass =
+  "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
+
 export default function PaymentVoucher({ companyId }) {
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
@@ -28,6 +31,7 @@ export default function PaymentVoucher({ companyId }) {
 
   useEffect(() => {
     if (!companyId) return;
+
     async function loadMasters() {
       const [voucherResponse, ledgerResponse, companyResponse] = await Promise.all([
         api.get(`/companies/${companyId}/voucher-types`),
@@ -36,18 +40,25 @@ export default function PaymentVoucher({ companyId }) {
         }),
         api.get("/companies"),
       ]);
+
       setPaymentTypeId(
         voucherResponse.data.find((row) => row.name.toLowerCase() === "payment")?._id || ""
       );
       setLedgers(ledgerResponse.data);
       setCompanies(companyResponse.data);
     }
+
     loadMasters();
   }, [companyId, form.date]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
-  const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+
+  const ledgerMap = useMemo(
+    () => new Map(ledgers.map((ledger) => [ledger._id, ledger])),
+    [ledgers]
+  );
+
   const ledgerOptions = useMemo(
     () =>
       ledgers.map((ledger) => ({
@@ -57,6 +68,7 @@ export default function PaymentVoucher({ companyId }) {
       })),
     [ledgers]
   );
+
   const paymentLedger = ledgerMap.get(form.paymentLedger);
   const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
   const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -113,6 +125,7 @@ export default function PaymentVoucher({ companyId }) {
       referenceNo: form.referenceNo,
       lines,
     });
+
     alert("Payment voucher saved");
     resetForm();
   }
@@ -140,35 +153,49 @@ export default function PaymentVoucher({ companyId }) {
           emphasis: true,
         },
       ]}
-      >
+    >
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Voucher No.
+            </label>
             <input
               data-vnav="true"
-              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className={`${inputClass} bg-[#fff7cf]`}
               value={form.number}
-              onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, number: event.target.value }))
+              }
             />
           </div>
+
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Voucher Date
+            </label>
             <TallyDateInput
               data-voucher-date="true"
-              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className={`${inputClass} bg-[#fff7cf]`}
               value={form.date}
               onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
           </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Pay From</label>
-            <SearchableSelect
-              options={ledgerOptions}
-              value={form.paymentLedger}
-              onChange={(newValue) => setForm((prev) => ({ ...prev, paymentLedger: newValue }))}
-              placeholder="Search cash / bank ledger"
-            />
+
+          <div className="relative z-[9999]">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Pay From
+            </label>
+            <div className="relative h-[31px] z-[9999]">
+              <SearchableSelect
+                options={ledgerOptions}
+                value={form.paymentLedger}
+                onChange={(newValue) =>
+                  setForm((prev) => ({ ...prev, paymentLedger: newValue }))
+                }
+                placeholder="Search cash / bank ledger"
+              />
+            </div>
             <p className="mt-2 text-xs text-slate-500">
               Current Balance:{" "}
               {paymentLedger
@@ -184,30 +211,38 @@ export default function PaymentVoucher({ companyId }) {
       </VoucherPanel>
 
       <VoucherPanel title="Payment Details">
-        <div className="overflow-hidden border border-[#bccfe3]">
-          <table className="min-w-full text-sm">
+        <div className="overflow-visible border border-[#bccfe3]">
+          <table className="min-w-full table-fixed text-sm">
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
-                <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Paid To (Account)</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Narration</th>
-                <th className="px-4 py-3"></th>
+                <th className="w-[5%] px-4 py-3 font-medium">#</th>
+                <th className="w-[35%] px-4 py-3 font-medium">Paid To (Account)</th>
+                <th className="w-[20%] px-4 py-3 text-right font-medium">Amount</th>
+                <th className="w-[30%] px-4 py-3 font-medium">Narration</th>
+                <th className="w-[10%] px-4 py-3"></th>
               </tr>
             </thead>
+
             <tbody>
               {form.rows.map((row, index) => {
                 const ledger = ledgerMap.get(row.ledgerId);
+
                 return (
-                  <tr key={index} className="border-t border-slate-100">
-                    <td className="px-4 py-4 text-slate-500">{index + 1}</td>
-                    <td className="px-4 py-4">
-                      <SearchableSelect
-                        options={ledgerOptions}
-                        value={row.ledgerId}
-                        onChange={(newValue) => updateRow(index, "ledgerId", newValue)}
-                        placeholder="Search paid-to ledger"
-                      />
+                  <tr key={index} className="border-t border-slate-100 align-top">
+                    <td className="px-4 py-4 align-top text-slate-500">
+                      <div className="flex h-[31px] items-center">{index + 1}</div>
+                    </td>
+
+                    <td className="relative z-50 px-4 py-4 align-top">
+                      <div className="relative z-[9999] h-[31px]">
+                        <SearchableSelect
+                          options={ledgerOptions}
+                          value={row.ledgerId}
+                          onChange={(newValue) => updateRow(index, "ledgerId", newValue)}
+                          placeholder="Search paid-to ledger"
+                        />
+                      </div>
+
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {ledger
@@ -219,33 +254,38 @@ export default function PaymentVoucher({ companyId }) {
                           : "-"}
                       </p>
                     </td>
-                    <td className="px-4 py-4">
+
+                    <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
                         type="number"
-                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]"
+                        className={`${inputClass} bg-[#fff7cf] text-right`}
                         value={row.amount}
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4">
+
+                    <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
-                        className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                        className={`${inputClass} bg-[#fffdf4]`}
                         value={row.narration}
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4 text-right">
-                      {form.rows.length > 1 ? (
-                        <button
-                          type="button"
-                          className="rounded p-2 text-rose-500 hover:bg-rose-50"
-                          onClick={() => removeRow(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      ) : null}
+
+                    <td className="px-4 py-4 align-top text-right">
+                      <div className="flex h-[31px] items-center justify-end">
+                        {form.rows.length > 1 ? (
+                          <button
+                            type="button"
+                            className="rounded p-2 text-rose-500 hover:bg-rose-50"
+                            onClick={() => removeRow(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -270,17 +310,24 @@ export default function PaymentVoucher({ companyId }) {
             data-vnav="true"
             className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
             value={form.narration}
-            onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, narration: event.target.value }))
+            }
             placeholder="Payment for goods purchased."
           />
         </VoucherPanel>
+
         <VoucherPanel title="Reference">
-          <label className="mb-2 block text-sm font-semibold text-slate-700">Reference No.</label>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Reference No.
+          </label>
           <input
             data-vnav="true"
-            className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+            className={`${inputClass} bg-[#fffdf4]`}
             value={form.referenceNo}
-            onChange={(event) => setForm((prev) => ({ ...prev, referenceNo: event.target.value }))}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, referenceNo: event.target.value }))
+            }
           />
         </VoucherPanel>
       </div>

@@ -179,7 +179,7 @@ export default function JournalVoucher({ companyId }) {
       </VoucherPanel>
 
       <VoucherPanel title="Journal Details">
-        <div className="overflow-hidden border border-[#bccfe3]">
+        <div className="overflow-visible border border-[#bccfe3] table-head">
           <table className="min-w-full text-sm">
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
@@ -197,7 +197,7 @@ export default function JournalVoucher({ companyId }) {
                 const toLedger = ledgerMap.get(row.toLedgerId);
                 return (
                   <tr key={index} className="border-t border-slate-100">
-                    <td className="px-4 py-4 text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 text-slate-500 align-top">{index + 1}</td>
                     <td className="px-4 py-4">
                       <SearchableSelect
                         options={ledgerOptions}
@@ -216,7 +216,7 @@ export default function JournalVoucher({ companyId }) {
                           : "-"}
                       </p>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <SearchableSelect
                         options={ledgerOptions}
                         value={row.toLedgerId}
@@ -234,7 +234,7 @@ export default function JournalVoucher({ companyId }) {
                           : "-"}
                       </p>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
                         type="number"
@@ -243,7 +243,7 @@ export default function JournalVoucher({ companyId }) {
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
                         className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
@@ -251,7 +251,7 @@ export default function JournalVoucher({ companyId }) {
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className="px-4 py-4 align-top text-right">
                       {form.rows.length > 1 ? (
                         <button
                           type="button"
