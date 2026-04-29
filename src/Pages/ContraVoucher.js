@@ -11,7 +11,15 @@ import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
-const emptyRow = { creditLedgerId: "", debitLedgerId: "", amount: "", narration: "" };
+const emptyRow = {
+  creditLedgerId: "",
+  debitLedgerId: "",
+  amount: "",
+  narration: "",
+};
+
+const inputClass =
+  "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
 
 export default function ContraVoucher({ companyId }) {
   const [contraTypeId, setContraTypeId] = useState("");
@@ -26,6 +34,7 @@ export default function ContraVoucher({ companyId }) {
 
   useEffect(() => {
     if (!companyId) return;
+
     async function loadMasters() {
       const [voucherResponse, ledgerResponse, companyResponse] = await Promise.all([
         api.get(`/companies/${companyId}/voucher-types`),
@@ -34,18 +43,25 @@ export default function ContraVoucher({ companyId }) {
         }),
         api.get("/companies"),
       ]);
+
       setContraTypeId(
         voucherResponse.data.find((row) => row.name.toLowerCase() === "contra")?._id || ""
       );
       setLedgers(ledgerResponse.data);
       setCompanies(companyResponse.data);
     }
+
     loadMasters();
   }, [companyId, form.date]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
-  const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+
+  const ledgerMap = useMemo(
+    () => new Map(ledgers.map((ledger) => [ledger._id, ledger])),
+    [ledgers]
+  );
+
   const ledgerOptions = useMemo(
     () =>
       ledgers.map((ledger) => ({
@@ -59,6 +75,7 @@ export default function ContraVoucher({ companyId }) {
   const validRows = form.rows.filter(
     (row) => row.creditLedgerId && row.debitLedgerId && Number(row.amount) > 0
   );
+
   const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
   function updateRow(index, key, value) {
@@ -105,6 +122,7 @@ export default function ContraVoucher({ companyId }) {
       narration: form.narration,
       lines,
     });
+
     alert("Contra voucher saved");
     resetForm();
   }
@@ -134,64 +152,73 @@ export default function ContraVoucher({ companyId }) {
           emphasis: true,
         },
       ]}
-      >
+    >
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Voucher No.
+            </label>
             <input
               data-vnav="true"
-              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className={`${inputClass} bg-[#fff7cf]`}
               value={form.number}
-              onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, number: event.target.value }))
+              }
             />
           </div>
+
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Date</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Date
+            </label>
             <TallyDateInput
               data-voucher-date="true"
-              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className={`${inputClass} bg-[#fff7cf]`}
               value={form.date}
               onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
-          </div>
-          <div className="border border-[#bddfc2] bg-[#eef9ef] px-4 py-4 text-center">
-            <p className="text-sm font-medium text-emerald-700">Total Amount</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-700">
-              {formatVoucherMoney(totalAmount, currency.symbol)}
-            </p>
-            <p className="mt-1 text-xs text-emerald-600">(Dr = Cr)</p>
           </div>
         </div>
       </VoucherPanel>
 
       <VoucherPanel title="Voucher Details">
-        <div className="overflow-hidden border border-[#bccfe3]">
-          <table className="min-w-full text-sm">
+        <div className="overflow-visible border border-[#bccfe3]">
+          <table className="min-w-full table-fixed text-sm">
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
-                <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Account (Credit)</th>
-                <th className="px-4 py-3 font-medium">Contra Account (Debit)</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Narration</th>
-                <th className="px-4 py-3"></th>
+                <th className="w-[4%] px-4 py-3 font-medium">#</th>
+                <th className="w-[26%] px-4 py-3 font-medium">Account (Credit)</th>
+                <th className="w-[26%] px-4 py-3 font-medium">Contra Account (Debit)</th>
+                <th className="w-[18%] px-4 py-3 text-right font-medium">Amount</th>
+                <th className="w-[20%] px-4 py-3 font-medium">Narration</th>
+                <th className="w-[6%] px-4 py-3"></th>
               </tr>
             </thead>
+
             <tbody>
               {form.rows.map((row, index) => {
                 const creditLedger = ledgerMap.get(row.creditLedgerId);
                 const debitLedger = ledgerMap.get(row.debitLedgerId);
+
                 return (
-                  <tr key={index} className="border-t border-slate-100">
-                    <td className="px-4 py-4 text-slate-500">{index + 1}</td>
-                    <td className="px-4 py-4">
-                      <SearchableSelect
-                        options={ledgerOptions}
-                        value={row.creditLedgerId}
-                        onChange={(newValue) => updateRow(index, "creditLedgerId", newValue)}
-                        placeholder="Search account"
-                      />
+                  <tr key={index} className="border-t border-slate-100 align-top">
+                    <td className="px-4 py-4 align-top text-slate-500">
+                      <div className="flex h-[31px] items-center">{index + 1}</div>
+                    </td>
+
+                    <td className="px-4 py-4 align-top">
+                      <div className="h-[31px]">
+                        <SearchableSelect
+                          options={ledgerOptions}
+                          value={row.creditLedgerId}
+                          onChange={(newValue) =>
+                            updateRow(index, "creditLedgerId", newValue)
+                          }
+                          placeholder="Search account"
+                        />
+                      </div>
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {creditLedger
@@ -203,13 +230,18 @@ export default function ContraVoucher({ companyId }) {
                           : "-"}
                       </p>
                     </td>
-                    <td className="px-4 py-4">
-                      <SearchableSelect
-                        options={ledgerOptions}
-                        value={row.debitLedgerId}
-                        onChange={(newValue) => updateRow(index, "debitLedgerId", newValue)}
-                        placeholder="Search contra account"
-                      />
+
+                    <td className="px-4 py-4 align-top">
+                      <div className="h-[31px]">
+                        <SearchableSelect
+                          options={ledgerOptions}
+                          value={row.debitLedgerId}
+                          onChange={(newValue) =>
+                            updateRow(index, "debitLedgerId", newValue)
+                          }
+                          placeholder="Search contra account"
+                        />
+                      </div>
                       <p className="mt-2 text-xs text-slate-500">
                         Current Balance:{" "}
                         {debitLedger
@@ -221,33 +253,42 @@ export default function ContraVoucher({ companyId }) {
                           : "-"}
                       </p>
                     </td>
-                    <td className="px-4 py-4">
+
+                    <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
                         type="number"
-                        className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]"
+                        className={`${inputClass} bg-[#fff7cf] text-right`}
                         value={row.amount}
-                        onChange={(event) => updateRow(index, "amount", event.target.value)}
+                        onChange={(event) =>
+                          updateRow(index, "amount", event.target.value)
+                        }
                       />
                     </td>
-                    <td className="px-4 py-4">
+
+                    <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
-                        className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                        className={`${inputClass} bg-[#fffdf4]`}
                         value={row.narration}
-                        onChange={(event) => updateRow(index, "narration", event.target.value)}
+                        onChange={(event) =>
+                          updateRow(index, "narration", event.target.value)
+                        }
                       />
                     </td>
-                    <td className="px-4 py-4 text-right">
-                      {form.rows.length > 1 ? (
-                        <button
-                          type="button"
-                          className="rounded p-2 text-rose-500 hover:bg-rose-50"
-                          onClick={() => removeRow(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      ) : null}
+
+                    <td className="px-4 py-4 align-top text-right">
+                      <div className="flex h-[31px] items-center justify-end">
+                        {form.rows.length > 1 ? (
+                          <button
+                            type="button"
+                            className="rounded p-2 text-rose-500 hover:bg-rose-50"
+                            onClick={() => removeRow(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -271,7 +312,9 @@ export default function ContraVoucher({ companyId }) {
           data-vnav="true"
           className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
-          onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, narration: event.target.value }))
+          }
           placeholder="Cash deposited into bank account."
         />
       </VoucherPanel>
