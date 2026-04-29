@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   Building2,
@@ -15,9 +15,11 @@ import {
   Wallet,
 } from "lucide-react";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { sidebarChildShortcuts, sidebarParentShortcuts } from "../utils/shortcuts";
 
 const menuTree = [
   { label: "Dashboard", to: "/", icon: Home },
+  { label: "All Short Keys", to: "/shortcuts", icon: ScrollText },
   {
     label: "Company",
     icon: Building2,
@@ -347,6 +349,14 @@ const menuTree = [
   },
 ];
 
+function openTreePath(nodeKey, setOpenKeys) {
+  if (!nodeKey) return;
+  setOpenKeys((current) => ({
+    ...current,
+    [nodeKey]: true,
+  }));
+}
+
 function hasActiveNode(node, pathname) {
   if (node.to) {
     return pathname === node.to || pathname.startsWith(`${node.to}/`);
@@ -429,7 +439,9 @@ function TreeNode({
 
 export default function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [openKeys, setOpenKeys] = useState({});
+  const [shortcutScope, setShortcutScope] = useState(null);
   const { companies, companyId, setCompanyId, loading } = useActiveCompany();
 
   const treeWithIcons = useMemo(
@@ -440,6 +452,70 @@ export default function Sidebar() {
       })),
     [],
   );
+
+  useEffect(() => {
+    if (!shortcutScope) return undefined;
+    const timeout = window.setTimeout(() => setShortcutScope(null), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [shortcutScope]);
+
+  useEffect(() => {
+    function handleSidebarShortcuts(event) {
+      const activeElement = document.activeElement;
+      const tagName = activeElement?.tagName?.toLowerCase();
+      const isTypingContext =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        activeElement?.isContentEditable;
+
+      if (event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const match = sidebarParentShortcuts.find(
+          (entry) => entry.key.toLowerCase() === String(event.key).toLowerCase(),
+        );
+        if (!match) return;
+
+        event.preventDefault();
+        if (match.openKey) {
+          openTreePath(match.openKey, setOpenKeys);
+        }
+        if (match.scope) {
+          setShortcutScope({
+            key: match.scope,
+            label: match.label,
+          });
+        } else {
+          setShortcutScope(null);
+        }
+        if (match.route) {
+          navigate(match.route);
+        }
+        return;
+      }
+
+      if (!event.altKey || event.ctrlKey || event.shiftKey) return;
+      if (!shortcutScope?.key) return;
+      if (isTypingContext && !activeElement?.hasAttribute("data-sidebar-shortcut-allow")) return;
+
+      const childMatch = (sidebarChildShortcuts[shortcutScope.key] || []).find(
+        (entry) => entry.key.toLowerCase() === String(event.key).toLowerCase(),
+      );
+      if (!childMatch) return;
+
+      event.preventDefault();
+      navigate(childMatch.route);
+      setShortcutScope((current) =>
+        current
+          ? {
+              ...current,
+            }
+          : current,
+      );
+    }
+
+    window.addEventListener("keydown", handleSidebarShortcuts);
+    return () => window.removeEventListener("keydown", handleSidebarShortcuts);
+  }, [navigate, shortcutScope]);
 
   return (
     <aside className="sticky top-0 flex h-screen w-[23rem] flex-col border-r border-slate-200 bg-white">
@@ -533,8 +609,13 @@ export default function Sidebar() {
           Accounting workspace
         </div>
         <p className="mt-1">
-          Tally-style sidebar with working masters, vouchers, and reports.
+          `Ctrl + key` opens a sidebar tab. `Alt + key` jumps to a child page.
         </p>
+        {shortcutScope ? (
+          <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+            Active shortcut scope: <span className="font-semibold">{shortcutScope.label}</span>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

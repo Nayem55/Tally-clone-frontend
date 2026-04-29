@@ -33,6 +33,7 @@ import ProductCustomerReportPage from "./Pages/ProductCustomerReportPage";
 import CustomerDimensionReportPage from "./Pages/CustomerDimensionReportPage";
 import StockItemDetailPage from "./Pages/StockItemDetailPage";
 import InventoryMovementAnalysisPage from "./Pages/InventoryMovementAnalysisPage";
+import ShortcutReferencePage from "./Pages/ShortcutReferencePage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -47,6 +48,7 @@ function AppShell() {
         <main className="min-h-screen flex-1 bg-slate-100">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/shortcuts" element={<ShortcutReferencePage />} />
 
             <Route path="/masters/create/group" element={<Groups />} />
             <Route path="/masters/alter/group" element={<Groups />} />

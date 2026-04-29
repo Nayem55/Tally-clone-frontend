@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Check, ChevronDown, Save, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { voucherShortcuts } from "../utils/shortcuts";
 
 export function formatVoucherMoney(value, symbol = "") {
   const amount = Number(value || 0).toLocaleString("en-IN", {
@@ -14,19 +15,6 @@ export function renderBalance(value, side, symbol = "") {
   if (value === undefined || value === null) return "-";
   return `${formatVoucherMoney(value, symbol)} ${side || ""}`.trim();
 }
-
-const shortcutRoutes = [
-  { primary: "F2", alternate: "D", label: "Date", focusTarget: "[data-voucher-date='true']" },
-  { primary: "F4", alternate: "C", label: "Contra", route: "/transactions/accounting/contra" },
-  { primary: "F5", alternate: "M", label: "Payment", route: "/transactions/accounting/payment" },
-  { primary: "F6", alternate: "R", label: "Receipt", route: "/transactions/accounting/receipt" },
-  { primary: "F7", alternate: "J", label: "Journal", route: "/transactions/accounting/journal" },
-  { primary: "F8", alternate: "S", label: "Sales", route: "/transactions/accounting/sales" },
-  { primary: "F9", alternate: "P", label: "Purchase", route: "/transactions/accounting/purchase" },
-  { primary: "F10", alternate: "U", label: "POS Voucher", route: "/transactions/accounting/pos-voucher" },
-  { primary: "F11", alternate: "A", label: "Add Row", action: "addRow" },
-  { primary: "F12", alternate: "V", label: "Save Voucher", action: "saveVoucher" },
-];
 
 function InfoCard({ title, children }) {
   return (
@@ -59,7 +47,7 @@ export default function VoucherWorkspace({
 
   const mergedShortcuts = useMemo(() => {
     const incomingByLabel = new Map(shortcuts.map((item) => [item.label, item]));
-    return shortcutRoutes.map((shortcut) => {
+    return voucherShortcuts.map((shortcut) => {
       const incoming = incomingByLabel.get(shortcut.label);
       return {
         ...shortcut,
