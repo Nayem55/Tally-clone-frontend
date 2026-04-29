@@ -1,170 +1,135 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { BarChart3, CalendarRange, ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  BarChart3,
+  BookText,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  Download,
+  Filter,
+  GitCompareArrows,
+  Printer,
+  ShoppingCart,
+  Wallet,
+} from "lucide-react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
-import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
+
+function formatLocalDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatSignedAmount(value, company) {
+  const amount = Number(value || 0);
+  const formatted = formatCurrencyAmount(Math.abs(amount), company);
+  return amount < 0 ? `(${formatted})` : formatted;
+}
 
 function groupRowsByGroupName(rows) {
   const grouped = new Map();
 
-  rows.forEach((row) => {
+  (rows || []).forEach((row) => {
     const key = row.groupName || "Ungrouped";
-    const current = grouped.get(key) || {
-      groupName: key,
-      amount: 0,
-      ledgers: [],
-    };
+    const current = grouped.get(key) || { groupName: key, amount: 0, ledgers: [] };
     current.amount += Number(row.amount || 0);
     current.ledgers.push(row);
     grouped.set(key, current);
   });
 
-  return [...grouped.values()]
-    .map((row) => ({
-      ...row,
-      amount: Number(row.amount || 0),
-      ledgers: row.ledgers.sort((left, right) =>
-        left.ledgerName.localeCompare(right.ledgerName)
-      ),
-    }))
-    .sort((left, right) => left.groupName.localeCompare(right.groupName));
+  return [...grouped.values()].map((group) => ({
+    ...group,
+    ledgers: group.ledgers.sort((left, right) =>
+      left.ledgerName.localeCompare(right.ledgerName)
+    ),
+  }));
 }
 
-function ProfitLossTable({
-  title,
-  rows,
-  accent,
-  company,
-  companyId,
-  fromDate,
-  toDate,
-  expandedGroups,
-  onToggleGroup,
-  expandedLedgers,
-  onToggleLedger,
-}) {
-  const groupedRows = useMemo(() => groupRowsByGroupName(rows), [rows]);
-
+function MetricCard({ icon: Icon, title, value, helper, iconClass = "", valueClass = "" }) {
   return (
-    <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${accent}`}>
-          Ledger-wise
-        </span>
-      </div>
-
-      <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Particulars</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 text-right font-medium">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupedRows.map((group) => {
-              const groupKey = `${title}-${group.groupName}`;
-              const groupOpen = expandedGroups[groupKey];
-
-              return (
-                <Fragment key={groupKey}>
-                  <tr className="border-t border-slate-100 bg-slate-50/70">
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        className="flex items-center gap-2 font-semibold text-slate-800"
-                        onClick={() => onToggleGroup(groupKey)}
-                      >
-                        {groupOpen ? (
-                          <ChevronDown className="h-4 w-4 text-blue-600" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-400" />
-                        )}
-                        {group.groupName}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">Group Total</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {formatCurrencyAmount(group.amount, company)}
-                    </td>
-                  </tr>
-
-                  {groupOpen &&
-                    group.ledgers.map((row) => {
-                      const ledgerKey = `${groupKey}-${row.ledgerId}`;
-                      const ledgerOpen = expandedLedgers[ledgerKey];
-
-                      return (
-                        <Fragment key={ledgerKey}>
-                          <tr className="border-t border-slate-100">
-                            <td className="px-4 py-3 font-medium text-slate-800">
-                              <div className="flex items-center gap-2 pl-6">
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-2"
-                                  onClick={() => onToggleLedger(ledgerKey)}
-                                >
-                                  {ledgerOpen ? (
-                                    <ChevronDown className="h-4 w-4 text-blue-600" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                                  )}
-                                  <span>{row.ledgerName}</span>
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500">Ledger</td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                              {formatCurrencyAmount(row.amount, company)}
-                            </td>
-                          </tr>
-                          {ledgerOpen && (
-                            <LedgerDrilldownRow
-                              companyId={companyId}
-                              ledgerId={row.ledgerId}
-                              fromDate={fromDate}
-                              toDate={toDate}
-                              company={company}
-                              colSpan={3}
-                            />
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {groupedRows.length === 0 && (
-          <div className="p-8 text-center text-sm text-slate-500">No rows found.</div>
-        )}
+    <article className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-4">
+        <div className={`flex h-14 w-14 items-center justify-center rounded-full bg-slate-50 ${iconClass}`}>
+          <Icon className="h-6 w-6" />
+        </div>
+        <div>
+          <p className="text-[13px] font-medium text-slate-600">{title}</p>
+          <p className={`mt-1 text-[16px] font-semibold ${valueClass || "text-slate-900"}`}>{value}</p>
+          {helper ? <p className="mt-1 text-[13px] text-slate-500">{helper}</p> : null}
+        </div>
       </div>
     </article>
   );
 }
 
+function StatementPanel({ icon: Icon, title, children, totalLabel, totalValue, totalNegative }) {
+  return (
+    <section className="rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+        <div className="flex items-center gap-3 text-[#1a59d1]">
+          <Icon className="h-5 w-5" />
+          <h2 className="text-[16px] font-semibold uppercase tracking-wide">{title}</h2>
+        </div>
+        <ChevronDown className="h-4 w-4 text-slate-500" />
+      </div>
+
+      <div className="space-y-7 px-6 py-5 text-[14px]">{children}</div>
+
+      <div className={`mx-4 mb-4 rounded-xl px-5 py-4 text-[15px] font-semibold ${totalNegative ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-900"}`}>
+        <div className="flex items-center justify-between">
+          <span>{totalLabel}</span>
+          <span>{totalValue}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LedgerBlock({ heading, rows, company, negative = false }) {
+  return (
+    <div>
+      <h3 className="text-[15px] font-semibold text-slate-900">{heading}</h3>
+      <div className="mt-3 space-y-3">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-4 text-[14px]">
+            <span className="text-slate-700">{row.label}</span>
+            <span className={negative ? "text-rose-600" : "text-slate-900"}>
+              {formatSignedAmount(row.value, company)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ProfitLoss() {
   const today = new Date();
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    .toISOString()
-    .slice(0, 10);
+  const monthStart = formatLocalDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
+  const monthEnd = formatLocalDateInput(
+    new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  );
 
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
-  const [report, setReport] = useState({ incomes: [], expenses: [], totals: {} });
+  const [ledgerFilter, setLedgerFilter] = useState("");
+  const [reportView, setReportView] = useState("Detailed");
+  const [costCenter, setCostCenter] = useState("All");
+  const [report, setReport] = useState({ incomes: [], expenses: [], totals: {}, trading: {} });
   const [loading, setLoading] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [expandedLedgers, setExpandedLedgers] = useState({});
 
   useEffect(() => {
     async function loadCompanies() {
@@ -195,205 +160,341 @@ export default function ProfitLoss() {
     loadReport();
   }, [companyId, fromDate, toDate]);
 
-  const summaryCards = useMemo(
-    () => [
-      {
-        label: "Net Sales",
-        value: report.totals?.grossIncome,
-        accent: "bg-emerald-50 text-emerald-700",
-      },
-      {
-        label: "COGS",
-        value: report.totals?.grossExpense,
-        accent: "bg-amber-50 text-amber-700",
-      },
-      {
-        label: "Gross Profit",
-        value: report.totals?.grossProfit,
-        accent: "bg-blue-50 text-blue-700",
-      },
-      {
-        label: "Indirect Income",
-        value: report.totals?.netIncome,
-        accent: "bg-cyan-50 text-cyan-700",
-      },
-      {
-        label: "Indirect Expense",
-        value: report.totals?.netExpense,
-        accent: "bg-rose-50 text-rose-700",
-      },
-      {
-        label: "Net Profit",
-        value: report.totals?.netProfit,
-        accent: "bg-indigo-50 text-indigo-700",
-      },
-      {
-        label: "Profit Margin %",
-        value: `${Number(report.totals?.profitMargin || 0).toFixed(2)}%`,
-        accent: "bg-fuchsia-50 text-fuchsia-700",
-      },
-    ],
-    [report.totals]
-  );
   const selectedCompany = companies.find((company) => company._id === companyId);
+  const incomeGroups = useMemo(() => groupRowsByGroupName(report.incomes || []), [report.incomes]);
+  const expenseGroups = useMemo(() => groupRowsByGroupName(report.expenses || []), [report.expenses]);
 
-  function toggleGroup(key) {
-    setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
-  }
+  const ledgerOptions = useMemo(() => {
+    const ledgers = [...(report.incomes || []), ...(report.expenses || [])];
+    return ledgers
+      .map((row) => ({ value: String(row.ledgerId), label: row.ledgerName }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [report.incomes, report.expenses]);
 
-  function toggleLedger(key) {
-    setExpandedLedgers((current) => ({ ...current, [key]: !current[key] }));
-  }
+  const filteredIncomeGroups = useMemo(() => {
+    if (!ledgerFilter) return incomeGroups;
+    return incomeGroups
+      .map((group) => ({
+        ...group,
+        ledgers: group.ledgers.filter((ledger) => String(ledger.ledgerId) === ledgerFilter),
+      }))
+      .filter((group) => group.ledgers.length > 0);
+  }, [incomeGroups, ledgerFilter]);
+
+  const filteredExpenseGroups = useMemo(() => {
+    if (!ledgerFilter) return expenseGroups;
+    return expenseGroups
+      .map((group) => ({
+        ...group,
+        ledgers: group.ledgers.filter((ledger) => String(ledger.ledgerId) === ledgerFilter),
+      }))
+      .filter((group) => group.ledgers.length > 0);
+  }, [expenseGroups, ledgerFilter]);
+
+  const sales = Number(report.trading?.netSales || 0);
+  const grossProfit = Number(report.trading?.grossProfit || 0);
+  const expenses = Number(report.totals?.netExpense || 0);
+  const netProfit = Number(report.totals?.netProfit || 0);
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
-                <BarChart3 className="h-3.5 w-3.5" />
-                Profitability
-              </div>
-              <h1 className="mt-3 text-3xl font-bold text-slate-900">Profit &amp; Loss</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-500">
-                Review direct and indirect incomes and expenses for the selected period.
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <CompanyPicker
-                companies={companies}
-                value={companyId}
-                onChange={setCompanyId}
-                label="Company"
-              />
+    <div className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+      <div className="mx-auto max-w-[1380px]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_240px]">
+          <div className="space-y-5">
+            <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <CalendarRange className="h-4 w-4 text-blue-600" />
-                  From
-                </label>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={fromDate}
-                  onChange={(event) => setFromDate(event.target.value)}
-                />
+                <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
+                  Profit &amp; Loss Statement
+                </h1>
+                <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[14px] text-slate-500">
+                  <span>Period : {formatDisplayDate(fromDate)} to {formatDisplayDate(toDate)}</span>
+                  <span>Company : <span className="font-medium text-slate-700">{selectedCompany?.name || "-"}</span></span>
+                </div>
               </div>
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <CalendarRange className="h-4 w-4 text-blue-600" />
-                  To
-                </label>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={toDate}
-                  onChange={(event) => setToDate(event.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {loading ? (
-          <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-500 shadow">
-            Loading profit and loss...
-          </div>
-        ) : (
-          <>
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {summaryCards.map((card) => (
-                <article
-                  key={card.label}
-                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex h-11 min-w-[268px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm">
+                  <CalendarDays className="h-4 w-4 text-slate-500" />
+                  <input
+                    type="date"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14px] outline-none"
+                    value={fromDate}
+                    onChange={(event) => setFromDate(event.target.value)}
+                  />
+                  <span className="text-slate-400">to</span>
+                  <input
+                    type="date"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14px] outline-none"
+                    value={toDate}
+                    onChange={(event) => setToDate(event.target.value)}
+                  />
+                </div>
+                <select
+                  className="h-11 min-w-[130px] rounded-xl border border-slate-200 bg-white px-4 text-[14px] shadow-sm outline-none"
+                  value={companyId}
+                  onChange={(event) => setCompanyId(event.target.value)}
                 >
-                  <div
-                    className={`inline-flex rounded-xl px-3 py-2 text-xs font-semibold ${card.accent}`}
-                  >
-                    {card.label}
-                  </div>
-                  <p className="mt-4 text-2xl font-bold text-slate-900">
-                    {typeof card.value === "string"
-                      ? card.value
-                      : formatCurrencyAmount(card.value, selectedCompany)}
-                  </p>
-                </article>
-              ))}
-            </section>
-
-            <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">Trading Account</h2>
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                  Formula based
-                </span>
-              </div>
-
-              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Particulars</th>
-                      <th className="px-4 py-3 text-right font-medium">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ["Sales", report.trading?.sales],
-                      ["Sales Return", report.trading?.salesReturns],
-                      ["Net Sales", report.trading?.netSales],
-                      ["Opening Stock", report.trading?.openingStock],
-                      ["Purchases", report.trading?.purchases],
-                      ["Purchase Return", report.trading?.purchaseReturns],
-                      ["Net Purchases", report.trading?.netPurchases],
-                      ["Closing Stock", report.trading?.closingStock],
-                      ["Cost of Goods Sold", report.trading?.costOfGoodsSold],
-                      ["Gross Profit", report.trading?.grossProfit],
-                    ].map(([label, value]) => (
-                      <tr key={label} className="border-t border-slate-100">
-                        <td className="px-4 py-3 font-medium text-slate-800">{label}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatCurrencyAmount(value, selectedCompany)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  {companies.map((company) => (
+                    <option key={company._id} value={company._id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                >
+                  <GitCompareArrows className="h-4 w-4" />
+                  Compare
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
+                >
+                  <Printer className="h-4 w-4" />
+                </button>
               </div>
             </section>
 
-            <section className="grid gap-6 xl:grid-cols-2">
-              <ProfitLossTable
-                title="Income"
-                rows={report.incomes || []}
-                accent="bg-emerald-50 text-emerald-700"
-                company={selectedCompany}
-                companyId={companyId}
-                fromDate={fromDate}
-                toDate={toDate}
-                expandedGroups={expandedGroups}
-                onToggleGroup={toggleGroup}
-                expandedLedgers={expandedLedgers}
-                onToggleLedger={toggleLedger}
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                icon={ShoppingCart}
+                title="Sales"
+                value={formatCurrencyAmount(sales, selectedCompany)}
+                helper="Current period"
+                iconClass="text-blue-600"
               />
-              <ProfitLossTable
+              <MetricCard
+                icon={BarChart3}
+                title="Gross Profit"
+                value={formatSignedAmount(grossProfit, selectedCompany)}
+                helper={grossProfit >= 0 ? "Profit" : "Loss"}
+                valueClass={grossProfit >= 0 ? "text-emerald-600" : "text-rose-600"}
+                iconClass="text-emerald-600"
+              />
+              <MetricCard
+                icon={Wallet}
                 title="Expenses"
-                rows={report.expenses || []}
-                accent="bg-amber-50 text-amber-700"
-                company={selectedCompany}
-                companyId={companyId}
-                fromDate={fromDate}
-                toDate={toDate}
-                expandedGroups={expandedGroups}
-                onToggleGroup={toggleGroup}
-                expandedLedgers={expandedLedgers}
-                onToggleLedger={toggleLedger}
+                value={formatCurrencyAmount(expenses, selectedCompany)}
+                helper="Indirect expenses"
+                iconClass="text-amber-500"
+              />
+              <MetricCard
+                icon={BookText}
+                title="Net Profit / Loss"
+                value={formatSignedAmount(netProfit, selectedCompany)}
+                helper={`${Number(report.totals?.profitMargin || 0).toFixed(2)}% margin`}
+                valueClass={netProfit >= 0 ? "text-emerald-600" : "text-rose-600"}
+                iconClass="text-rose-500"
               />
             </section>
-          </>
-        )}
+
+            {loading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
+                Loading profit and loss...
+              </div>
+            ) : (
+              <>
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <StatementPanel
+                    icon={ArrowIcon}
+                    title="Trading Account"
+                    totalLabel="Gross Profit"
+                    totalValue={formatSignedAmount(report.trading?.grossProfit, selectedCompany)}
+                    totalNegative={Number(report.trading?.grossProfit || 0) < 0}
+                  >
+                    <LedgerBlock
+                      heading="Sales"
+                      rows={[
+                        { label: "Sales Account", value: report.trading?.sales },
+                        { label: "Sales Return", value: -Number(report.trading?.salesReturns || 0) },
+                      ]}
+                      company={selectedCompany}
+                    />
+                    <LedgerBlock
+                      heading="Cost of Goods Sold"
+                      rows={[
+                        { label: "Opening Stock", value: report.trading?.openingStock },
+                        { label: "Add: Purchase Accounts", value: report.trading?.purchases },
+                        { label: "Less: Closing Stock", value: -Number(report.trading?.closingStock || 0) },
+                      ]}
+                      company={selectedCompany}
+                      negative
+                    />
+                  </StatementPanel>
+
+                  <StatementPanel
+                    icon={BookText}
+                    title="Income Statement"
+                    totalLabel="Net Profit / Loss"
+                    totalValue={formatSignedAmount(report.totals?.netProfit, selectedCompany)}
+                    totalNegative={Number(report.totals?.netProfit || 0) < 0}
+                  >
+                    <LedgerBlock
+                      heading="Other Income"
+                      rows={
+                        filteredIncomeGroups.flatMap((group) =>
+                          group.ledgers.map((ledger) => ({
+                            label: ledger.ledgerName,
+                            value: ledger.amount,
+                          }))
+                        ).length > 0
+                          ? filteredIncomeGroups.flatMap((group) =>
+                              group.ledgers.map((ledger) => ({
+                                label: ledger.ledgerName,
+                                value: ledger.amount,
+                              }))
+                            )
+                          : [{ label: "Other Income", value: 0 }]
+                      }
+                      company={selectedCompany}
+                    />
+                    <LedgerBlock
+                      heading="Expenses"
+                      rows={
+                        filteredExpenseGroups.flatMap((group) =>
+                          group.ledgers.map((ledger) => ({
+                            label: ledger.ledgerName,
+                            value: ledger.amount,
+                          }))
+                        )
+                      }
+                      company={selectedCompany}
+                    />
+                  </StatementPanel>
+                </section>
+
+                <section className="rounded-[22px] border border-slate-200 bg-white px-6 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                  <div className="grid gap-4 md:grid-cols-5 text-center">
+                    {[
+                      ["Sales", formatCurrencyAmount(sales, selectedCompany)],
+                      ["Gross Profit", formatSignedAmount(grossProfit, selectedCompany)],
+                      ["Expenses", formatCurrencyAmount(expenses, selectedCompany)],
+                      ["Net Profit / Loss", formatSignedAmount(netProfit, selectedCompany)],
+                      ["Net Profit Margin", `${Number(report.totals?.profitMargin || 0).toFixed(2)}%`],
+                    ].map(([label, value]) => (
+                      <div key={label} className="border-r border-slate-200 last:border-r-0">
+                        <p className="text-[13px] text-slate-500">{label}</p>
+                        <p className={`mt-2 text-[16px] font-semibold ${String(value).includes("(") ? "text-rose-600" : "text-slate-900"}`}>
+                          {value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+          </div>
+
+          <aside className="rounded-[22px] border border-slate-200 bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center gap-3">
+              <Filter className="h-5 w-5 text-slate-700" />
+              <h2 className="text-[15px] font-semibold uppercase tracking-wide text-slate-700">
+                Filters
+              </h2>
+            </div>
+
+            <div className="mt-6 space-y-5">
+              <div>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">Date Range</label>
+                <div className="rounded-xl border border-slate-200 px-3 py-3 text-[13px] text-slate-700">
+                  {formatDisplayDate(fromDate)} to {formatDisplayDate(toDate)}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">Company</label>
+                <div className="relative">
+                  <Building2 className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <select
+                    className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-[14px] outline-none"
+                    value={companyId}
+                    onChange={(event) => setCompanyId(event.target.value)}
+                  >
+                    {companies.map((company) => (
+                      <option key={company._id} value={company._id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-400" />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">Report View</label>
+                <select
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[14px] outline-none"
+                  value={reportView}
+                  onChange={(event) => setReportView(event.target.value)}
+                >
+                  <option>Detailed</option>
+                  <option>Summary</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">Cost Center</label>
+                <select
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[14px] outline-none"
+                  value={costCenter}
+                  onChange={(event) => setCostCenter(event.target.value)}
+                >
+                  <option>All</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">Ledger Filter</label>
+                <select
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[14px] outline-none"
+                  value={ledgerFilter}
+                  onChange={(event) => setLedgerFilter(event.target.value)}
+                >
+                  <option value="">All Ledgers</option>
+                  {ledgerOptions.map((ledger) => (
+                    <option key={ledger.value} value={ledger.value}>
+                      {ledger.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="w-full rounded-xl bg-[#1463ff] px-4 py-3 text-[14px] font-medium text-white shadow-sm"
+              >
+                Apply Filter
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] font-medium text-slate-700"
+                onClick={() => {
+                  setLedgerFilter("");
+                  setReportView("Detailed");
+                  setCostCenter("All");
+                  setFromDate(monthStart);
+                  setToDate(monthEnd);
+                }}
+              >
+                Clear Filter
+              </button>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );
+}
+
+function ArrowIcon(props) {
+  return <GitCompareArrows {...props} />;
 }

@@ -1,7 +1,14 @@
-import { Fragment, useEffect, useState } from "react";
-import { CalendarRange, ChevronDown, ChevronRight } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Printer,
+  SlidersHorizontal,
+} from "lucide-react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
 import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
 
@@ -12,7 +19,39 @@ function formatLocalDateInput(date) {
   return `${year}-${month}-${day}`;
 }
 
-function BalanceTable({
+function formatDisplayDate(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function exportBalanceCsv(report, company) {
+  const rows = [["Side", "Particulars", "Opening", "Closing"]];
+  ["liabilities", "assets"].forEach((side) => {
+    (report[side] || []).forEach((row) => {
+      rows.push([side, row.groupName, row.openingAmount || 0, row.amount || 0]);
+      (row.ledgers || []).forEach((ledger) => {
+        rows.push([side, `  ${ledger.ledgerName}`, ledger.openingAmount || 0, ledger.amount || 0]);
+      });
+    });
+  });
+
+  const csv = rows
+    .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `balance-sheet-${company?.name || "company"}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function BalanceColumn({
   title,
   rows,
   openingTotal,
@@ -27,131 +66,127 @@ function BalanceTable({
   onToggleLedger,
 }) {
   return (
-    <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        <div className="text-right text-sm">
-          <div className="font-semibold text-slate-500">
-            Opening: {formatCurrencyAmount(openingTotal, company)}
-          </div>
-          <div className="font-semibold text-slate-500">
-            Closing: {formatCurrencyAmount(total, company)}
-          </div>
-        </div>
+    <div className="border-r border-slate-200 last:border-r-0">
+      <div className="px-6 py-5">
+        <h2 className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
+          {title}
+        </h2>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Particulars</th>
-              <th className="px-4 py-3 text-right font-medium">Opening</th>
-              <th className="px-4 py-3 text-right font-medium">Closing</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const groupKey = `${title}-${row.groupName}`;
-              const groupOpen = expandedGroups[groupKey];
-              const hasLedgers = (row.ledgers || []).length > 0;
+      <div className="border-t border-slate-100">
+        {(rows || []).map((row) => {
+          const groupKey = `${title}-${row.groupName}`;
+          const groupOpen = expandedGroups[groupKey];
+          const hasLedgers = (row.ledgers || []).length > 0;
 
-              return (
-                <Fragment key={groupKey}>
-                  <tr className="border-t border-slate-100 bg-slate-50/70">
-                    <td className="px-4 py-3">
-                      {hasLedgers ? (
-                        <button
-                          type="button"
-                          className="flex items-center gap-2 font-semibold text-slate-800"
-                          onClick={() => onToggleGroup(groupKey)}
-                        >
-                          {groupOpen ? (
-                            <ChevronDown className="h-4 w-4 text-blue-600" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-slate-400" />
-                          )}
-                          {row.groupName}
-                        </button>
-                      ) : (
-                        <div className="font-semibold text-slate-800">{row.groupName}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {formatCurrencyAmount(row.openingAmount, company)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {formatCurrencyAmount(row.amount, company)}
-                    </td>
-                  </tr>
+          return (
+            <Fragment key={groupKey}>
+              <div className="border-b border-slate-100 px-6 py-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {hasLedgers ? (
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 text-left"
+                        onClick={() => onToggleGroup(groupKey)}
+                      >
+                        {groupOpen ? (
+                          <ChevronDown className="h-4 w-4 text-slate-700" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                        )}
+                        <span className="font-semibold text-slate-900">{row.groupName}</span>
+                      </button>
+                    ) : (
+                      <span className="font-semibold text-slate-900">{row.groupName}</span>
+                    )}
+                  </div>
+                  <div className="text-right font-semibold text-slate-900">
+                    {formatCurrencyAmount(row.amount, company)}
+                  </div>
+                </div>
 
-                  {hasLedgers &&
-                    groupOpen &&
-                    (row.ledgers || []).map((ledger) => {
+                {groupOpen && hasLedgers ? (
+                  <div className="mt-4 space-y-4">
+                    {(row.ledgers || []).map((ledger) => {
                       const ledgerKey = `${groupKey}-${ledger.ledgerId}`;
                       const ledgerOpen = expandedLedgers[ledgerKey];
-
                       return (
                         <Fragment key={ledgerKey}>
-                          <tr className="border-t border-slate-100">
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 pl-6">
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-2 text-slate-700"
-                                  onClick={() => onToggleLedger(ledgerKey)}
-                                >
-                                  {ledgerOpen ? (
-                                    <ChevronDown className="h-4 w-4 text-blue-600" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                                  )}
-                                  <span className="font-medium">{ledger.ledgerName}</span>
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right text-slate-800">
-                              {formatCurrencyAmount(ledger.openingAmount, company)}
-                            </td>
-                            <td className="px-4 py-3 text-right text-slate-800">
+                          <div className="flex items-center justify-between gap-4 pl-6">
+                            <button
+                              type="button"
+                              className="flex min-w-0 items-center gap-2 text-left text-slate-700"
+                              onClick={() => onToggleLedger(ledgerKey)}
+                            >
+                              {ledgerOpen ? (
+                                <ChevronDown className="h-4 w-4 text-slate-700" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-slate-400" />
+                              )}
+                              <span className="truncate">{ledger.ledgerName}</span>
+                            </button>
+                            <div className="text-right text-slate-800">
                               {formatCurrencyAmount(ledger.amount, company)}
-                            </td>
-                          </tr>
-                          {ledgerOpen && (
-                            <LedgerDrilldownRow
-                              companyId={companyId}
-                              ledgerId={ledger.ledgerId}
-                              fromDate={fromDate}
-                              toDate={toDate}
-                              company={company}
-                              colSpan={3}
-                              mode="inventory"
-                            />
-                          )}
+                            </div>
+                          </div>
+                          {ledgerOpen ? (
+                            <div className="mt-3 pl-4">
+                              <table className="w-full">
+                                <tbody>
+                                  <LedgerDrilldownRow
+                                    companyId={companyId}
+                                    ledgerId={ledger.ledgerId}
+                                    fromDate={fromDate}
+                                    toDate={toDate}
+                                    company={company}
+                                    colSpan={1}
+                                    mode="inventory"
+                                  />
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : null}
                         </Fragment>
                       );
                     })}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                  </div>
+                ) : null}
+              </div>
+            </Fragment>
+          );
+        })}
       </div>
-    </article>
+
+      <div className="px-6 py-5">
+        <div className="rounded-lg bg-[#eef5ff] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
+              Total
+            </span>
+            <span className="text-[15px] font-semibold text-slate-900">
+              {formatCurrencyAmount(total, company)}
+            </span>
+          </div>
+          <div className="mt-2 text-[13px] text-slate-500">
+            Opening: {formatCurrencyAmount(openingTotal, company)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function BalanceSheetPage() {
   const now = new Date();
-  const monthStart = formatLocalDateInput(
-    new Date(now.getFullYear(), now.getMonth(), 1)
-  );
-  const monthEnd = formatLocalDateInput(
-    new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  );
+  const monthStart = formatLocalDateInput(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = formatLocalDateInput(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
+  const [showFilters, setShowFilters] = useState(false);
   const [report, setReport] = useState({ assets: [], liabilities: [], totals: {} });
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedLedgers, setExpandedLedgers] = useState({});
@@ -177,7 +212,12 @@ export default function BalanceSheetPage() {
     }
     loadReport();
   }, [companyId, fromDate, toDate]);
+
   const selectedCompany = companies.find((company) => company._id === companyId);
+  const netTotal = useMemo(
+    () => Math.max(Number(report.totals?.assets || 0), Number(report.totals?.liabilities || 0)),
+    [report.totals]
+  );
 
   function toggleGroup(key) {
     setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
@@ -188,81 +228,162 @@ export default function BalanceSheetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="grid gap-4 xl:grid-cols-3">
-            <div className="xl:col-span-2">
-              <h1 className="text-3xl font-bold text-slate-900">Balance Sheet</h1>
-              <p className="mt-2 text-sm text-slate-500">
-                Review assets and liabilities as of the selected date.
-              </p>
+    <div className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+      <div className="mx-auto max-w-[1380px]">
+        <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
+              Balance Sheet
+            </h1>
+            <div className="mt-2 text-[14px] text-slate-500">
+              As at {formatDisplayDate(toDate)}
             </div>
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-1">
-              <CompanyPicker
-                companies={companies}
-                value={companyId}
-                onChange={setCompanyId}
-                label="Company"
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex h-11 min-w-[180px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm">
+              <CalendarDays className="h-4 w-4 text-slate-500" />
+              <input
+                type="date"
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14px] outline-none"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
               />
+            </div>
+            <select
+              className="h-11 min-w-[120px] rounded-xl border border-slate-200 bg-white px-4 text-[14px] shadow-sm outline-none"
+              value={companyId}
+              onChange={(event) => setCompanyId(event.target.value)}
+            >
+              {companies.map((company) => (
+                <option key={company._id} value={company._id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              onClick={() => setShowFilters((current) => !current)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              More Filters
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+              onClick={() => exportBalanceCsv(report, selectedCompany)}
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
+            >
+              <Printer className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
+
+        {showFilters ? (
+          <section className="mt-5 rounded-[22px] border border-slate-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <CalendarRange className="h-4 w-4 text-blue-600" />
-                  From
-                </label>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">From</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  className="h-11 w-full rounded-xl border border-slate-200 px-4 text-[14px] outline-none"
                   value={fromDate}
                   onChange={(event) => setFromDate(event.target.value)}
                 />
               </div>
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <CalendarRange className="h-4 w-4 text-blue-600" />
-                  To
-                </label>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">To</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  className="h-11 w-full rounded-xl border border-slate-200 px-4 text-[14px] outline-none"
                   value={toDate}
                   onChange={(event) => setToDate(event.target.value)}
                 />
               </div>
+              <div>
+                <label className="mb-2 block text-[13px] font-medium text-slate-600">Company</label>
+                <div className="relative">
+                  <Building2 className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <select
+                    className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-[14px] outline-none"
+                    value={companyId}
+                    onChange={(event) => setCompanyId(event.target.value)}
+                  >
+                    {companies.map((company) => (
+                      <option key={company._id} value={company._id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
+          </section>
+        ) : null}
+
+        <section className="mt-6 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+          <div className="grid xl:grid-cols-2">
+            <BalanceColumn
+              title="Liabilities"
+              rows={report.liabilities || []}
+              openingTotal={report.totals?.openingLiabilities}
+              total={report.totals?.liabilities}
+              company={selectedCompany}
+              companyId={companyId}
+              fromDate={fromDate}
+              toDate={toDate}
+              expandedGroups={expandedGroups}
+              onToggleGroup={toggleGroup}
+              expandedLedgers={expandedLedgers}
+              onToggleLedger={toggleLedger}
+            />
+            <BalanceColumn
+              title="Assets"
+              rows={report.assets || []}
+              openingTotal={report.totals?.openingAssets}
+              total={report.totals?.assets}
+              company={selectedCompany}
+              companyId={companyId}
+              fromDate={fromDate}
+              toDate={toDate}
+              expandedGroups={expandedGroups}
+              onToggleGroup={toggleGroup}
+              expandedLedgers={expandedLedgers}
+              onToggleLedger={toggleLedger}
+            />
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-2">
-          <BalanceTable
-            title="Liabilities"
-            rows={report.liabilities || []}
-            openingTotal={report.totals?.openingLiabilities}
-            total={report.totals?.liabilities}
-            company={selectedCompany}
-            companyId={companyId}
-            fromDate={fromDate}
-            toDate={toDate}
-            expandedGroups={expandedGroups}
-            onToggleGroup={toggleGroup}
-            expandedLedgers={expandedLedgers}
-            onToggleLedger={toggleLedger}
-          />
-          <BalanceTable
-            title="Assets"
-            rows={report.assets || []}
-            openingTotal={report.totals?.openingAssets}
-            total={report.totals?.assets}
-            company={selectedCompany}
-            companyId={companyId}
-            fromDate={fromDate}
-            toDate={toDate}
-            expandedGroups={expandedGroups}
-            onToggleGroup={toggleGroup}
-            expandedLedgers={expandedLedgers}
-            onToggleLedger={toggleLedger}
-          />
+        <section className="mt-6 rounded-[18px] border border-slate-200 bg-white px-6 py-4 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-3 text-[14px]">
+            <div>
+              Company : <span className="font-medium text-slate-700">{selectedCompany?.name || "-"}</span>
+            </div>
+            <div>
+              Financial Year :{" "}
+              <span className="font-medium text-slate-700">
+                {selectedCompany?.financialYearFrom || "-"} to {selectedCompany?.financialYearTo || "-"}
+              </span>
+            </div>
+            <div className="text-left md:text-right">
+              Base Currency :{" "}
+              <span className="font-medium text-slate-700">
+                {selectedCompany?.baseCurrencyCode || selectedCompany?.baseCurrencySymbol || "BDT"}
+                {selectedCompany?.formalName ? ` - ${selectedCompany.formalName}` : ""}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 text-[14px] font-semibold text-slate-900">
+            Total : {formatCurrencyAmount(netTotal, selectedCompany)}
+          </div>
         </section>
       </div>
     </div>
