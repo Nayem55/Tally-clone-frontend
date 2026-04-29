@@ -5,8 +5,8 @@ export const voucherShortcuts = [
   { primary: "F6", alternate: "R", label: "Receipt", route: "/transactions/accounting/receipt" },
   { primary: "F7", alternate: "J", label: "Journal", route: "/transactions/accounting/journal" },
   { primary: "F8", alternate: "S", label: "Sales", route: "/transactions/accounting/sales" },
-  { primary: "F9", alternate: "P", label: "Purchase", route: "/transactions/accounting/purchase" },
-  { primary: "F10", alternate: "U", label: "POS Voucher", route: "/transactions/accounting/pos-voucher" },
+  { primary: "F9", alternate: "H", label: "Purchase", route: "/transactions/accounting/purchase" },
+  { primary: "F10", alternate: "O", label: "POS Voucher", route: "/transactions/accounting/pos-voucher" },
   { primary: "F11", alternate: "A", label: "Add Row", action: "addRow" },
   { primary: "F12", alternate: "V", label: "Save Voucher", action: "saveVoucher" },
 ];
@@ -103,7 +103,7 @@ export const sidebarChildShortcuts = {
   ],
   "Transactions (Vouchers)/Accounting Vouchers": [
     { key: "c", label: "Contra", route: "/transactions/accounting/contra" },
-    { key: "p", label: "Payment", route: "/transactions/accounting/payment" },
+    { key: "m", label: "Payment", route: "/transactions/accounting/payment" },
     { key: "r", label: "Receipt", route: "/transactions/accounting/receipt" },
     { key: "j", label: "Journal", route: "/transactions/accounting/journal" },
     { key: "s", label: "Sales", route: "/transactions/accounting/sales" },
