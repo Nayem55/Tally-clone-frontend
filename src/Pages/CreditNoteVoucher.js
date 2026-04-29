@@ -152,6 +152,7 @@ export default function CreditNoteVoucher({ companyId }) {
       onCancel={resetForm}
       onSave={save}
       onSaveDraft={() => alert("Draft support can be added next.")}
+      onAddRow={addRow}
       summaryTag="Credit Note"
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
@@ -167,13 +168,7 @@ export default function CreditNoteVoucher({ companyId }) {
           emphasis: true,
         },
       ]}
-      shortcuts={[
-        { key: "F7", label: "Journal" },
-        { key: "F8", label: "Sales" },
-        { key: "F9", label: "Purchase" },
-        { key: "F10", label: "Other Vouchers", active: true },
-      ]}
-    >
+      >
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-4">
           <div>

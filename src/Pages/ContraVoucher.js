@@ -11,16 +11,6 @@ import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
-const shortcutKeys = [
-  { key: "F4", label: "Contra", active: true },
-  { key: "F5", label: "Payment" },
-  { key: "F6", label: "Receipt" },
-  { key: "F7", label: "Journal" },
-  { key: "F8", label: "Sales" },
-  { key: "F9", label: "Purchase" },
-  { key: "F10", label: "Other Vouchers" },
-];
-
 const emptyRow = { creditLedgerId: "", debitLedgerId: "", amount: "", narration: "" };
 
 export default function ContraVoucher({ companyId }) {
@@ -128,10 +118,10 @@ export default function ContraVoucher({ companyId }) {
       onCancel={resetForm}
       onSave={save}
       onSaveDraft={() => alert("Draft support can be added next.")}
+      onAddRow={addRow}
       summaryTag="Contra Voucher"
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
-        { label: "Company", value: company?.name },
         { label: "Date", value: form.date },
       ]}
       amountSummaryItems={[
@@ -144,10 +134,9 @@ export default function ContraVoucher({ companyId }) {
           emphasis: true,
         },
       ]}
-      shortcuts={shortcutKeys}
-    >
+      >
       <VoucherPanel title="Voucher Header">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
@@ -165,12 +154,6 @@ export default function ContraVoucher({ companyId }) {
               value={form.date}
               onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="border border-[#c8d2de] bg-[#edf4ff] px-2 py-1.5 text-[14px] text-slate-700">
-              {company?.name || "-"}
-            </div>
           </div>
           <div className="border border-[#bddfc2] bg-[#eef9ef] px-4 py-4 text-center">
             <p className="text-sm font-medium text-emerald-700">Total Amount</p>

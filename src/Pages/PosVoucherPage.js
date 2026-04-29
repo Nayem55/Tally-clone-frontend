@@ -10,9 +10,10 @@ import {
   X,
 } from "lucide-react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { getCompanyCurrency } from "../utils/currency";
 import { resolveItemRateByDate } from "../utils/pricing";
+import { formatDateForInput } from "../utils/voucherDates";
 
 function formatMoney(value, symbol = "Tk") {
   return `${symbol} ${Number(value || 0).toLocaleString("en-IN", {
@@ -36,8 +37,7 @@ const emptyRow = {
 };
 
 export default function PosVoucherPage() {
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
+  const { companies, companyId } = useActiveCompany();
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
@@ -47,7 +47,7 @@ export default function PosVoucherPage() {
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateForInput(new Date()),
     customerName: "",
     phone: "",
     address: "",
@@ -60,17 +60,6 @@ export default function PosVoucherPage() {
     cashTendered: "",
     rows: [emptyRow],
   });
-
-  useEffect(() => {
-    async function loadCompanies() {
-      const response = await api.get("/companies");
-      setCompanies(response.data);
-      if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
-      }
-    }
-    loadCompanies();
-  }, []);
 
   useEffect(() => {
     async function loadMasters() {
@@ -259,7 +248,7 @@ export default function PosVoucherPage() {
     alert("POS voucher completed successfully");
     setForm({
       number: "",
-      date: new Date().toISOString().slice(0, 10),
+      date: formatDateForInput(new Date()),
       customerName: "",
       phone: "",
       address: "",
@@ -309,7 +298,6 @@ export default function PosVoucherPage() {
                   onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
                 />
               </div>
-              <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} label="Company" />
             </div>
           </div>
         </section>
@@ -566,7 +554,7 @@ export default function PosVoucherPage() {
                 onClick={() =>
                   setForm({
                     number: "",
-                    date: new Date().toISOString().slice(0, 10),
+                    date: formatDateForInput(new Date()),
                     customerName: "",
                     phone: "",
                     address: "",

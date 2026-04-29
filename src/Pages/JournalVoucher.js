@@ -11,16 +11,6 @@ import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
-const shortcutKeys = [
-  { key: "F4", label: "Contra" },
-  { key: "F5", label: "Payment" },
-  { key: "F6", label: "Receipt" },
-  { key: "F7", label: "Journal", active: true },
-  { key: "F8", label: "Sales" },
-  { key: "F9", label: "Purchase" },
-  { key: "F10", label: "Other Vouchers" },
-];
-
 const emptyRow = { fromLedgerId: "", toLedgerId: "", amount: "", narration: "" };
 
 export default function JournalVoucher({ companyId }) {
@@ -139,11 +129,11 @@ export default function JournalVoucher({ companyId }) {
       onCancel={resetForm}
       onSave={save}
       onSaveDraft={() => alert("Draft support can be added next.")}
+      onAddRow={addRow}
       summaryTag="Journal Voucher"
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
         { label: "Date", value: form.date },
-        { label: "Company", value: company?.name },
       ]}
       amountSummaryItems={[
         { label: "Total Debit", value: formatVoucherMoney(totalAmount, currency.symbol) },
@@ -155,10 +145,9 @@ export default function JournalVoucher({ companyId }) {
           emphasis: true,
         },
       ]}
-      shortcuts={shortcutKeys}
-    >
+      >
       <VoucherPanel title="Voucher Header">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
@@ -176,12 +165,6 @@ export default function JournalVoucher({ companyId }) {
               value={form.date}
               onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="border border-[#c8d2de] bg-[#edf4ff] px-2 py-1.5 text-[14px] text-slate-700">
-              {company?.name || "-"}
-            </div>
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Reference No.</label>

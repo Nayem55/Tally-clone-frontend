@@ -7,7 +7,6 @@ import {
   ChevronRight,
   FolderOpen,
   Home,
-  Landmark,
   Layers3,
   Receipt,
   ScrollText,
@@ -15,6 +14,7 @@ import {
   ShieldCheck,
   Wallet,
 } from "lucide-react";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 
 const menuTree = [
   { label: "Dashboard", to: "/", icon: Home },
@@ -430,6 +430,7 @@ function TreeNode({
 export default function Sidebar() {
   const location = useLocation();
   const [openKeys, setOpenKeys] = useState({});
+  const { companies, companyId, setCompanyId, loading } = useActiveCompany();
 
   const treeWithIcons = useMemo(
     () =>
@@ -453,6 +454,23 @@ export default function Sidebar() {
               Tally-style Accounting System
             </p>
           </div>
+        </div>
+        <div className="mt-4">
+          <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            Active Company
+          </label>
+          <select
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500"
+            value={companyId}
+            onChange={(event) => setCompanyId(event.target.value)}
+            disabled={loading}
+          >
+            {companies.map((company) => (
+              <option key={company._id} value={company._id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

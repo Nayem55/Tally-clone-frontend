@@ -10,7 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -42,9 +42,8 @@ export default function VoucherRegister() {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString()
     .slice(0, 10);
+  const { companyId } = useActiveCompany();
 
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
   const [voucherTypes, setVoucherTypes] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [items, setItems] = useState([]);
@@ -57,18 +56,6 @@ export default function VoucherRegister() {
   const [toDate, setToDate] = useState(today);
   const [selectedVoucherId, setSelectedVoucherId] = useState("");
   const [form, setForm] = useState(emptyVoucherForm());
-
-  useEffect(() => {
-    async function loadCompanies() {
-      const response = await api.get("/companies");
-      setCompanies(response.data);
-      if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
-      }
-    }
-
-    loadCompanies();
-  }, []);
 
   useEffect(() => {
     async function loadMasters() {
@@ -295,12 +282,6 @@ export default function VoucherRegister() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <CompanyPicker
-                companies={companies}
-                value={companyId}
-                onChange={setCompanyId}
-                label="Company"
-              />
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Voucher Type

@@ -23,7 +23,9 @@ const shortcutRoutes = [
   { primary: "F7", alternate: "J", label: "Journal", route: "/transactions/accounting/journal" },
   { primary: "F8", alternate: "S", label: "Sales", route: "/transactions/accounting/sales" },
   { primary: "F9", alternate: "P", label: "Purchase", route: "/transactions/accounting/purchase" },
-  { primary: "F10", alternate: "O", label: "Other Vouchers", route: "/transactions/alter-vouchers" },
+  { primary: "F10", alternate: "U", label: "POS Voucher", route: "/transactions/accounting/pos-voucher" },
+  { primary: "F11", alternate: "A", label: "Add Row", action: "addRow" },
+  { primary: "F12", alternate: "V", label: "Save Voucher", action: "saveVoucher" },
 ];
 
 function InfoCard({ title, children }) {
@@ -43,6 +45,7 @@ export default function VoucherWorkspace({
   onCancel,
   onSave,
   onSaveDraft,
+  onAddRow,
   summaryTag,
   summaryItems = [],
   amountSummaryItems = [],
@@ -87,6 +90,20 @@ export default function VoucherWorkspace({
         return;
       }
 
+      if (match.action === "addRow" && onAddRow) {
+        event.preventDefault();
+        onAddRow();
+        return;
+      }
+
+      if (match.action === "saveVoucher" && onSave) {
+        event.preventDefault();
+        if (window.confirm("Save this voucher now?")) {
+          onSave();
+        }
+        return;
+      }
+
       if (match.route) {
         if (isTypingContext && !event.altKey && !String(event.key).startsWith("F")) return;
         event.preventDefault();
@@ -96,7 +113,7 @@ export default function VoucherWorkspace({
 
     window.addEventListener("keydown", handleKeyboard);
     return () => window.removeEventListener("keydown", handleKeyboard);
-  }, [mergedShortcuts, navigate]);
+  }, [mergedShortcuts, navigate, onAddRow, onSave]);
 
   function focusRelativeField(currentTarget, direction) {
     const fields = Array.from(

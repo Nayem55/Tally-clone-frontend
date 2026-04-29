@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, FileText, Trash2 } from "lucide-react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { resolveItemRateByDate } from "../utils/pricing";
+import { formatDateForInput } from "../utils/voucherDates";
 
 function getVoucherMode(voucherName) {
   const key = voucherName.toLowerCase();
@@ -13,15 +14,14 @@ function getVoucherMode(voucherName) {
 
 export default function InventoryVoucherPage({ voucherName }) {
   const mode = getVoucherMode(voucherName);
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
+  const { companyId } = useActiveCompany();
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
   const [godowns, setGodowns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     number: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateForInput(new Date()),
     narration: "",
     rows: [
       {
@@ -34,17 +34,6 @@ export default function InventoryVoucherPage({ voucherName }) {
       },
     ],
   });
-
-  useEffect(() => {
-    async function loadCompanies() {
-      const response = await api.get("/companies");
-      setCompanies(response.data);
-      if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
-      }
-    }
-    loadCompanies();
-  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -164,7 +153,7 @@ export default function InventoryVoucherPage({ voucherName }) {
       alert(`${voucherName} saved successfully`);
       setForm({
         number: "",
-        date: new Date().toISOString().slice(0, 10),
+        date: formatDateForInput(new Date()),
         narration: "",
         rows: [
           {
@@ -200,7 +189,6 @@ export default function InventoryVoucherPage({ voucherName }) {
                 Maintain inventory movement with item, quantity, rate, and godown details.
               </p>
             </div>
-            <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
           </div>
         </section>
 

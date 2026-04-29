@@ -12,14 +12,6 @@ import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
-const shortcutKeys = [
-  { key: "F5", label: "Payment" },
-  { key: "F6", label: "Receipt" },
-  { key: "F7", label: "Journal" },
-  { key: "F8", label: "Sales" },
-  { key: "F9", label: "Purchase", active: true },
-];
-
 const emptyRow = {
   itemId: "",
   actualQty: "1",
@@ -215,11 +207,11 @@ export default function PurchaseVoucher({ companyId }) {
       onCancel={resetForm}
       onSave={save}
       onSaveDraft={() => alert("Draft support can be added next.")}
+      onAddRow={addRow}
       summaryTag="Purchase Voucher"
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
         { label: "Date", value: form.date },
-        { label: "Company", value: company?.name },
         { label: "Supplier", value: supplierLedger?.name || "-" },
         { label: "Purchase Ledger", value: purchaseLedger?.name || "-" },
       ]}
@@ -231,10 +223,9 @@ export default function PurchaseVoucher({ companyId }) {
           emphasis: true,
         },
       ]}
-      shortcuts={shortcutKeys}
-    >
+      >
       <VoucherPanel title="Voucher Header">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
@@ -265,12 +256,6 @@ export default function PurchaseVoucher({ companyId }) {
                 setForm((prev) => ({ ...prev, supplierInvoiceNo: event.target.value }))
               }
             />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Company</label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              {company?.name || "-"}
-            </div>
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Supplier</label>

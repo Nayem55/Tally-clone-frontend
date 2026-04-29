@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react";
-import api from "../api/api";
 import ContraVoucher from "./ContraVoucher";
 import PaymentVoucher from "./PaymentVoucher";
 import ReceiptVoucher from "./ReceiptVoucher";
@@ -8,19 +6,10 @@ import SalesVoucher from "./SalesVoucher";
 import PurchaseVoucher from "./PurchaseVoucher";
 import DebitNoteVoucher from "./DebitNoteVoucher";
 import CreditNoteVoucher from "./CreditNoteVoucher";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 
 export default function VoucherList({ initialVoucherName = "" }) {
-  const [companyId, setCompanyId] = useState("");
-
-  useEffect(() => {
-    async function loadCompanies() {
-      const res = await api.get("/companies");
-      if (res.data.length > 0) {
-        setCompanyId((current) => current || res.data[0]._id);
-      }
-    }
-    loadCompanies();
-  }, []);
+  const { companyId } = useActiveCompany();
 
   function renderVoucherComponent() {
     const name = initialVoucherName.toLowerCase();
