@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -365,6 +365,22 @@ function hasActiveNode(node, pathname) {
   return (node.children || []).some((child) => hasActiveNode(child, pathname));
 }
 
+function ShortcutBadge({ children, tone = "slate" }) {
+  const tones = {
+    slate: "border-slate-200 bg-slate-50 text-slate-500",
+    blue: "border-blue-200 bg-blue-50 text-blue-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+  };
+
+  return (
+    <span
+      className={`inline-flex min-w-[54px] justify-center rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 function TreeNode({
   node,
   depth = 0,
@@ -372,23 +388,36 @@ function TreeNode({
   openKeys,
   setOpenKeys,
   nodeKey,
+  shortcutBadges,
+  activeShortcutTarget,
+  registerNodeRef,
 }) {
   const active = hasActiveNode(node, pathname);
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
   const isOpen = hasChildren && (openKeys[nodeKey] ?? active);
+  const badge = shortcutBadges[node.to || nodeKey];
+  const shortcutSelected = activeShortcutTarget === nodeKey || activeShortcutTarget === node.to;
 
   if (!hasChildren) {
     return (
       <Link
         to={node.to}
-        className={`block rounded-lg px-3 py-2 text-sm transition ${
+        ref={(element) => registerNodeRef(node.to, element)}
+        className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition ${
           active
             ? "bg-blue-600 text-white shadow-sm"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            : shortcutSelected
+              ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
         }`}
         style={{ marginLeft: depth === 0 ? 0 : depth * 10 }}
       >
-        {node.label}
+        <span>{node.label}</span>
+        {badge ? (
+          <ShortcutBadge tone={active || shortcutSelected ? "amber" : "slate"}>
+            {badge}
+          </ShortcutBadge>
+        ) : null}
       </Link>
     );
   }
@@ -396,6 +425,7 @@ function TreeNode({
   return (
     <div>
       <button
+        ref={(element) => registerNodeRef(nodeKey, element)}
         type="button"
         onClick={() =>
           setOpenKeys((current) => ({
@@ -406,16 +436,27 @@ function TreeNode({
         className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
           active
             ? "bg-blue-50 text-blue-700"
-            : "text-slate-700 hover:bg-slate-100"
+            : shortcutSelected
+              ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+              : "text-slate-700 hover:bg-slate-100"
         }`}
         style={{ marginLeft: depth === 0 ? 0 : depth * 10 }}
       >
-        <span>{node.label}</span>
-        {isOpen ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronRight className="h-4 w-4" />
-        )}
+        <span className="flex items-center gap-2">
+          <span>{node.label}</span>
+          {badge ? (
+            <ShortcutBadge tone={active || shortcutSelected ? "amber" : "slate"}>
+              {badge}
+            </ShortcutBadge>
+          ) : null}
+        </span>
+        <span className="flex items-center gap-2">
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </span>
       </button>
 
       {isOpen ? (
@@ -429,6 +470,9 @@ function TreeNode({
               openKeys={openKeys}
               setOpenKeys={setOpenKeys}
               nodeKey={`${nodeKey}/${child.label}`}
+              shortcutBadges={shortcutBadges}
+              activeShortcutTarget={activeShortcutTarget}
+              registerNodeRef={registerNodeRef}
             />
           ))}
         </div>
@@ -442,7 +486,9 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [openKeys, setOpenKeys] = useState({});
   const [shortcutScope, setShortcutScope] = useState(null);
+  const [activeShortcutTarget, setActiveShortcutTarget] = useState("");
   const { companies, companyId, setCompanyId, loading } = useActiveCompany();
+  const nodeRefs = useRef({});
 
   const treeWithIcons = useMemo(
     () =>
@@ -453,11 +499,44 @@ export default function Sidebar() {
     [],
   );
 
+  const shortcutBadges = useMemo(() => {
+    const badges = {};
+    sidebarParentShortcuts.forEach((shortcut) => {
+      const targetKey = shortcut.openKey || shortcut.scope || shortcut.route;
+      if (targetKey) {
+        badges[targetKey] = `Ctrl+${shortcut.key.toUpperCase()}`;
+      }
+    });
+    Object.values(sidebarChildShortcuts).forEach((rows) => {
+      rows.forEach((row) => {
+        badges[row.route] = `Alt+${row.key.toUpperCase()}`;
+      });
+    });
+    return badges;
+  }, []);
+
+  function registerNodeRef(key, element) {
+    if (!key) return;
+    if (element) {
+      nodeRefs.current[key] = element;
+      return;
+    }
+    delete nodeRefs.current[key];
+  }
+
   useEffect(() => {
     if (!shortcutScope) return undefined;
     const timeout = window.setTimeout(() => setShortcutScope(null), 8000);
     return () => window.clearTimeout(timeout);
   }, [shortcutScope]);
+
+  useEffect(() => {
+    if (!activeShortcutTarget) return undefined;
+    const target = nodeRefs.current[activeShortcutTarget];
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const timeout = window.setTimeout(() => setActiveShortcutTarget(""), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [activeShortcutTarget]);
 
   useEffect(() => {
     function handleSidebarShortcuts(event) {
@@ -476,6 +555,7 @@ export default function Sidebar() {
         if (!match) return;
 
         event.preventDefault();
+        const targetKey = match.openKey || match.scope || match.route || "";
         if (match.openKey) {
           openTreePath(match.openKey, setOpenKeys);
         }
@@ -487,6 +567,7 @@ export default function Sidebar() {
         } else {
           setShortcutScope(null);
         }
+        setActiveShortcutTarget(targetKey);
         if (match.route) {
           navigate(match.route);
         }
@@ -503,6 +584,7 @@ export default function Sidebar() {
       if (!childMatch) return;
 
       event.preventDefault();
+      setActiveShortcutTarget(childMatch.route);
       navigate(childMatch.route);
       setShortcutScope((current) =>
         current
@@ -561,14 +643,22 @@ export default function Sidebar() {
                 <Link
                   key={section.label}
                   to={section.to}
+                  ref={(element) => registerNodeRef(section.to, element)}
                   className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
                     active
                       ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-700 hover:bg-slate-100"
+                      : activeShortcutTarget === section.to
+                        ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+                        : "text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   <Icon className="h-4.5 w-4.5" />
-                  <span>{section.label}</span>
+                  <span className="flex-1">{section.label}</span>
+                  {shortcutBadges[section.to] ? (
+                    <ShortcutBadge tone={active || activeShortcutTarget === section.to ? "amber" : "slate"}>
+                      {shortcutBadges[section.to]}
+                    </ShortcutBadge>
+                  ) : null}
                 </Link>
               );
             }
@@ -576,13 +666,25 @@ export default function Sidebar() {
             return (
               <section
                 key={section.label}
-                className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3"
+                ref={(element) => registerNodeRef(section.label, element)}
+                className={`rounded-2xl border px-3 py-3 ${
+                  activeShortcutTarget === section.label
+                    ? "border-amber-300 bg-amber-50/80 ring-1 ring-amber-200"
+                    : "border-slate-200 bg-slate-50/70"
+                }`}
               >
                 <div className="mb-2 flex items-center gap-2 px-1">
                   <Icon className="h-4.5 w-4.5 text-slate-500" />
-                  <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {section.label}
-                  </h2>
+                  <div className="flex flex-1 items-center justify-between gap-3">
+                    <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                      {section.label}
+                    </h2>
+                    {shortcutBadges[section.label] ? (
+                      <ShortcutBadge tone={activeShortcutTarget === section.label ? "amber" : "slate"}>
+                        {shortcutBadges[section.label]}
+                      </ShortcutBadge>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -594,6 +696,9 @@ export default function Sidebar() {
                       openKeys={openKeys}
                       setOpenKeys={setOpenKeys}
                       nodeKey={`${section.label}/${child.label}`}
+                      shortcutBadges={shortcutBadges}
+                      activeShortcutTarget={activeShortcutTarget}
+                      registerNodeRef={registerNodeRef}
                     />
                   ))}
                 </div>
