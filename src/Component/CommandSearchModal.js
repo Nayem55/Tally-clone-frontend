@@ -11,6 +11,7 @@ export default function CommandSearchModal() {
   const navigate = useNavigate();
   const location = useLocation();
   const inputRef = useRef(null);
+  const listRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedParent, setSelectedParent] = useState(null);
@@ -131,6 +132,17 @@ export default function CommandSearchModal() {
   }, [open, selectedParent]);
 
   useEffect(() => {
+    if (!open) return;
+    const container = listRef.current;
+    if (!container) return;
+    const activeRow = container.querySelector("[data-command-active='true']");
+    activeRow?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeIndex, open, query, scopedResults, selectedParent]);
+
+  useEffect(() => {
     setOpen(false);
     setSelectedParent(null);
     setQuery("");
@@ -200,7 +212,7 @@ export default function CommandSearchModal() {
           </div>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto px-3 py-3">
+        <div ref={listRef} className="max-h-[60vh] overflow-y-auto px-3 py-3">
           {scopedResults.length ? (
             <div className="space-y-1">
               {scopedResults.map((result, index) => {
@@ -221,6 +233,7 @@ export default function CommandSearchModal() {
                       navigate(result.to);
                       setOpen(false);
                     }}
+                    data-command-active={isActive ? "true" : "false"}
                     className={`flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left transition ${
                       isActive
                         ? "bg-blue-600 text-white shadow-sm"
