@@ -208,7 +208,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
             </label>
             <input
               data-vnav="true"
-              className={`${inputClass} bg-[#fff7cf]`}
+              className={`${inputClass} bg-[#EEF5FF]`}
               value={form.number}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, number: event.target.value }))
@@ -222,7 +222,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
             </label>
             <TallyDateInput
               data-voucher-date="true"
-              className={`${inputClass} bg-[#fff7cf]`}
+              className={`${inputClass} bg-[#EEF5FF]`}
               value={form.date}
               onChange={(nextDate) => setForm((prev) => ({ ...prev, date: nextDate }))}
             />
@@ -305,7 +305,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
                       <input
                         data-vnav="true"
                         type="number"
-                        className={`${inputClass} bg-[#fff7cf] text-right`}
+                        className={`${inputClass} bg-[#EEF5FF] text-right`}
                         value={row.amount}
                         onChange={(event) => updateRow(index, "amount", event.target.value)}
                       />
@@ -314,7 +314,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
                     <td className="px-4 py-4 align-top">
                       <input
                         data-vnav="true"
-                        className={`${inputClass} bg-[#fffdf4]`}
+                        className={`${inputClass} bg-[#EEF5FF]`}
                         value={row.narration}
                         onChange={(event) => updateRow(index, "narration", event.target.value)}
                       />
@@ -354,7 +354,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
         <VoucherPanel title="Narration">
           <textarea
             data-vnav="true"
-            className="min-h-24 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+            className="min-h-24 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
             value={form.narration}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, narration: event.target.value }))
@@ -369,7 +369,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
           </label>
           <input
             data-vnav="true"
-            className={`${inputClass} bg-[#fffdf4]`}
+            className={`${inputClass} bg-[#EEF5FF]`}
             value={form.referenceNo}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, referenceNo: event.target.value }))

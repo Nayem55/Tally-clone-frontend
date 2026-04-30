@@ -62,7 +62,7 @@ export default function SearchableSelect({
           ref={inputRef}
           type="text"
           data-vnav={dataNav ? "true" : undefined}
-          className="w-full border border-[#c8d2de] bg-[#fff7cf] py-1.5 pl-9 pr-8 text-[14px] text-slate-900 outline-none focus:border-[#3f83f8]"
+          className="w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-9 pr-8 text-[14px] text-slate-900 outline-none focus:border-[#3f83f8]"
           value={query}
           placeholder={placeholder}
           onFocus={() => {

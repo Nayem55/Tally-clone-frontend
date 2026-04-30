@@ -276,7 +276,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
               data-vnav="true"
-              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.number}
               onChange={(event) => setForm((prev) => ({ ...prev, number: event.target.value }))}
             />
@@ -285,7 +285,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
             <TallyDateInput
               data-voucher-date="true"
-              className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.date}
               onChange={updateDate}
             />
@@ -296,7 +296,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             </label>
             <input
               data-vnav="true"
-              className="w-full border border-[#c8d2de] bg-[#fffdf4] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+              className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
               value={form.supplierInvoiceNo}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, supplierInvoiceNo: event.target.value }))
@@ -378,7 +378,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                     <input
                       type="number"
                       data-vnav="true"
-                      className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={row.actualQty}
                       onChange={(event) => updateRow(index, "actualQty", event.target.value)}
                     />
@@ -387,7 +387,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                     <input
                       type="number"
                       data-vnav="true"
-                      className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={row.billedQty}
                       onChange={(event) => updateRow(index, "billedQty", event.target.value)}
                     />
@@ -396,7 +396,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                     <input
                       type="number"
                       data-vnav="true"
-                      className="w-full border border-[#c8d2de] bg-[#fff7cf] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={row.rate}
                       onChange={(event) => updateRow(index, "rate", event.target.value)}
                     />
@@ -434,7 +434,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       <VoucherPanel title="Narration">
         <textarea
           data-vnav="true"
-          className="min-h-28 w-full border border-[#c8d2de] bg-[#fffdf4] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+          className="min-h-28 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
           onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
           placeholder="Purchased from supplier as per bill."
