@@ -10,8 +10,10 @@ import {
   X,
 } from "lucide-react";
 import api from "../api/api";
+import SaveVoucherModal from "../Component/SaveVoucherModal";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
+import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
 import { voucherShortcuts } from "../utils/shortcuts";
 import { getCompanyCurrency } from "../utils/currency";
 import { resolveItemRateByDate } from "../utils/pricing";
@@ -38,9 +40,11 @@ const emptyRow = {
   discountPercent: 0,
 };
 
-export default function PosVoucherPage() {
+export default function PosVoucherPage({ editVoucherId = "", companyIdOverride = "" }) {
   const containerRef = useRef(null);
   const { companies, companyId } = useActiveCompany();
+  const effectiveCompanyId = companyIdOverride || companyId;
+  const isEditMode = Boolean(editVoucherId);
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
@@ -48,6 +52,7 @@ export default function PosVoucherPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -66,13 +71,13 @@ export default function PosVoucherPage() {
 
   useEffect(() => {
     async function loadMasters() {
-      if (!companyId) return;
+      if (!effectiveCompanyId) return;
       const [voucherTypeResponse, itemResponse, levelResponse, defaultResponse] =
         await Promise.all([
-          api.get(`/companies/${companyId}/voucher-types`),
-          api.get(`/companies/${companyId}/items`),
-          api.get(`/companies/${companyId}/price-levels`),
-          api.get(`/companies/${companyId}/ledgers/defaults`),
+          api.get(`/companies/${effectiveCompanyId}/voucher-types`),
+          api.get(`/companies/${effectiveCompanyId}/items`),
+          api.get(`/companies/${effectiveCompanyId}/price-levels`),
+          api.get(`/companies/${effectiveCompanyId}/ledgers/defaults`),
         ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
@@ -83,17 +88,17 @@ export default function PosVoucherPage() {
       setVoucherTypeId(voucherType?._id || "");
     }
     loadMasters();
-  }, [companyId]);
+  }, [effectiveCompanyId]);
 
   useEffect(() => {
     const phone = form.phone.replace(/\D/g, "");
-    if (!companyId || phone.length < 6) {
+    if (!effectiveCompanyId || phone.length < 6) {
       setCustomerSuggestions([]);
       return;
     }
 
     const handle = setTimeout(async () => {
-      const response = await api.get(`/companies/${companyId}/customers`, {
+      const response = await api.get(`/companies/${effectiveCompanyId}/customers`, {
         params: { phone, limit: 8 },
       });
       setCustomerSuggestions(response.data);
@@ -101,9 +106,47 @@ export default function PosVoucherPage() {
     }, 250);
 
     return () => clearTimeout(handle);
-  }, [companyId, form.phone]);
+  }, [effectiveCompanyId, form.phone]);
 
-  const selectedCompany = companies.find((company) => company._id === companyId);
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!effectiveCompanyId || !editVoucherId || items.length === 0) return;
+      const response = await api.get(`/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        customerName: voucher.customerSnapshot?.name || "",
+        phone: voucher.customerSnapshot?.phone || "",
+        address: voucher.customerSnapshot?.address || "",
+        note: voucher.narration || "",
+        discountType: voucher.posMeta?.discountType || "fixed",
+        discountValue: String(voucher.posMeta?.discountValue || ""),
+        redeemPoints: String(voucher.posMeta?.rewardRedeemed || ""),
+        cardPayment: String(voucher.posMeta?.cardAmount || ""),
+        cashPayment: String(voucher.posMeta?.cashAmount || ""),
+        cashTendered: String(voucher.posMeta?.cashTendered || ""),
+        rows:
+          (voucher.inventoryLines || []).map((line) => ({
+            itemId: String(line.itemId || ""),
+            qty: String(line.qty || 1),
+            rate: Number(line.rate || 0),
+            mrpRate: Number(line.mrpRate || line.rate || 0),
+            discountPercent: Number(line.discountValue || 0),
+          })) || [emptyRow],
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [effectiveCompanyId, editVoucherId, items.length]);
+
+  const selectedCompany = companies.find((company) => company._id === effectiveCompanyId);
   const currency = getCompanyCurrency(selectedCompany);
   const mrpPriceLevelId =
     priceLevels.find((level) => String(level.code || "").toUpperCase() === "MRP")?._id || "";
@@ -209,50 +252,7 @@ export default function PosVoucherPage() {
     setShowCustomerSuggestions(false);
   };
 
-  const submit = async () => {
-    if (!voucherTypeId) return alert("POS Voucher type is missing");
-    if (!form.customerName.trim()) return alert("Customer name is required");
-    if (form.phone.replace(/\D/g, "").length < 6) return alert("Valid phone number is required");
-    if (validRows.length === 0) return alert("Please add at least one item");
-    if (Number((cardPayment + cashPayment).toFixed(2)) !== Number(totalAmount.toFixed(2))) {
-      return alert("Cash payment + card payment must match total payable");
-    }
-
-    await api.post(`/companies/${companyId}/pos-vouchers`, {
-      voucherTypeId,
-      number: form.number,
-      date: form.date,
-      narration: form.note,
-      customer: {
-        name: form.customerName,
-        phone: form.phone,
-        address: form.address,
-      },
-      salesLedgerId: defaults.salesLedger?._id || "",
-      discountType: form.discountType,
-      discountValue: Number(form.discountValue || 0),
-      redeemedPoints: redeemPoints,
-      payments: {
-        card: cardPayment,
-        cash: cashPayment,
-        cashTendered: Number(form.cashTendered || 0),
-      },
-      items: validRows.map((row) => {
-        const item = items.find((entry) => entry._id === row.itemId);
-        return {
-          itemId: row.itemId,
-          qty: Number(row.qty || 0),
-          rate: Number(row.rate || 0),
-          mrpRate: Number(row.mrpRate || row.rate || 0),
-          discountType: "percent",
-          discountValue: Number(row.discountPercent || 0),
-          groupName: item?.groupName || "",
-          stockCategoryName: item?.stockCategory || "",
-        };
-      }),
-    });
-
-    alert("POS voucher completed successfully");
+  const resetForm = () => {
     setForm({
       number: "",
       date: formatDateForInput(new Date()),
@@ -269,13 +269,130 @@ export default function PosVoucherPage() {
       rows: [emptyRow],
     });
     setCustomerSuggestions([]);
+    setShowCustomerSuggestions(false);
+    setSearchTerm("");
+  };
+
+  const submit = async (options = {}) => {
+    if (!voucherTypeId) return alert("POS Voucher type is missing");
+    if (!form.customerName.trim()) return alert("Customer name is required");
+    if (form.phone.replace(/\D/g, "").length < 6) return alert("Valid phone number is required");
+    if (validRows.length === 0) return alert("Please add at least one item");
+    if (Number((cardPayment + cashPayment).toFixed(2)) !== Number(totalAmount.toFixed(2))) {
+      return alert("Cash payment + card payment must match total payable");
+    }
+
+    const primaryBankLedgerId = defaults.bankLedger?._id || defaults.bankLedgers?.[0]?._id || "";
+    const payload = {
+      voucherTypeId,
+      voucherName: "POS Voucher",
+      number: form.number,
+      date: form.date,
+      narration: form.note,
+      customerSnapshot: {
+        name: form.customerName,
+        phone: form.phone,
+        address: form.address,
+      },
+      lines: [
+        ...(cashPayment > 0 && defaults.cashLedger?._id
+          ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
+          : []),
+        ...(cardPayment > 0 && primaryBankLedgerId
+          ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
+          : []),
+        { ledgerId: defaults.salesLedger?._id || "", debit: 0, credit: totalAmount },
+      ],
+      inventoryLines: validRows.map((row) => {
+        const item = items.find((entry) => entry._id === row.itemId);
+        const gross = Number(row.qty || 0) * Number(row.rate || 0);
+        const discountValue = Number(row.discountPercent || 0);
+        const discountAmount = gross * (discountValue / 100);
+        return {
+          itemId: row.itemId,
+          itemName: item?.name || "",
+          qty: Number(row.qty || 0),
+          billedQty: Number(row.qty || 0),
+          rate: Number(row.rate || 0),
+          mrpRate: Number(row.mrpRate || row.rate || 0),
+          discount: discountAmount,
+          discountType: "percent",
+          discountValue,
+          amount: lineAmount(row),
+          groupId: item?.groupId || null,
+          groupName: item?.groupName || "",
+          stockCategoryId: item?.stockCategoryId || null,
+          stockCategoryName: item?.stockCategory || "",
+          alias: item?.alias || "",
+          barcode: item?.barcode || "",
+        };
+      }),
+      posMeta: {
+        discountType: form.discountType,
+        discountValue: Number(form.discountValue || 0),
+        invoiceDiscount,
+        subtotal,
+        totalAmount,
+        rewardEarned: rewardToEarn,
+        rewardRedeemed: redeemPoints,
+        cashAmount: cashPayment,
+        cardAmount: cardPayment,
+        cashTendered: Number(form.cashTendered || 0),
+        changeAmount,
+      },
+    };
+
+    if (isEditMode) {
+      await api.put(`/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${effectiveCompanyId}/pos-vouchers`, {
+        voucherTypeId,
+        number: form.number,
+        date: form.date,
+        narration: form.note,
+        customer: {
+          name: form.customerName,
+          phone: form.phone,
+          address: form.address,
+        },
+        salesLedgerId: defaults.salesLedger?._id || "",
+        discountType: form.discountType,
+        discountValue: Number(form.discountValue || 0),
+        redeemedPoints: redeemPoints,
+        payments: {
+          card: cardPayment,
+          cash: cashPayment,
+          cashTendered: Number(form.cashTendered || 0),
+        },
+        items: validRows.map((row) => {
+          const item = items.find((entry) => entry._id === row.itemId);
+          return {
+            itemId: row.itemId,
+            qty: Number(row.qty || 0),
+            rate: Number(row.rate || 0),
+            mrpRate: Number(row.mrpRate || row.rate || 0),
+            discountType: "percent",
+            discountValue: Number(row.discountPercent || 0),
+            groupName: item?.groupName || "",
+            stockCategoryName: item?.stockCategory || "",
+          };
+        }),
+      });
+    }
+
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "POS voucher updated successfully" : "POS voucher completed successfully");
+    }
+    if (!isEditMode) resetForm();
   };
 
   useVoucherShortcuts({
     shortcuts: voucherShortcuts,
     containerRef,
     onAddRow: addRow,
-    onSave: submit,
+    onSaveRequest: () => setShowSaveConfirm(true),
   });
 
   return (
@@ -551,14 +668,15 @@ export default function PosVoucherPage() {
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => previewVoucherNode(containerRef.current, "POS Sales Voucher")}
               >
                 <Printer className="h-4 w-4" />
-                Print (F9)
+                Print Preview
               </button>
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-4 text-sm font-semibold text-white hover:bg-emerald-700"
-                onClick={submit}
+                onClick={() => setShowSaveConfirm(true)}
               >
                 <Check className="h-4 w-4" />
                 Complete Sale (F10)
@@ -566,23 +684,7 @@ export default function PosVoucherPage() {
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-4 text-sm font-semibold text-rose-600 hover:bg-rose-50"
-                onClick={() =>
-                  setForm({
-                    number: "",
-                    date: formatDateForInput(new Date()),
-                    customerName: "",
-                    phone: "",
-                    address: "",
-                    note: "",
-                    discountType: "fixed",
-                    discountValue: "",
-                    redeemPoints: "",
-                    cardPayment: "",
-                    cashPayment: "",
-                    cashTendered: "",
-                    rows: [emptyRow],
-                  })
-                }
+                onClick={resetForm}
               >
                 <X className="h-4 w-4" />
                 Cancel
@@ -591,7 +693,7 @@ export default function PosVoucherPage() {
           </div>
 
           <aside className="space-y-6">
-            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <section data-print-hide="true" className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <h3 className="text-lg font-semibold text-slate-900">Amount Summary</h3>
               <div className="mt-4 space-y-4 text-sm">
                 <div className="flex items-center justify-between"><span>Total Items</span><span>{totalItems}</span></div>
@@ -664,6 +766,24 @@ export default function PosVoucherPage() {
           </aside>
         </div>
       </div>
+
+      <SaveVoucherModal
+        open={showSaveConfirm}
+        onClose={() => setShowSaveConfirm(false)}
+        onSave={async () => {
+          setShowSaveConfirm(false);
+          await submit();
+        }}
+        onSaveAndPrint={async () => {
+          setShowSaveConfirm(false);
+          await submit({
+            printAfterSave: true,
+            printVoucher: () => printVoucherNode(containerRef.current, "POS Sales Voucher"),
+          });
+        }}
+        title="Complete POS sale?"
+        description="We are ready to post this POS voucher. You can save it now or save and open a clean printable bill immediately."
+      />
     </div>
   );
 }

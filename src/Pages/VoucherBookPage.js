@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { buildAlterVoucherPath } from "../utils/voucherRoutes";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -23,6 +26,8 @@ export default function VoucherBookPage({
   voucherNames = [],
   ledgerGroupNames = [],
 }) {
+  const navigate = useNavigate();
+  const containerRef = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString()
@@ -94,9 +99,12 @@ export default function VoucherBookPage({
       return voucherMatch && ledgerMatch && textMatch;
     });
   }, [vouchers, voucherNames, ledgerGroupNames, ledgerGroupNameById, search]);
+  useReportKeyboardNav(containerRef, [filteredVouchers], {
+    onExit: () => navigate(-1),
+  });
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
@@ -156,6 +164,7 @@ export default function VoucherBookPage({
                   <th className="px-4 py-3 font-medium">Number</th>
                   <th className="px-4 py-3 font-medium">Narration</th>
                   <th className="px-4 py-3 text-right font-medium">Value</th>
+                  <th className="px-4 py-3 text-right font-medium">Edit</th>
                 </tr>
               </thead>
               <tbody>
@@ -169,6 +178,16 @@ export default function VoucherBookPage({
                     <td className="px-4 py-3 text-slate-500">{voucher.narration || "-"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {formatAmount(voucherValue(voucher))}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        data-report-nav="true"
+                        className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        onClick={() => navigate(buildAlterVoucherPath(companyId, voucher._id))}
+                      >
+                        Alter
+                      </button>
                     </td>
                   </tr>
                 ))}

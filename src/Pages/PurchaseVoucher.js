@@ -19,7 +19,8 @@ const emptyRow = {
   rate: "",
 };
 
-export default function PurchaseVoucher({ companyId }) {
+export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [purchaseTypeId, setPurchaseTypeId] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [purchaseLedgers, setPurchaseLedgers] = useState([]);
@@ -84,6 +85,40 @@ export default function PurchaseVoucher({ companyId }) {
     }
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId || items.length === 0) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const debitLine = (voucher.lines || []).find((line) => Number(line.debit || 0) > 0);
+      const creditLine = (voucher.lines || []).find((line) => Number(line.credit || 0) > 0);
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        supplierInvoiceNo: voucher.referenceNo || "",
+        supplierLedger: String(creditLine?.ledgerId || ""),
+        purchaseLedger: String(debitLine?.ledgerId || defaultPurchaseLedgerId || ""),
+        narration: voucher.narration || "",
+        rows:
+          (voucher.inventoryLines || []).map((line) => ({
+            itemId: String(line.itemId || ""),
+            actualQty: String(line.qty || line.billedQty || 1),
+            billedQty: String(line.billedQty || line.qty || 1),
+            rate: Number(line.rate || 0),
+          })) || [emptyRow],
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId, items.length, defaultPurchaseLedgerId]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -162,7 +197,7 @@ export default function PurchaseVoucher({ companyId }) {
       rows: [emptyRow],
     });
 
-  const save = async () => {
+  const save = async (options = {}) => {
     if (!form.supplierLedger) return alert("Please select a supplier");
     if (!form.purchaseLedger && !defaultPurchaseLedgerId) return alert("Purchase ledger is missing");
     if (validRows.length === 0) return alert("Please add at least one item");
@@ -179,19 +214,30 @@ export default function PurchaseVoucher({ companyId }) {
       };
     });
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: purchaseTypeId,
+      voucherName: "Purchase",
       number: form.number,
       date: form.date,
       narration: form.narration || "Purchase Voucher",
+      referenceNo: form.supplierInvoiceNo,
       lines: [
         { ledgerId: form.purchaseLedger || defaultPurchaseLedgerId, debit: totalAmount, credit: 0 },
         { ledgerId: form.supplierLedger, debit: 0, credit: totalAmount },
       ],
       inventoryLines,
-    });
-    alert("Purchase voucher saved");
-    resetForm();
+    };
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Purchase voucher updated" : "Purchase voucher saved");
+    }
+    if (!isEditMode) resetForm();
   };
 
   if (loading) {

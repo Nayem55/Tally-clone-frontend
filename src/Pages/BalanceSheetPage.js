@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   CalendarDays,
@@ -8,9 +8,11 @@ import {
   Printer,
   SlidersHorizontal,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -87,7 +89,9 @@ function BalanceColumn({
                     {hasLedgers ? (
                       <button
                         type="button"
-                        className="flex items-center gap-2 text-left"
+                        data-report-nav="true"
+                        data-report-back={groupOpen ? "true" : "false"}
+                        className="flex items-center gap-2 rounded px-1 text-left focus:bg-blue-50 focus:outline-none"
                         onClick={() => onToggleGroup(groupKey)}
                       >
                         {groupOpen ? (
@@ -116,7 +120,9 @@ function BalanceColumn({
                           <div className="flex items-center justify-between gap-4 pl-6">
                             <button
                               type="button"
-                              className="flex min-w-0 items-center gap-2 text-left text-slate-700"
+                              data-report-nav="true"
+                              data-report-back={ledgerOpen ? "true" : "false"}
+                              className="flex min-w-0 items-center gap-2 rounded px-1 text-left text-slate-700 focus:bg-blue-50 focus:outline-none"
                               onClick={() => onToggleLedger(ledgerKey)}
                             >
                               {ledgerOpen ? (
@@ -178,6 +184,8 @@ function BalanceColumn({
 }
 
 export default function BalanceSheetPage() {
+  const navigate = useNavigate();
+  const containerRef = useRef(null);
   const now = new Date();
   const monthStart = formatLocalDateInput(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = formatLocalDateInput(new Date(now.getFullYear(), now.getMonth() + 1, 0));
@@ -218,6 +226,9 @@ export default function BalanceSheetPage() {
     () => Math.max(Number(report.totals?.assets || 0), Number(report.totals?.liabilities || 0)),
     [report.totals]
   );
+  useReportKeyboardNav(containerRef, [report, expandedGroups, expandedLedgers], {
+    onExit: () => navigate(-1),
+  });
 
   function toggleGroup(key) {
     setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
@@ -228,7 +239,7 @@ export default function BalanceSheetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
       <div className="mx-auto max-w-[1380px]">
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

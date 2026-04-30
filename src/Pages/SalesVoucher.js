@@ -20,7 +20,8 @@ const emptyRow = {
   discountPercent: "",
 };
 
-export default function SalesVoucher({ companyId }) {
+export default function SalesVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [salesTypeId, setSalesTypeId] = useState("");
   const [salesLedgerId, setSalesLedgerId] = useState("");
   const [partyLedgers, setPartyLedgers] = useState([]);
@@ -89,6 +90,43 @@ export default function SalesVoucher({ companyId }) {
     }
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId || items.length === 0) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const debitLine = (voucher.lines || []).find((line) => Number(line.debit || 0) > 0);
+      const creditLine = (voucher.lines || []).find((line) => Number(line.credit || 0) > 0);
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        partyLedger: String(debitLine?.ledgerId || ""),
+        salesLedger: String(creditLine?.ledgerId || salesLedgerId || ""),
+        priceLevelId: "",
+        narration: voucher.narration || "",
+        discountAmount: "",
+        additionalCharges: "",
+        rows:
+          (voucher.inventoryLines || []).map((line) => ({
+            itemId: String(line.itemId || ""),
+            actualQty: String(line.qty || line.billedQty || 1),
+            billedQty: String(line.billedQty || line.qty || 1),
+            rate: Number(line.rate || 0),
+            discountPercent: "",
+          })) || [emptyRow],
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId, items.length, salesLedgerId]);
 
   useEffect(() => {
     setForm((prev) => ({
@@ -208,7 +246,7 @@ export default function SalesVoucher({ companyId }) {
       rows: [emptyRow],
     });
 
-  const save = async () => {
+  const save = async (options = {}) => {
     if (!form.partyLedger) return alert("Please select a party account");
     if (!form.salesLedger && !salesLedgerId) return alert("Sales ledger is missing for this company");
     if (validRows.length === 0) return alert("Please add at least one item");
@@ -226,8 +264,9 @@ export default function SalesVoucher({ companyId }) {
       };
     });
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: salesTypeId,
+      voucherName: "Sales",
       number: form.number,
       date: form.date,
       narration: form.narration || "Sales Voucher",
@@ -236,10 +275,20 @@ export default function SalesVoucher({ companyId }) {
         { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: totalAmount },
       ],
       inventoryLines,
-    });
+    };
 
-    alert("Sales voucher saved");
-    resetForm();
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Sales voucher updated" : "Sales voucher saved");
+    }
+    if (!isEditMode) resetForm();
   };
 
   if (loading) {

@@ -21,7 +21,8 @@ const emptyRow = {
 const inputClass =
   "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
 
-export default function ContraVoucher({ companyId }) {
+export default function ContraVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [contraTypeId, setContraTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -53,6 +54,43 @@ export default function ContraVoucher({ companyId }) {
 
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const rows = [];
+      const sourceLines = voucher.lines || [];
+      for (let index = 0; index < sourceLines.length; index += 2) {
+        const first = sourceLines[index];
+        const second = sourceLines[index + 1];
+        rows.push({
+          creditLedgerId:
+            Number(first?.credit || 0) > 0 ? String(first.ledgerId || "") : String(second?.ledgerId || ""),
+          debitLedgerId:
+            Number(first?.debit || 0) > 0 ? String(first.ledgerId || "") : String(second?.ledgerId || ""),
+          amount: Number(first?.credit || second?.credit || first?.debit || second?.debit || 0) || "",
+          narration: "",
+        });
+      }
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        rows: rows.length > 0 ? rows : [emptyRow],
+        narration: voucher.narration || "",
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -106,7 +144,7 @@ export default function ContraVoucher({ companyId }) {
     });
   }
 
-  async function save() {
+  async function save(options = {}) {
     if (!contraTypeId) return alert("Contra voucher type missing");
     if (validRows.length === 0) return alert("Please add at least one contra row");
 
@@ -115,16 +153,27 @@ export default function ContraVoucher({ companyId }) {
       { ledgerId: row.debitLedgerId, debit: Number(row.amount), credit: 0 },
     ]);
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: contraTypeId,
+      voucherName: "Contra",
       number: form.number,
       date: form.date,
       narration: form.narration,
       lines,
-    });
+    };
 
-    alert("Contra voucher saved");
-    resetForm();
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Contra voucher updated" : "Contra voucher saved");
+    }
+    if (!isEditMode) resetForm();
   }
 
   return (

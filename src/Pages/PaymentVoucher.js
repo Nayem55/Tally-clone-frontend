@@ -16,7 +16,8 @@ const emptyRow = { ledgerId: "", amount: "", narration: "" };
 const inputClass =
   "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
 
-export default function PaymentVoucher({ companyId }) {
+export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -50,6 +51,40 @@ export default function PaymentVoucher({ companyId }) {
 
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const lines = voucher.lines || [];
+      const paymentLine = lines.find((line) => Number(line.credit || 0) > 0);
+      const rows = lines
+        .filter((line) => Number(line.debit || 0) > 0)
+        .map((line) => ({
+          ledgerId: String(line.ledgerId || ""),
+          amount: Number(line.debit || 0) || "",
+          narration: "",
+        }));
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        paymentLedger: String(paymentLine?.ledgerId || ""),
+        rows: rows.length > 0 ? rows : [emptyRow],
+        narration: voucher.narration || "",
+        referenceNo: voucher.referenceNo || "",
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -103,7 +138,7 @@ export default function PaymentVoucher({ companyId }) {
     });
   }
 
-  async function save() {
+  async function save(options = {}) {
     if (!paymentTypeId) return alert("Payment voucher type missing");
     if (!form.paymentLedger) return alert("Please select the account to pay from");
     if (validRows.length === 0) return alert("Please add at least one payment row");
@@ -117,17 +152,28 @@ export default function PaymentVoucher({ companyId }) {
       { ledgerId: form.paymentLedger, debit: 0, credit: totalAmount },
     ];
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: paymentTypeId,
+      voucherName: "Payment",
       number: form.number,
       date: form.date,
       narration: form.narration,
       referenceNo: form.referenceNo,
       lines,
-    });
+    };
 
-    alert("Payment voucher saved");
-    resetForm();
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Payment voucher updated" : "Payment voucher saved");
+    }
+    if (!isEditMode) resetForm();
   }
 
   return (

@@ -1,8 +1,11 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, ChevronRight, PackageSearch } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { buildAlterVoucherPath } from "../utils/voucherRoutes";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -12,6 +15,9 @@ function formatNumber(value) {
 }
 
 export default function StockItemDetailPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const containerRef = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString()
@@ -19,23 +25,27 @@ export default function StockItemDetailPage() {
 
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(today);
-  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || monthStart);
+  const [toDate, setToDate] = useState(searchParams.get("to") || today);
+  const [search, setSearch] = useState(searchParams.get("q") || "");
   const [report, setReport] = useState({ rows: [], totals: {} });
   const [expandedItems, setExpandedItems] = useState({});
+  const requestedItemId = searchParams.get("itemId") || "";
+  const requestedGroupId = searchParams.get("groupId") || "";
+  const requestedCategory = searchParams.get("category") || "";
+  const requestedCompanyId = searchParams.get("companyId") || "";
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
       if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
+        setCompanyId((current) => current || requestedCompanyId || response.data[0]._id);
       }
     }
 
     loadCompanies();
-  }, []);
+  }, [requestedCompanyId]);
 
   useEffect(() => {
     async function loadReport() {
@@ -50,20 +60,43 @@ export default function StockItemDetailPage() {
     loadReport();
   }, [companyId, fromDate, toDate]);
 
+  useEffect(() => {
+    if (!requestedItemId) return;
+    setExpandedItems((current) => ({ ...current, [requestedItemId]: true }));
+  }, [requestedItemId]);
+
   const selectedCompany = companies.find((company) => company._id === companyId);
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return report.rows || [];
-    return (report.rows || []).filter(
+    const baseRows = report.rows || [];
+    const scopedRows = baseRows.filter((row) => {
+      if (requestedItemId && String(row.itemId) !== String(requestedItemId)) return false;
+      if (requestedGroupId && String(row.groupId || "") !== String(requestedGroupId)) return false;
+      if (
+        requestedCategory &&
+        String(row.stockCategoryName || "")
+          .toLowerCase()
+          .trim() !== String(requestedCategory).toLowerCase().trim()
+      ) {
+        return false;
+      }
+      return true;
+    });
+    if (!query) return scopedRows;
+    return scopedRows.filter(
       (row) =>
         row.itemName?.toLowerCase().includes(query) ||
         row.alias?.toLowerCase().includes(query) ||
-        row.groupName?.toLowerCase().includes(query)
+        row.groupName?.toLowerCase().includes(query) ||
+        row.stockCategoryName?.toLowerCase().includes(query)
     );
-  }, [report.rows, search]);
+  }, [report.rows, requestedCategory, requestedGroupId, requestedItemId, search]);
+  useReportKeyboardNav(containerRef, [filteredRows, expandedItems], {
+    onExit: () => navigate(-1),
+  });
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
@@ -175,6 +208,8 @@ export default function StockItemDetailPage() {
                         <td className="px-4 py-3 font-medium text-slate-800">
                           <button
                             type="button"
+                            data-report-nav="true"
+                            data-report-back={open ? "true" : "false"}
                             className="flex items-center gap-2"
                             onClick={() =>
                               setExpandedItems((current) => ({
@@ -232,6 +267,7 @@ export default function StockItemDetailPage() {
                                     <th className="px-3 py-2 text-right font-medium">Value</th>
                                     <th className="px-3 py-2 text-right font-medium">Closing Qty</th>
                                     <th className="px-3 py-2 text-right font-medium">Closing Value</th>
+                                    <th className="px-3 py-2 text-right font-medium">Edit</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -265,6 +301,16 @@ export default function StockItemDetailPage() {
                                       <td className="px-3 py-2 text-right">{formatNumber(entry.closingQty)}</td>
                                       <td className="px-3 py-2 text-right font-semibold text-slate-900">
                                         {formatCurrencyAmount(entry.closingValue, selectedCompany)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right">
+                                        <button
+                                          type="button"
+                                          data-report-nav="true"
+                                          className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                                          onClick={() => navigate(buildAlterVoucherPath(companyId, entry.voucherId))}
+                                        >
+                                          Alter
+                                        </button>
                                       </td>
                                     </tr>
                                   ))}

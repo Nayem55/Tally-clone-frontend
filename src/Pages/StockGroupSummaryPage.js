@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   ChevronDown,
@@ -10,9 +10,11 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatQty(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -30,7 +32,10 @@ function formatRate(value) {
 
 function startOfMonth() {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = "01";
+  return `${year}-${month}-${day}`;
 }
 
 function getId(value) {
@@ -133,14 +138,19 @@ function flattenVisibleRows(rows, expandedSet, query) {
 }
 
 export default function StockGroupSummaryPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const containerRef = useRef(null);
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
-  const [fromDate, setFromDate] = useState(startOfMonth);
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
-  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || startOfMonth());
+  const [toDate, setToDate] = useState(searchParams.get("to") || new Date().toISOString().slice(0, 10));
+  const [search, setSearch] = useState(searchParams.get("q") || "");
   const [report, setReport] = useState({ rows: [], totals: {} });
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [loading, setLoading] = useState(false);
+  const requestedCompanyId = searchParams.get("companyId") || "";
+  const requestedGroupId = searchParams.get("groupId") || "";
 
   useEffect(() => {
     async function loadCompanies() {
@@ -149,12 +159,12 @@ export default function StockGroupSummaryPage() {
       setCompanies(list);
 
       if (list.length > 0) {
-        setCompanyId((current) => current || list[0]._id || list[0].id);
+        setCompanyId((current) => current || requestedCompanyId || list[0]._id || list[0].id);
       }
     }
 
     loadCompanies();
-  }, []);
+  }, [requestedCompanyId]);
 
   useEffect(() => {
     async function loadReport() {
@@ -177,6 +187,15 @@ export default function StockGroupSummaryPage() {
           .filter((row) => row.type === "group" && Number(row.level || 0) <= 1)
           .map((row) => String(row.id));
 
+        if (requestedGroupId) {
+          let parentId = requestedGroupId;
+          const rowMap = new Map(normalized.rows.map((row) => [String(row.id), row]));
+          while (parentId) {
+            groupsToExpand.push(String(parentId));
+            parentId = rowMap.get(String(parentId))?.parentId || "";
+          }
+        }
+
         setExpandedGroups(new Set(groupsToExpand));
       } catch (error) {
         console.error("Stock group summary load failed:", error);
@@ -187,16 +206,30 @@ export default function StockGroupSummaryPage() {
     }
 
     loadReport();
-  }, [companyId, fromDate, toDate]);
+  }, [companyId, fromDate, requestedGroupId, toDate]);
 
   const selectedCompany = companies.find(
     (company) => String(company._id || company.id) === String(companyId)
   );
 
-  const visibleRows = useMemo(
-    () => flattenVisibleRows(report.rows || [], expandedGroups, search),
-    [report.rows, expandedGroups, search]
-  );
+  const visibleRows = useMemo(() => {
+    const rows = report.rows || [];
+    const flattened = flattenVisibleRows(rows, expandedGroups, search);
+    if (!requestedGroupId) return flattened;
+    const rowMap = new Map(rows.map((row) => [String(row.id), row]));
+    const inScope = (row) => {
+      let current = row;
+      while (current) {
+        if (String(current.id) === String(requestedGroupId)) return true;
+        current = current.parentId ? rowMap.get(String(current.parentId)) : null;
+      }
+      return false;
+    };
+    return flattened.filter(inScope);
+  }, [report.rows, expandedGroups, requestedGroupId, search]);
+  useReportKeyboardNav(containerRef, [visibleRows, expandedGroups], {
+    onExit: () => navigate(-1),
+  });
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((current) => {
@@ -213,7 +246,7 @@ export default function StockGroupSummaryPage() {
   const totals = report.totals || {};
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1500px] space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
@@ -396,7 +429,9 @@ export default function StockGroupSummaryPage() {
                           {isGroup && row.hasChildren ? (
                             <button
                               type="button"
-                              className="rounded p-1 text-slate-500 hover:bg-slate-200"
+                              data-report-nav="true"
+                              data-report-back={expanded ? "true" : "false"}
+                              className="rounded p-1 text-slate-500 hover:bg-slate-200 focus:bg-slate-200 focus:outline-none"
                               onClick={() => toggleGroup(row.id)}
                             >
                               {expanded ? (
@@ -410,13 +445,33 @@ export default function StockGroupSummaryPage() {
                           )}
 
                           <div>
-                            <p
-                              className={`font-medium ${
-                                isGroup ? "text-slate-900" : "text-slate-700"
-                              }`}
-                            >
-                              {row.name}
-                            </p>
+                            {isGroup ? (
+                              <button
+                                type="button"
+                                data-report-nav="true"
+                                className="rounded px-1 text-left font-medium text-slate-900 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                                onClick={() =>
+                                  navigate(
+                                    `/reports/inventory-books/stock-groups?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&groupId=${encodeURIComponent(row.id)}`,
+                                  )
+                                }
+                              >
+                                {row.name}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                data-report-nav="true"
+                                className="rounded px-1 text-left font-medium text-slate-700 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                                onClick={() =>
+                                  navigate(
+                                    `/reports/inventory-books/stock-item?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&itemId=${encodeURIComponent(row.id)}`
+                                  )
+                                }
+                              >
+                                {row.name}
+                              </button>
+                            )}
 
                             {!isGroup && row.alias ? (
                               <p className="text-xs text-slate-400">{row.alias}</p>

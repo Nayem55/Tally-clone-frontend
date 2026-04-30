@@ -14,7 +14,8 @@ import { formatDateForInput } from "../utils/voucherDates";
 
 const emptyRow = { itemId: "", qty: "1", rate: "" };
 
-export default function CreditNoteVoucher({ companyId }) {
+export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [creditTypeId, setCreditTypeId] = useState("");
   const [customers, setCustomers] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -50,6 +51,38 @@ export default function CreditNoteVoucher({ companyId }) {
     }
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId || items.length === 0) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const debitLine = (voucher.lines || []).find((line) => Number(line.debit || 0) > 0);
+      const creditLine = (voucher.lines || []).find((line) => Number(line.credit || 0) > 0);
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        customerLedger: String(debitLine?.ledgerId || ""),
+        returnLedger: String(creditLine?.ledgerId || ""),
+        narration: voucher.narration || "",
+        rows:
+          (voucher.inventoryLines || []).map((line) => ({
+            itemId: String(line.itemId || ""),
+            qty: String(line.qty || 1),
+            rate: Number(line.rate || 0),
+          })) || [emptyRow],
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId, items.length]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -117,14 +150,15 @@ export default function CreditNoteVoucher({ companyId }) {
     });
   }
 
-  async function save() {
+  async function save(options = {}) {
     if (!creditTypeId) return alert("Credit note type missing");
     if (!form.customerLedger) return alert("Please select customer");
     if (!form.returnLedger) return alert("Please select return ledger");
     if (validRows.length === 0) return alert("Please add at least one item");
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: creditTypeId,
+      voucherName: "Credit Note",
       number: form.number,
       date: form.date,
       narration: form.narration || "Credit Note",
@@ -138,9 +172,18 @@ export default function CreditNoteVoucher({ companyId }) {
         rate: Number(row.rate),
         amount: lineAmount(row),
       })),
-    });
-    alert("Credit note saved");
-    resetForm();
+    };
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Credit note updated" : "Credit note saved");
+    }
+    if (!isEditMode) resetForm();
   }
 
   return (

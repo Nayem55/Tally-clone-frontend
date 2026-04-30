@@ -8,19 +8,24 @@ import DebitNoteVoucher from "./DebitNoteVoucher";
 import CreditNoteVoucher from "./CreditNoteVoucher";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 
-export default function VoucherList({ initialVoucherName = "" }) {
-  const { companyId } = useActiveCompany();
+export default function VoucherList({
+  initialVoucherName = "",
+  companyIdOverride = "",
+  editVoucherId = "",
+}) {
+  const { companyId: activeCompanyId } = useActiveCompany();
+  const companyId = companyIdOverride || activeCompanyId;
 
   function renderVoucherComponent() {
     const name = initialVoucherName.toLowerCase();
-    if (name === "contra") return <ContraVoucher companyId={companyId} />;
-    if (name === "payment") return <PaymentVoucher companyId={companyId} />;
-    if (name === "receipt") return <ReceiptVoucher companyId={companyId} />;
-    if (name === "sales") return <SalesVoucher companyId={companyId} />;
-    if (name === "journal") return <JournalVoucher companyId={companyId} />;
-    if (name === "purchase") return <PurchaseVoucher companyId={companyId} />;
-    if (name === "debit note") return <DebitNoteVoucher companyId={companyId} />;
-    if (name === "credit note") return <CreditNoteVoucher companyId={companyId} />;
+    if (name === "contra") return <ContraVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "payment") return <PaymentVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "receipt") return <ReceiptVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "sales") return <SalesVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "journal") return <JournalVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "purchase") return <PurchaseVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "debit note") return <DebitNoteVoucher companyId={companyId} editVoucherId={editVoucherId} />;
+    if (name === "credit note") return <CreditNoteVoucher companyId={companyId} editVoucherId={editVoucherId} />;
     return <div className="p-6 text-sm text-slate-500">Voucher Screen Not Implemented</div>;
   }
 

@@ -35,6 +35,7 @@ import StockItemDetailPage from "./Pages/StockItemDetailPage";
 import InventoryMovementAnalysisPage from "./Pages/InventoryMovementAnalysisPage";
 import ShortcutReferencePage from "./Pages/ShortcutReferencePage";
 import CommandSearchModal from "./Component/CommandSearchModal";
+import AlterVoucherEntryPage from "./Pages/AlterVoucherEntryPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -285,6 +286,7 @@ function AppShell() {
             <Route path="/transactions/inventory/stock-journal" element={<InventoryVoucherPage voucherName="Stock Journal" />} />
             <Route path="/transactions/inventory/physical-stock" element={Placeholder("Physical Stock", "Physical stock entry is scaffolded for stock adjustment and verification workflows.")} />
             <Route path="/transactions/alter-vouchers" element={<VoucherRegister />} />
+            <Route path="/transactions/alter-vouchers/:voucherId" element={<AlterVoucherEntryPage />} />
 
             <Route path="/banking/activities/cheque-printing" element={Placeholder("Cheque Printing", "Banking activity routing is in place for cheque layout and printing support.")} />
             <Route path="/banking/activities/deposit-slip" element={Placeholder("Deposit Slip", "Deposit slip support can be added here with bank-wise templates.")} />

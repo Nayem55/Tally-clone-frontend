@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { formatCurrencyAmount } from "../utils/currency";
+import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 
 export default function LedgerDrilldownRow({
   companyId,
@@ -11,6 +13,7 @@ export default function LedgerDrilldownRow({
   colSpan,
   mode = "full",
 }) {
+  const navigate = useNavigate();
   const [state, setState] = useState({
     loading: true,
     error: "",
@@ -116,6 +119,7 @@ export default function LedgerDrilldownRow({
                       <th className="px-3 py-2 text-right font-medium">Debit</th>
                       <th className="px-3 py-2 text-right font-medium">Credit</th>
                       <th className="px-3 py-2 text-right font-medium">Running</th>
+                      <th className="px-3 py-2 text-right font-medium">Edit</th>
                       {mode !== "inventory" && (
                         <th className="px-3 py-2 font-medium">Narration</th>
                       )}
@@ -153,6 +157,18 @@ export default function LedgerDrilldownRow({
                         </td>
                         <td className="px-3 py-2 text-right font-semibold text-slate-900">
                           {formatCurrencyAmount(entry.runningBalance, company)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            data-report-nav="true"
+                            className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                            onClick={() =>
+                              navigate(buildAlterVoucherPath(companyId, entry.voucherId))
+                            }
+                          >
+                            Alter
+                          </button>
                         </td>
                         {mode !== "inventory" && (
                           <td className="px-3 py-2 text-slate-600">

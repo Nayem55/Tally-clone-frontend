@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, CalendarRange, Search, TrendingDown, TrendingUp } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 const VARIANTS = {
   "stock-group": {
@@ -78,15 +79,19 @@ function SummaryCard({ title, value, tone = "text-slate-900", icon }) {
 }
 
 export default function InventoryMovementAnalysisPage({ variant = "stock-group" }) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const containerRef = useRef(null);
   const view = VARIANTS[variant] || VARIANTS["stock-group"];
   const hideClosing = variant === "group" || variant === "ledger";
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
-  const [fromDate, setFromDate] = useState(defaultMonthStart());
-  const [toDate, setToDate] = useState(todayValue());
-  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || defaultMonthStart());
+  const [toDate, setToDate] = useState(searchParams.get("to") || todayValue());
+  const [search, setSearch] = useState(searchParams.get("q") || "");
   const [report, setReport] = useState({ rows: [], totals: {} });
   const [loading, setLoading] = useState(false);
+  const requestedCompanyId = searchParams.get("companyId") || "";
 
   useEffect(() => {
     async function loadCompanies() {
@@ -94,12 +99,12 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
       const list = response.data || [];
       setCompanies(list);
       if (list.length > 0) {
-        setCompanyId((current) => current || list[0]._id);
+        setCompanyId((current) => current || requestedCompanyId || list[0]._id);
       }
     }
 
     loadCompanies();
-  }, []);
+  }, [requestedCompanyId]);
 
   useEffect(() => {
     async function loadReport() {
@@ -136,6 +141,35 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [report.rows, search]);
+  useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, variant], {
+    onExit: () => navigate(-1),
+  });
+
+  function buildDrillPath(row) {
+    const shared = `companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+
+    if (variant === "stock-group") {
+      return `/reports/inventory-books/stock-group-summary?${shared}&groupId=${encodeURIComponent(row.id)}`;
+    }
+
+    if (variant === "stock-category") {
+      return `/reports/inventory-books/stock-item?${shared}&category=${encodeURIComponent(row.name)}`;
+    }
+
+    if (variant === "stock-item") {
+      return `/reports/inventory-books/stock-item?${shared}&itemId=${encodeURIComponent(row.id)}`;
+    }
+
+    if (variant === "group") {
+      return `/reports/inventory-books/movement-analysis/ledger?${shared}&q=${encodeURIComponent(row.name)}`;
+    }
+
+    if (variant === "ledger") {
+      return `/reports/day-book?${shared}&ledger=${encodeURIComponent(row.name)}&q=${encodeURIComponent(row.name)}`;
+    }
+
+    return "";
+  }
 
   const links = [
     { key: "stock-group", label: "Stock Group Analysis" },
@@ -148,7 +182,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   const totals = report.totals || {};
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1550px] space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
@@ -326,10 +360,20 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                   return (
                     <tr key={`${row.id}-${index}`} className="border-t border-slate-100">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-slate-900">{row.name}</p>
-                        {row.secondaryLabel ? (
-                          <p className="mt-0.5 text-xs text-slate-400">{row.secondaryLabel}</p>
-                        ) : null}
+                        <button
+                          type="button"
+                          data-report-nav="true"
+                          className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                          onClick={() => {
+                            const nextPath = buildDrillPath(row);
+                            if (nextPath) navigate(nextPath);
+                          }}
+                        >
+                          <p className="font-medium text-slate-900">{row.name}</p>
+                          {row.secondaryLabel ? (
+                            <p className="mt-0.5 text-xs text-slate-400">{row.secondaryLabel}</p>
+                          ) : null}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-right">{formatQty(metrics.openingQty)}</td>
                       <td className="px-4 py-3 text-right">{formatRate(metrics.openingRate)}</td>

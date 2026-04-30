@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { useNavigate } from "react-router-dom";
+import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -38,6 +40,7 @@ function emptyVoucherForm() {
 }
 
 export default function VoucherRegister() {
+  const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString()
@@ -399,7 +402,7 @@ export default function VoucherRegister() {
                         <button
                           type="button"
                           className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-                          onClick={() => selectVoucher(voucher._id)}
+                          onClick={() => navigate(buildAlterVoucherPath(companyId, voucher._id))}
                         >
                           Edit
                         </button>

@@ -13,7 +13,8 @@ import { formatDateForInput } from "../utils/voucherDates";
 
 const emptyRow = { ledgerId: "", amount: "", narration: "" };
 
-export default function ReceiptVoucher({ companyId }) {
+export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [receiptTypeId, setReceiptTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -43,6 +44,39 @@ export default function ReceiptVoucher({ companyId }) {
     }
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const lines = voucher.lines || [];
+      const receiptLine = lines.find((line) => Number(line.debit || 0) > 0);
+      const rows = lines
+        .filter((line) => Number(line.credit || 0) > 0)
+        .map((line) => ({
+          ledgerId: String(line.ledgerId || ""),
+          amount: Number(line.credit || 0) || "",
+          narration: "",
+        }));
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        receiptLedger: String(receiptLine?.ledgerId || ""),
+        rows: rows.length > 0 ? rows : [emptyRow],
+        narration: voucher.narration || "",
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -89,7 +123,7 @@ export default function ReceiptVoucher({ companyId }) {
     });
   }
 
-  async function save() {
+  async function save(options = {}) {
     if (!receiptTypeId) return alert("Receipt voucher type missing");
     if (!form.receiptLedger) return alert("Please select the account to receive into");
     if (validRows.length === 0) return alert("Please add at least one receipt row");
@@ -103,15 +137,26 @@ export default function ReceiptVoucher({ companyId }) {
       })),
     ];
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: receiptTypeId,
+      voucherName: "Receipt",
       number: form.number,
       date: form.date,
       narration: form.narration,
       lines,
-    });
-    alert("Receipt voucher saved");
-    resetForm();
+    };
+
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Receipt voucher updated" : "Receipt voucher saved");
+    }
+    if (!isEditMode) resetForm();
   }
 
   return (

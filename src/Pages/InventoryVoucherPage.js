@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, FileText, Trash2 } from "lucide-react";
 import api from "../api/api";
+import SaveVoucherModal from "../Component/SaveVoucherModal";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { formatDateForInput } from "../utils/voucherDates";
 
@@ -12,13 +14,21 @@ function getVoucherMode(voucherName) {
   return "inward";
 }
 
-export default function InventoryVoucherPage({ voucherName }) {
+export default function InventoryVoucherPage({
+  voucherName,
+  editVoucherId = "",
+  companyIdOverride = "",
+}) {
+  const containerRef = useRef(null);
   const mode = getVoucherMode(voucherName);
   const { companyId } = useActiveCompany();
+  const effectiveCompanyId = companyIdOverride || companyId;
+  const isEditMode = Boolean(editVoucherId);
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
   const [godowns, setGodowns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -37,13 +47,13 @@ export default function InventoryVoucherPage({ voucherName }) {
 
   useEffect(() => {
     async function loadData() {
-      if (!companyId) return;
+      if (!effectiveCompanyId) return;
       setLoading(true);
       try {
         const [voucherTypeResponse, itemsResponse, godownsResponse] = await Promise.all([
-          api.get(`/companies/${companyId}/voucher-types`),
-          api.get(`/companies/${companyId}/items`),
-          api.get(`/companies/${companyId}/godowns`),
+          api.get(`/companies/${effectiveCompanyId}/voucher-types`),
+          api.get(`/companies/${effectiveCompanyId}/items`),
+          api.get(`/companies/${effectiveCompanyId}/godowns`),
         ]);
         const match = voucherTypeResponse.data.find(
           (row) => row.name.toLowerCase() === voucherName.toLowerCase()
@@ -56,7 +66,46 @@ export default function InventoryVoucherPage({ voucherName }) {
       }
     }
     loadData();
-  }, [companyId, voucherName]);
+  }, [effectiveCompanyId, voucherName]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!effectiveCompanyId || !editVoucherId) return;
+      const response = await api.get(`/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        narration: voucher.narration || "",
+        rows:
+          (voucher.inventoryLines || []).map((line) => ({
+            itemId: String(line.itemId || ""),
+            qty: String(line.qty || 1),
+            rate: Number(line.rate || 0),
+            amount: String(line.amount || ""),
+            godownId: String(line.godownId || ""),
+            toGodownId: String(line.toGodownId || ""),
+          })) || [
+            {
+              itemId: "",
+              qty: "1",
+              rate: "",
+              amount: "",
+              godownId: "",
+              toGodownId: "",
+            },
+          ],
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [effectiveCompanyId, editVoucherId]);
 
   const validRows = useMemo(
     () => form.rows.filter((row) => row.itemId && Number(row.qty || 0) > 0),
@@ -117,7 +166,25 @@ export default function InventoryVoucherPage({ voucherName }) {
     }));
   };
 
-  async function save() {
+  function resetForm() {
+    setForm({
+      number: "",
+      date: formatDateForInput(new Date()),
+      narration: "",
+      rows: [
+        {
+          itemId: "",
+          qty: "1",
+          rate: "",
+          amount: "",
+          godownId: "",
+          toGodownId: "",
+        },
+      ],
+    });
+  }
+
+  async function save(options = {}) {
     if (!voucherTypeId) return alert("Voucher type is missing");
     if (validRows.length === 0) return alert("Please add at least one stock line");
 
@@ -149,23 +216,18 @@ export default function InventoryVoucherPage({ voucherName }) {
     };
 
     try {
-      await api.post(`/companies/${companyId}/vouchers`, body);
-      alert(`${voucherName} saved successfully`);
-      setForm({
-        number: "",
-        date: formatDateForInput(new Date()),
-        narration: "",
-        rows: [
-          {
-            itemId: "",
-            qty: "1",
-            rate: "",
-            amount: "",
-            godownId: "",
-            toGodownId: "",
-          },
-        ],
-      });
+      const payload = { ...body, voucherName };
+      if (isEditMode) {
+        await api.put(`/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`, payload);
+      } else {
+        await api.post(`/companies/${effectiveCompanyId}/vouchers`, payload);
+      }
+      if (options.printAfterSave) {
+        await options.printVoucher?.();
+      } else {
+        alert(isEditMode ? `${voucherName} updated successfully` : `${voucherName} saved successfully`);
+      }
+      if (!isEditMode) resetForm();
     } catch (error) {
       alert(error.response?.data?.message || `Unable to save ${voucherName}`);
     }
@@ -176,7 +238,7 @@ export default function InventoryVoucherPage({ voucherName }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
@@ -321,16 +383,41 @@ export default function InventoryVoucherPage({ voucherName }) {
           </div>
         </section>
 
-        <section className="flex justify-end">
+        <section className="flex justify-end gap-3">
+          <button
+            type="button"
+            className="rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+            onClick={() => previewVoucherNode(containerRef.current, voucherName)}
+          >
+            Print Preview
+          </button>
           <button
             type="button"
             className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
-            onClick={save}
+            onClick={() => setShowSaveConfirm(true)}
           >
             Save {voucherName}
           </button>
         </section>
       </div>
+
+      <SaveVoucherModal
+        open={showSaveConfirm}
+        onClose={() => setShowSaveConfirm(false)}
+        onSave={async () => {
+          setShowSaveConfirm(false);
+          await save();
+        }}
+        onSaveAndPrint={async () => {
+          setShowSaveConfirm(false);
+          await save({
+            printAfterSave: true,
+            printVoucher: () => printVoucherNode(containerRef.current, voucherName),
+          });
+        }}
+        title={`Save ${voucherName}?`}
+        description={`We are ready to post this ${voucherName.toLowerCase()}. You can save it now or save and open a printable copy immediately.`}
+      />
     </div>
   );
 }

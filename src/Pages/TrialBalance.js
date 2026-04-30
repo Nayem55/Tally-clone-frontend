@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   Building2,
@@ -12,9 +12,11 @@ import {
   Scale,
   Wallet,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -153,6 +155,8 @@ function SummaryCard({ icon: Icon, title, value, subtitle, iconClass = "" }) {
 }
 
 export default function TrialBalance() {
+  const navigate = useNavigate();
+  const containerRef = useRef(null);
   const today = new Date();
   const monthStart = formatLocalDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
   const monthEnd = formatLocalDateInput(
@@ -207,6 +211,9 @@ export default function TrialBalance() {
     () => filterTree(report.tree || [], selectedGroup, selectedLedger),
     [report.tree, selectedGroup, selectedLedger]
   );
+  useReportKeyboardNav(containerRef, [visibleTree, expandedGroups, expandedLedgers], {
+    onExit: () => navigate(-1),
+  });
 
   function toggleGroup(groupId) {
     setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
@@ -224,7 +231,13 @@ export default function TrialBalance() {
         <tr className="border-t border-slate-100 bg-white">
           <td className="px-4 py-2.5 font-medium text-slate-800">
             <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 20}px` }}>
-              <button type="button" className="flex items-center gap-2" onClick={() => toggleLedger(String(ledger.id))}>
+              <button
+                type="button"
+                data-report-nav="true"
+                data-report-back={ledgerOpen ? "true" : "false"}
+                className="flex items-center gap-2 rounded px-1 focus:bg-blue-50 focus:outline-none"
+                onClick={() => toggleLedger(String(ledger.id))}
+              >
                 {ledgerOpen ? (
                   <ChevronDown className="h-4 w-4 text-blue-600" />
                 ) : (
@@ -276,7 +289,13 @@ export default function TrialBalance() {
         >
           <td className="px-4 py-2.5 font-semibold text-slate-900">
             <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 18}px` }}>
-              <button type="button" className="flex items-center gap-2" onClick={() => toggleGroup(String(node.id))}>
+              <button
+                type="button"
+                data-report-nav="true"
+                data-report-back={groupOpen ? "true" : "false"}
+                className="flex items-center gap-2 rounded px-1 focus:bg-blue-50 focus:outline-none"
+                onClick={() => toggleGroup(String(node.id))}
+              >
                 {groupOpen ? (
                   <ChevronDown className="h-4 w-4 text-blue-600" />
                 ) : (
@@ -315,7 +334,7 @@ export default function TrialBalance() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
       <div className="mx-auto max-w-[1380px]">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_240px]">
           <div className="space-y-5">

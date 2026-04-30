@@ -13,7 +13,8 @@ import { formatDateForInput } from "../utils/voucherDates";
 
 const emptyRow = { fromLedgerId: "", toLedgerId: "", amount: "", narration: "" };
 
-export default function JournalVoucher({ companyId }) {
+export default function JournalVoucher({ companyId, editVoucherId = "" }) {
+  const isEditMode = Boolean(editVoucherId);
   const [journalTypeId, setJournalTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -43,6 +44,42 @@ export default function JournalVoucher({ companyId }) {
     }
     loadMasters();
   }, [companyId, form.date]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVoucherForEdit() {
+      if (!companyId || !editVoucherId) return;
+      const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
+      const voucher = response.data;
+      const rows = [];
+      const sourceLines = voucher.lines || [];
+      for (let index = 0; index < sourceLines.length; index += 2) {
+        const debitLine = sourceLines[index];
+        const creditLine = sourceLines[index + 1];
+        rows.push({
+          fromLedgerId: String(debitLine?.ledgerId || ""),
+          toLedgerId: String(creditLine?.ledgerId || ""),
+          amount: Number(debitLine?.debit || creditLine?.credit || 0) || "",
+          narration: "",
+        });
+      }
+
+      if (!alive) return;
+      setForm({
+        number: voucher.number || "",
+        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        narration: voucher.narration || "",
+        referenceNo: voucher.referenceNo || "",
+        rows: rows.length > 0 ? rows : [emptyRow],
+      });
+    }
+
+    loadVoucherForEdit();
+    return () => {
+      alive = false;
+    };
+  }, [companyId, editVoucherId]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -90,7 +127,7 @@ export default function JournalVoucher({ companyId }) {
     });
   }
 
-  async function save() {
+  async function save(options = {}) {
     if (!journalTypeId) return alert("Journal voucher type missing");
     if (validRows.length === 0) {
       return alert("Add at least one complete From -> To journal row.");
@@ -108,16 +145,27 @@ export default function JournalVoucher({ companyId }) {
       { ledgerId: row.toLedgerId, debit: 0, credit: Number(row.amount) },
     ]);
 
-    await api.post(`/companies/${companyId}/vouchers`, {
+    const payload = {
       voucherTypeId: journalTypeId,
+      voucherName: "Journal",
       number: form.number,
       date: form.date,
       narration: form.narration,
       referenceNo: form.referenceNo,
       lines,
-    });
-    alert("Journal voucher saved");
-    resetForm();
+    };
+
+    if (isEditMode) {
+      await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
+    } else {
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+    }
+    if (options.printAfterSave) {
+      await options.printVoucher?.();
+    } else {
+      alert(isEditMode ? "Journal voucher updated" : "Journal voucher saved");
+    }
+    if (!isEditMode) resetForm();
   }
 
   return (

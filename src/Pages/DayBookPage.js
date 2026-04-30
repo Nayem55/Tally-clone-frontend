@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, Search } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { buildAlterVoucherPath } from "../utils/voucherRoutes";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -18,6 +21,9 @@ function voucherValue(voucher) {
 }
 
 export default function DayBookPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const containerRef = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString()
@@ -27,21 +33,24 @@ export default function DayBookPage() {
   const [companyId, setCompanyId] = useState("");
   const [vouchers, setVouchers] = useState([]);
   const [voucherTypes, setVoucherTypes] = useState([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("q") || "");
   const [voucherTypeId, setVoucherTypeId] = useState("");
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || monthStart);
+  const [toDate, setToDate] = useState(searchParams.get("to") || today);
+  const requestedCompanyId = searchParams.get("companyId") || "";
+  const ledgerQuery = (searchParams.get("ledger") || "").trim().toLowerCase();
+  const partyQuery = (searchParams.get("party") || "").trim().toLowerCase();
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
       if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
+        setCompanyId((current) => current || requestedCompanyId || response.data[0]._id);
       }
     }
     loadCompanies();
-  }, []);
+  }, [requestedCompanyId]);
 
   useEffect(() => {
     async function loadData() {
@@ -65,14 +74,37 @@ export default function DayBookPage() {
   const filteredVouchers = useMemo(() => {
     const query = search.trim().toLowerCase();
     return vouchers.filter((voucher) =>
-      `${voucher.voucherName} ${voucher.number || ""} ${voucher.narration || ""}`
-        .toLowerCase()
-        .includes(query)
+      {
+        const baseSearch = `${voucher.voucherName} ${voucher.number || ""} ${voucher.narration || ""}`.toLowerCase();
+        const lineSearch = (voucher.lines || [])
+          .map((line) => `${line.ledgerName || ""} ${line.name || ""}`)
+          .join(" ")
+          .toLowerCase();
+        const customerSearch = `${voucher.customerSnapshot?.name || ""} ${voucher.customerSnapshot?.phone || ""}`.toLowerCase();
+        const searchable = `${baseSearch} ${lineSearch} ${customerSearch}`;
+        const matchesText = !query || searchable.includes(query);
+        const matchesLedger =
+          !ledgerQuery ||
+          (voucher.lines || []).some((line) =>
+            `${line.ledgerName || ""} ${line.name || ""}`.toLowerCase().includes(ledgerQuery),
+          );
+        const matchesParty =
+          !partyQuery ||
+          searchable.includes(partyQuery) ||
+          (voucher.lines || []).some((line) =>
+            `${line.ledgerName || ""} ${line.name || ""}`.toLowerCase().includes(partyQuery),
+          );
+
+        return matchesText && matchesLedger && matchesParty;
+      }
     );
-  }, [vouchers, search]);
+  }, [ledgerQuery, partyQuery, search, vouchers]);
+  useReportKeyboardNav(containerRef, [filteredVouchers], {
+    onExit: () => navigate(-1),
+  });
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h1 className="text-3xl font-bold text-slate-900">Day Book</h1>
@@ -149,6 +181,7 @@ export default function DayBookPage() {
                   <th className="px-4 py-3 font-medium">Number</th>
                   <th className="px-4 py-3 font-medium">Narration</th>
                   <th className="px-4 py-3 text-right font-medium">Value</th>
+                  <th className="px-4 py-3 text-right font-medium">Edit</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,6 +195,16 @@ export default function DayBookPage() {
                     <td className="px-4 py-3 text-slate-500">{voucher.narration || "-"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {formatAmount(voucherValue(voucher))}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        data-report-nav="true"
+                        className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        onClick={() => navigate(buildAlterVoucherPath(companyId, voucher._id))}
+                      >
+                        Alter
+                      </button>
                     </td>
                   </tr>
                 ))}

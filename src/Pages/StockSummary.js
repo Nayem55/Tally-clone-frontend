@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, PackageSearch } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -12,6 +14,8 @@ function formatNumber(value) {
 }
 
 export default function StockSummary() {
+  const navigate = useNavigate();
+  const containerRef = useRef(null);
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [report, setReport] = useState({ rows: [], totals: null });
@@ -49,12 +53,15 @@ export default function StockSummary() {
         row.alias.toLowerCase().includes(query)
     );
   }, [report.rows, search]);
+  useReportKeyboardNav(containerRef, [filteredRows], {
+    onExit: () => navigate(-1),
+  });
 
   const totals = report.totals || {};
   const selectedCompany = companies.find((company) => company._id === companyId);
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -133,12 +140,21 @@ export default function StockSummary() {
                 {filteredRows.map((row) => (
                   <tr key={row.itemId} className="border-t border-slate-100">
                     <td className="px-4 py-3 font-medium text-slate-800">
-                      {row.itemName}
-                      {row.alias && (
-                        <span className="ml-2 text-xs font-normal text-slate-400">
-                          {row.alias}
-                        </span>
-                      )}
+                      <button
+                        type="button"
+                        data-report-nav="true"
+                        className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                        onClick={() =>
+                          navigate(`/reports/inventory-books/stock-item?itemId=${encodeURIComponent(row.itemId)}`)
+                        }
+                      >
+                        {row.itemName}
+                        {row.alias && (
+                          <span className="ml-2 text-xs font-normal text-slate-400">
+                            {row.alias}
+                          </span>
+                        )}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
                     <td className="px-4 py-3 text-right">{formatNumber(row.openingQty)}</td>

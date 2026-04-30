@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Save, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, Printer, Save, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { voucherShortcuts } from "../utils/shortcuts";
 import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
+import SaveVoucherModal from "./SaveVoucherModal";
+import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
 
 export function formatVoucherMoney(value, symbol = "") {
   const amount = Number(value || 0).toLocaleString("en-IN", {
@@ -19,7 +21,7 @@ export function renderBalance(value, side, symbol = "") {
 
 function InfoCard({ title, children }) {
   return (
-    <section className="border border-[#b9c8da] bg-[#eef5ff] p-3 shadow-sm">
+    <section data-print-card="true" className="border border-[#b9c8da] bg-[#eef5ff] p-3 shadow-sm">
       <h3 className="text-[14px] font-semibold text-[#214b91]">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>
@@ -43,7 +45,6 @@ export default function VoucherWorkspace({
 }) {
   const Icon = icon;
   const containerRef = useRef(null);
-  const confirmButtonRef = useRef(null);
   const location = useLocation();
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
@@ -66,31 +67,13 @@ export default function VoucherWorkspace({
     onSaveRequest: () => setShowSaveConfirm(true),
   });
 
-  function confirmSave() {
+  async function handleSave(mode = "save") {
     setShowSaveConfirm(false);
-    onSave?.();
+    await onSave?.({
+      printAfterSave: mode === "print",
+      printVoucher: () => printVoucherNode(containerRef.current, title),
+    });
   }
-
-  useEffect(() => {
-    if (!showSaveConfirm) return undefined;
-
-    const focusTimer = window.setTimeout(() => {
-      confirmButtonRef.current?.focus();
-    }, 10);
-
-    function handleConfirmKeys(event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setShowSaveConfirm(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleConfirmKeys);
-    return () => {
-      window.clearTimeout(focusTimer);
-      window.removeEventListener("keydown", handleConfirmKeys);
-    };
-  }, [showSaveConfirm]);
 
   function focusRelativeField(currentTarget, direction) {
     const fields = Array.from(
@@ -130,21 +113,34 @@ export default function VoucherWorkspace({
   }
 
   return (
-    <div className="min-h-screen bg-[#f1f1f1] px-0 py-0" ref={containerRef} onKeyDown={handleContainerKeyDown}>
+    <div
+      data-print-root="true"
+      className="min-h-screen bg-[#f1f1f1] px-0 py-0"
+      ref={containerRef}
+      onKeyDown={handleContainerKeyDown}
+    >
       <div className="mx-auto max-w-full">
-        <section className="border-b border-[#a6bfdc] bg-[#f7fbff] px-3 py-2">
+        <section data-print-header="true" className="border-b border-[#a6bfdc] bg-[#f7fbff] px-3 py-2">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-start gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${iconTone}`}>
+              <div data-print-hide="true" className={`flex h-10 w-10 items-center justify-center rounded-full ${iconTone}`}>
                 <Icon className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-[28px] font-semibold text-[#1f2f55]">{title}</h1>
-                <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
+                <h1 data-print-title="true" className="text-[28px] font-semibold text-[#1f2f55]">{title}</h1>
+                <p data-print-subtitle="true" className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div data-print-hide="true" className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+                onClick={() => previewVoucherNode(containerRef.current, title)}
+              >
+                <Printer className="h-4 w-4" />
+                Print Preview
+              </button>
               <button
                 type="button"
                 className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
@@ -174,10 +170,10 @@ export default function VoucherWorkspace({
           </div>
         </section>
 
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_250px]">
-          <div className="space-y-4 bg-[#f8f8f8] p-3">{children}</div>
+        <div data-print-layout="true" className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_250px]">
+          <div data-print-main="true" className="space-y-4 bg-[#f8f8f8] p-3">{children}</div>
 
-          <aside className="border-l border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3">
+          <aside data-print-sidebar="true" className="border-l border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3">
             <InfoCard title="Voucher Summary">
               <div className="space-y-2 text-[13px]">
                 {summaryTag ? (
@@ -210,6 +206,7 @@ export default function VoucherWorkspace({
               </div>
             </InfoCard>
 
+            <div data-print-hide="true">
             <InfoCard title="Short Keys">
               <div className="space-y-2">
                 {mergedShortcuts.map((shortcut) => (
@@ -228,53 +225,25 @@ export default function VoucherWorkspace({
                 ))}
               </div>
             </InfoCard>
+            </div>
           </aside>
         </div>
       </div>
 
-      {showSaveConfirm ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/40 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_80px_rgba(15,23,42,0.28)]">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                <Check className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-xl font-semibold text-slate-900">Save voucher?</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  We are ready to post this voucher. Once saved, it will update the connected stock and accounting reports.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => setShowSaveConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded-xl bg-[#1463ff] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0f57eb]"
-                ref={confirmButtonRef}
-                onClick={confirmSave}
-              >
-                Confirm Save
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SaveVoucherModal
+        open={showSaveConfirm}
+        onClose={() => setShowSaveConfirm(false)}
+        onSave={() => handleSave("save")}
+        onSaveAndPrint={() => handleSave("print")}
+      />
     </div>
   );
 }
 
 export function VoucherPanel({ title, children, className = "" }) {
   return (
-    <section className={`border border-[#bccfe3] bg-white p-4 shadow-sm ${className}`}>
-      <h2 className="text-[16px] font-semibold text-[#1f2f55]">{title}</h2>
+    <section data-print-panel="true" className={`border border-[#bccfe3] bg-white p-4 shadow-sm ${className}`}>
+      <h2 data-print-panel-title="true" className="text-[16px] font-semibold text-[#1f2f55]">{title}</h2>
       <div className="mt-4">{children}</div>
     </section>
   );
