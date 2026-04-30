@@ -1,42 +1,100 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, LineChart, PackageSearch } from "lucide-react";
+import { BarChart3, CalendarRange, Search, TrendingDown, TrendingUp } from "lucide-react";
+import { Link } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
 
-function formatNumber(value) {
+const VARIANTS = {
+  "stock-group": {
+    title: "Stock Group Analysis",
+    searchLabel: "Stock Group Name",
+    searchPlaceholder: "Search stock group name...",
+  },
+  "stock-category": {
+    title: "Stock Category Analysis",
+    searchLabel: "Stock Category Name",
+    searchPlaceholder: "Search stock category name...",
+  },
+  "stock-item": {
+    title: "Stock Item Analysis",
+    searchLabel: "Item Name",
+    searchPlaceholder: "Search item name...",
+  },
+  group: {
+    title: "Group Analysis",
+    searchLabel: "Party Name",
+    searchPlaceholder: "Search party name like Shwapno or Agora...",
+  },
+  ledger: {
+    title: "Ledger Analysis",
+    searchLabel: "Ledger Name",
+    searchPlaceholder: "Search ledger name like Shwapno: Mirpur...",
+  },
+};
+
+function formatQty(value) {
+  return Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatRate(value) {
   return Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("en-GB");
+function formatLocalDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-export default function InventoryMovementAnalysisPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
+function defaultMonthStart() {
+  const now = new Date();
+  return formatLocalDateInput(new Date(now.getFullYear(), now.getMonth(), 1));
+}
 
+function todayValue() {
+  return formatLocalDateInput(new Date());
+}
+
+function SummaryCard({ title, value, tone = "text-slate-900", icon }) {
+  return (
+    <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-center gap-3">
+        <div className="rounded-xl bg-blue-50 p-3 text-blue-600">{icon}</div>
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className={`mt-1 text-2xl font-bold ${tone}`}>{value}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export default function InventoryMovementAnalysisPage({ variant = "stock-group" }) {
+  const view = VARIANTS[variant] || VARIANTS["stock-group"];
+  const hideClosing = variant === "group" || variant === "ledger";
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate] = useState(defaultMonthStart());
+  const [toDate, setToDate] = useState(todayValue());
   const [search, setSearch] = useState("");
-  const [report, setReport] = useState({ rows: [], totals: {}, analytics: {} });
+  const [report, setReport] = useState({ rows: [], totals: {} });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
-      setCompanies(response.data);
-      if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
+      const list = response.data || [];
+      setCompanies(list);
+      if (list.length > 0) {
+        setCompanyId((current) => current || list[0]._id);
       }
     }
 
@@ -46,62 +104,67 @@ export default function InventoryMovementAnalysisPage() {
   useEffect(() => {
     async function loadReport() {
       if (!companyId) return;
-      const response = await api.get(
-        `/companies/${companyId}/reports/inventory-movement-analysis`,
-        { params: { from: fromDate, to: toDate } }
-      );
-      setReport(response.data);
+      setLoading(true);
+      try {
+        const response = await api.get(
+          `/companies/${companyId}/reports/inventory-movement-analysis`,
+          {
+            params: {
+              from: fromDate,
+              to: toDate,
+              dimension: variant,
+            },
+          },
+        );
+        setReport(response.data || { rows: [], totals: {} });
+      } finally {
+        setLoading(false);
+      }
     }
 
     loadReport();
-  }, [companyId, fromDate, toDate]);
+  }, [companyId, fromDate, toDate, variant]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
+
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return report.rows || [];
-    return (report.rows || []).filter(
-      (row) =>
-        row.itemName?.toLowerCase().includes(query) ||
-        row.alias?.toLowerCase().includes(query) ||
-        row.groupName?.toLowerCase().includes(query)
+    return (report.rows || []).filter((row) =>
+      [row.name, row.secondaryLabel]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [report.rows, search]);
 
+  const links = [
+    { key: "stock-group", label: "Stock Group Analysis" },
+    { key: "stock-category", label: "Stock Category Analysis" },
+    { key: "stock-item", label: "Stock Item Analysis" },
+    { key: "group", label: "Group Analysis" },
+    { key: "ledger", label: "Ledger Analysis" },
+  ];
+
+  const totals = report.totals || {};
+
   return (
     <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-[1550px] space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
-                <LineChart className="h-3.5 w-3.5" />
-                Inventory books
+                <BarChart3 className="h-3.5 w-3.5" />
+                Inventory Books
               </div>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">Movement Analysis</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Analyze how each stock item moved in the selected period, including inward, outward, net movement, turnover, and latest activity dates.
+                Switch between stock, category, party-group, and ledger movement views without leaving inventory books.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <CompanyPicker
-                companies={companies}
-                value={companyId}
-                onChange={setCompanyId}
-                label="Company"
-              />
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <PackageSearch className="h-4 w-4 text-blue-600" />
-                  Search
-                </label>
-                <input
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                  placeholder="Search item, alias, or group..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
               <div>
                 <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
                   <CalendarRange className="h-4 w-4 text-blue-600" />
@@ -109,7 +172,7 @@ export default function InventoryMovementAnalysisPage() {
                 </label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   value={fromDate}
                   onChange={(event) => setFromDate(event.target.value)}
                 />
@@ -121,127 +184,185 @@ export default function InventoryMovementAnalysisPage() {
                 </label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   value={toDate}
                   onChange={(event) => setToDate(event.target.value)}
                 />
               </div>
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Search className="h-4 w-4 text-blue-600" />
+                  {view.searchLabel}
+                </label>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  placeholder={view.searchPlaceholder}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
             </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            {links.map((link) => (
+              <Link
+                key={link.key}
+                to={`/reports/inventory-books/movement-analysis/${link.key}`}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  link.key === variant
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Inward Qty</p>
-            <p className="mt-2 text-2xl font-bold text-emerald-700">
-              {formatNumber(report.totals?.inwardQty)}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Outward Qty</p>
-            <p className="mt-2 text-2xl font-bold text-rose-700">
-              {formatNumber(report.totals?.outwardQty)}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Closing Qty</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
-              {formatNumber(report.totals?.closingQty)}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Closing Value</p>
-            <p className="mt-2 text-2xl font-bold text-blue-700">
-              {formatCurrencyAmount(report.totals?.closingValue, selectedCompany)}
-            </p>
-          </article>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-2">
-          <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900">Most Moved Items</h2>
-            <div className="mt-4 space-y-3">
-              {(report.analytics?.mostMovedItems || []).map((row) => (
-                <div key={row.itemId} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                  <div>
-                    <p className="font-medium text-slate-800">{row.itemName}</p>
-                    <p className="text-xs text-slate-500">{row.groupName || "-"}</p>
-                  </div>
-                  <span className="font-semibold text-slate-900">{formatNumber(row.totalMovementQty)}</span>
-                </div>
-              ))}
-            </div>
-          </article>
-          <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900">Fastest Outward Items</h2>
-            <div className="mt-4 space-y-3">
-              {(report.analytics?.fastestOutwardItems || []).map((row) => (
-                <div key={row.itemId} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                  <div>
-                    <p className="font-medium text-slate-800">{row.itemName}</p>
-                    <p className="text-xs text-slate-500">{row.groupName || "-"}</p>
-                  </div>
-                  <span className="font-semibold text-rose-700">{formatNumber(row.outwardQty)}</span>
-                </div>
-              ))}
-            </div>
-          </article>
+          {hideClosing ? (
+            <>
+              <SummaryCard
+                title="Purchase Qty"
+                value={formatQty(totals.inwardQty)}
+                icon={<TrendingUp className="h-5 w-5" />}
+                tone="text-emerald-700"
+              />
+              <SummaryCard
+                title="Purchase Value"
+                value={formatCurrencyAmount(totals.inwardValue, selectedCompany)}
+                icon={<TrendingUp className="h-5 w-5" />}
+                tone="text-emerald-700"
+              />
+              <SummaryCard
+                title="Sales Qty"
+                value={formatQty(totals.outwardQty)}
+                icon={<TrendingDown className="h-5 w-5" />}
+                tone="text-rose-700"
+              />
+              <SummaryCard
+                title="Sales Value"
+                value={formatCurrencyAmount(totals.outwardValue, selectedCompany)}
+                icon={<TrendingDown className="h-5 w-5" />}
+                tone="text-rose-700"
+              />
+            </>
+          ) : (
+            <>
+              <SummaryCard
+                title="Opening Value"
+                value={formatCurrencyAmount(totals.openingValue, selectedCompany)}
+                icon={<BarChart3 className="h-5 w-5" />}
+              />
+              <SummaryCard
+                title="Total Inward"
+                value={formatQty(totals.inwardQty)}
+                icon={<TrendingUp className="h-5 w-5" />}
+                tone="text-emerald-700"
+              />
+              <SummaryCard
+                title="Total Outward"
+                value={formatQty(totals.outwardQty)}
+                icon={<TrendingDown className="h-5 w-5" />}
+                tone="text-rose-700"
+              />
+              <SummaryCard
+                title="Closing Value"
+                value={formatCurrencyAmount(totals.closingValue, selectedCompany)}
+                icon={<BarChart3 className="h-5 w-5" />}
+                tone="text-blue-700"
+              />
+            </>
+          )}
         </section>
 
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
           <div className="border-b border-slate-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">Item-wise Movement Analysis</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{view.title}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {hideClosing
+                ? "Purchase and sales movement for the selected analysis view."
+                : "Opening, inwards, outwards, and closing balance for the selected analysis view."}
+            </p>
           </div>
+
           <div className="overflow-x-auto">
-            <table className="min-w-[1320px] text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
+            <table className={`w-full text-sm ${hideClosing ? "min-w-[1120px]" : "min-w-[1480px]"}`}>
+              <thead className="bg-slate-50 text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Item</th>
-                  <th className="px-4 py-3 font-medium">Group</th>
-                  <th className="px-4 py-3 text-right font-medium">Opening Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Inward Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Outward Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Net Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Closing Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Last Purchase Rate</th>
-                  <th className="px-4 py-3 text-right font-medium">Closing Value</th>
-                  <th className="px-4 py-3 text-right font-medium">Turnover</th>
-                  <th className="px-4 py-3 font-medium">Last Inward</th>
-                  <th className="px-4 py-3 font-medium">Last Outward</th>
+                  <th rowSpan="2" className="px-4 py-3 text-left font-medium">
+                    Particulars
+                  </th>
+                  <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                    Opening Balance
+                  </th>
+                  <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                    {hideClosing ? "Purchase" : "Inwards"}
+                  </th>
+                  <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                    {hideClosing ? "Sales" : "Outwards"}
+                  </th>
+                  {!hideClosing ? (
+                    <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                      Closing Balance
+                    </th>
+                  ) : null}
+                </tr>
+                <tr>
+                  {Array.from({ length: hideClosing ? 3 : 4 })
+                    .flatMap(() => ["Quantity", "Rate", "Value"])
+                    .map((label, index) => (
+                    <th key={`${label}-${index}`} className="px-4 py-3 text-right font-medium">
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row) => (
-                  <tr key={row.itemId} className="border-t border-slate-100">
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {row.itemName}
-                      {row.alias ? (
-                        <span className="ml-2 text-xs font-normal text-slate-400">{row.alias}</span>
+                {filteredRows.map((row, index) => {
+                  const metrics = row.metrics || {};
+                  return (
+                    <tr key={`${row.id}-${index}`} className="border-t border-slate-100">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-900">{row.name}</p>
+                        {row.secondaryLabel ? (
+                          <p className="mt-0.5 text-xs text-slate-400">{row.secondaryLabel}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right">{formatQty(metrics.openingQty)}</td>
+                      <td className="px-4 py-3 text-right">{formatRate(metrics.openingRate)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(metrics.openingValue, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right text-emerald-700">{formatQty(metrics.inwardQty)}</td>
+                      <td className="px-4 py-3 text-right">{formatRate(metrics.inwardRate)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(metrics.inwardValue, selectedCompany)}</td>
+                      <td className="px-4 py-3 text-right text-rose-700">{formatQty(metrics.outwardQty)}</td>
+                      <td className="px-4 py-3 text-right">{formatRate(metrics.outwardRate)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(metrics.outwardValue, selectedCompany)}</td>
+                      {!hideClosing ? (
+                        <>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatQty(metrics.closingQty)}</td>
+                          <td className="px-4 py-3 text-right">{formatRate(metrics.closingRate)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                            {formatCurrencyAmount(metrics.closingValue, selectedCompany)}
+                          </td>
+                        </>
                       ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
-                    <td className="px-4 py-3 text-right">{formatNumber(row.openingQty)}</td>
-                    <td className="px-4 py-3 text-right text-emerald-700">{formatNumber(row.inwardQty)}</td>
-                    <td className="px-4 py-3 text-right text-rose-700">{formatNumber(row.outwardQty)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatNumber(row.netQty)}</td>
-                    <td className="px-4 py-3 text-right">{formatNumber(row.closingQty)}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingRate, selectedCompany)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {formatCurrencyAmount(row.closingValue, selectedCompany)}
-                    </td>
-                    <td className="px-4 py-3 text-right">{formatNumber(row.stockTurnover)}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatDate(row.lastInwardAt)}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatDate(row.lastOutwardAt)}</td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            {filteredRows.length === 0 && (
-              <div className="p-10 text-center text-sm text-slate-500">
-                No movement rows matched this view.
-              </div>
-            )}
           </div>
+
+          {loading ? (
+            <div className="px-6 py-12 text-center text-sm text-slate-500">Loading movement analysis...</div>
+          ) : filteredRows.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-slate-500">
+              No rows matched this movement analysis search.
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

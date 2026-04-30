@@ -126,7 +126,16 @@ export const menuTree = [
         children: [
           { label: "Stock Item", to: "/reports/inventory-books/stock-item" },
           { label: "Stock Group Summary", to: "/reports/inventory-books/stock-group-summary" },
-          { label: "Movement Analysis", to: "/reports/inventory-books/movement-analysis" },
+          {
+            label: "Movement Analysis",
+            children: [
+              { label: "Stock Group Analysis", to: "/reports/inventory-books/movement-analysis/stock-group" },
+              { label: "Stock Category Analysis", to: "/reports/inventory-books/movement-analysis/stock-category" },
+              { label: "Stock Item Analysis", to: "/reports/inventory-books/movement-analysis/stock-item" },
+              { label: "Group Analysis", to: "/reports/inventory-books/movement-analysis/group" },
+              { label: "Ledger Analysis", to: "/reports/inventory-books/movement-analysis/ledger" },
+            ],
+          },
           { label: "Godown Summary", to: "/reports/inventory-books/godown-summary" },
           { label: "Batch Summary", to: "/reports/inventory-books/batch-summary" },
         ],

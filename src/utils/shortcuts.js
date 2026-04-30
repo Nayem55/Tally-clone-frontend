@@ -130,7 +130,7 @@ export const sidebarChildShortcuts = {
   "Reports/Inventory Books": [
     { key: "i", label: "Stock Item", route: "/reports/inventory-books/stock-item" },
     { key: "g", label: "Stock Group Summary", route: "/reports/inventory-books/stock-group-summary" },
-    { key: "m", label: "Movement Analysis", route: "/reports/inventory-books/movement-analysis" },
+    { key: "m", label: "Stock Group Analysis", route: "/reports/inventory-books/movement-analysis/stock-group" },
     { key: "d", label: "Godown Summary", route: "/reports/inventory-books/godown-summary" },
     { key: "b", label: "Batch Summary", route: "/reports/inventory-books/batch-summary" },
   ],

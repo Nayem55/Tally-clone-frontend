@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./Component/Sidebar";
 import Navbar from "./Component/Navbar";
 import DashboardPage from "./Pages/DashboardPage";
@@ -383,7 +383,30 @@ function AppShell() {
 
             <Route path="/reports/inventory-books/stock-item" element={<StockItemDetailPage />} />
             <Route path="/reports/inventory-books/stock-group-summary" element={<StockGroupSummaryPage />} />
-            <Route path="/reports/inventory-books/movement-analysis" element={<InventoryMovementAnalysisPage />} />
+            <Route
+              path="/reports/inventory-books/movement-analysis"
+              element={<Navigate to="/reports/inventory-books/movement-analysis/stock-group" replace />}
+            />
+            <Route
+              path="/reports/inventory-books/movement-analysis/stock-group"
+              element={<InventoryMovementAnalysisPage variant="stock-group" />}
+            />
+            <Route
+              path="/reports/inventory-books/movement-analysis/stock-category"
+              element={<InventoryMovementAnalysisPage variant="stock-category" />}
+            />
+            <Route
+              path="/reports/inventory-books/movement-analysis/stock-item"
+              element={<InventoryMovementAnalysisPage variant="stock-item" />}
+            />
+            <Route
+              path="/reports/inventory-books/movement-analysis/group"
+              element={<InventoryMovementAnalysisPage variant="group" />}
+            />
+            <Route
+              path="/reports/inventory-books/movement-analysis/ledger"
+              element={<InventoryMovementAnalysisPage variant="ledger" />}
+            />
             <Route path="/reports/inventory-books/godown-summary" element={Placeholder("Godown Summary", "Godown-wise stock summary is scaffolded for future warehouse-level reporting.")} />
             <Route path="/reports/inventory-books/batch-summary" element={Placeholder("Inventory Batch Summary", "Batch-wise stock reporting is reserved here for a later inventory enhancement.")} />
 
