@@ -349,7 +349,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       </VoucherPanel>
 
       <VoucherPanel title="Item Details">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-visible rounded-2xl border border-slate-200">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
