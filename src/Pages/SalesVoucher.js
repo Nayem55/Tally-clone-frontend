@@ -11,6 +11,11 @@ import TallyDateInput from "../Component/TallyDateInput";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  buildSalesFamilyPrintData,
+  previewVoucherDocument,
+  printVoucherDocument,
+} from "../utils/printVoucher";
 
 const emptyRow = {
   itemId: "",
@@ -233,6 +238,83 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const totalAmount = Number((subtotal - invoiceDiscount + additionalCharges).toFixed(2));
   const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
 
+  const printData = useMemo(
+    () =>
+      buildSalesFamilyPrintData({
+        company,
+        voucherTypeLabel: "Sales",
+        voucherSubtitle: "Sales Voucher Print Preview",
+        voucherNumber: form.number,
+        voucherDate: form.date,
+        partyLabel: "Party Details",
+        partyName: partyLedger?.name || "",
+        partyMeta: [
+          `Price Level: ${
+            priceLevels.find((level) => level._id === activePriceLevelId)?.name ||
+            priceLevels.find((level) => level._id === activePriceLevelId)?.code ||
+            "Not Applicable"
+          }`,
+        ],
+        accountLabel: "Sales Ledger",
+        accountName: salesLedger?.name || "",
+        rows: validRows.map((row) => {
+          const item = itemMap.get(row.itemId);
+          const billedQty = Number(row.billedQty || row.actualQty || 0);
+          const actualQty = Number(row.actualQty || billedQty);
+          return {
+            name: item?.name || "-",
+            subtext:
+              actualQty !== billedQty
+                ? `Actual Qty: ${actualQty} | Billed Qty: ${billedQty}`
+                : "",
+            qty: `${billedQty}`,
+            rate: formatVoucherMoney(row.rate, currency.symbol),
+            discount: Number(row.discountPercent || 0)
+              ? `${Number(row.discountPercent || 0).toFixed(2)}%`
+              : "",
+            amount: formatVoucherMoney(lineAmount(row), currency.symbol),
+          };
+        }),
+        totals: [
+          { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
+          {
+            label: "Discount",
+            value: formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol),
+          },
+          {
+            label: "Additional Charges",
+            value: formatVoucherMoney(additionalCharges, currency.symbol),
+          },
+          {
+            label: "Net Payable",
+            value: formatVoucherMoney(totalAmount, currency.symbol),
+            emphasis: true,
+          },
+        ],
+        narration: form.narration,
+        currencySymbol: `${currency.code || ""} ${currency.symbol || ""}`.trim(),
+      }),
+    [
+      company,
+      form.number,
+      form.date,
+      form.narration,
+      partyLedger,
+      priceLevels,
+      activePriceLevelId,
+      salesLedger,
+      validRows,
+      itemMap,
+      currency.symbol,
+      currency.code,
+      subtotal,
+      totalDiscount,
+      invoiceDiscount,
+      additionalCharges,
+      totalAmount,
+    ]
+  );
+
   const resetForm = () =>
     setForm({
       number: "",
@@ -323,6 +405,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      onPreviewPrint={() => previewVoucherDocument(printData)}
+      onPrintAfterSave={() => printVoucherDocument(printData)}
       >
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">

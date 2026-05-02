@@ -41,6 +41,8 @@ export default function VoucherWorkspace({
   summaryItems = [],
   amountSummaryItems = [],
   shortcuts = [],
+  onPreviewPrint,
+  onPrintAfterSave,
   children,
 }) {
   const Icon = icon;
@@ -71,7 +73,8 @@ export default function VoucherWorkspace({
     setShowSaveConfirm(false);
     await onSave?.({
       printAfterSave: mode === "print",
-      printVoucher: () => printVoucherNode(containerRef.current, title),
+      printVoucher:
+        onPrintAfterSave || (() => printVoucherNode(containerRef.current, title)),
     });
   }
 
@@ -136,7 +139,9 @@ export default function VoucherWorkspace({
               <button
                 type="button"
                 className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
-                onClick={() => previewVoucherNode(containerRef.current, title)}
+                onClick={() =>
+                  (onPreviewPrint || (() => previewVoucherNode(containerRef.current, title)))()
+                }
               >
                 <Printer className="h-4 w-4" />
                 Print Preview

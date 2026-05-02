@@ -36,6 +36,7 @@ import InventoryMovementAnalysisPage from "./Pages/InventoryMovementAnalysisPage
 import ShortcutReferencePage from "./Pages/ShortcutReferencePage";
 import CommandSearchModal from "./Component/CommandSearchModal";
 import AlterVoucherEntryPage from "./Pages/AlterVoucherEntryPage";
+import EmployeeCreationPage from "./Pages/EmployeeCreationPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -120,6 +121,8 @@ function AppShell() {
             <Route path="/masters/alter/cost-category" element={Placeholder("Alter Cost Category", "Use this slot for cost category maintenance once cost allocations are enabled.")} />
             <Route path="/masters/create/cost-centre" element={Placeholder("Create Cost Centre", "Cost centre master routing is prepared for the next implementation step.")} />
             <Route path="/masters/alter/cost-centre" element={Placeholder("Alter Cost Centre", "Cost centre alteration is scaffolded and ready for business-specific allocation logic.")} />
+            <Route path="/masters/create/employee" element={<EmployeeCreationPage mode="create" />} />
+            <Route path="/masters/alter/employee" element={<EmployeeCreationPage mode="alter" />} />
             <Route path="/masters/create/stock-group" element={<CoaStockGroups />} />
             <Route path="/masters/alter/stock-group" element={<CoaStockGroups />} />
             <Route

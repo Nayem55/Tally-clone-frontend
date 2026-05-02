@@ -1,0 +1,2205 @@
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Building2,
+  Check,
+  FilePlus2,
+  Landmark,
+  Upload,
+  User,
+} from "lucide-react";
+import api from "../api/api";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import SearchableSelect from "../Component/SearchableSelect";
+import TallyDateInput from "../Component/TallyDateInput";
+import { getCompanyCurrency } from "../utils/currency";
+import { formatDateForInput } from "../utils/voucherDates";
+
+const COMMON_PAY_HEADS = [
+  { name: "Basic Salary", section: "Earning" },
+  { name: "House Rent Allowance", section: "Earning" },
+  { name: "Medical Allowance", section: "Earning" },
+  { name: "Conveyance Allowance", section: "Earning" },
+  { name: "Provident Fund", section: "Deduction" },
+  { name: "Income Tax", section: "Deduction" },
+  { name: "Professional Tax", section: "Deduction" },
+  { name: "Other Deduction", section: "Deduction" },
+];
+
+const DEFAULT_SHORTCUTS = [
+  "F2 Date",
+  "F3 Company",
+  "F4 Contra",
+  "F5 Payment",
+  "F6 Receipt",
+  "F7 Journal",
+  "F8 Sales",
+  "F9 Purchase",
+  "F10 Other Voucher",
+  "F12 Configure",
+];
+
+const UNDER_OPTIONS = [
+  { label: "Administration", category: "Office Employee" },
+  { label: "Accounts", category: "Accounting Employee" },
+  { label: "Sales", category: "Sales Employee" },
+  { label: "Warehouse", category: "Store Employee" },
+  { label: "Management", category: "Management Staff" },
+];
+
+const STATUS_OPTIONS = ["Active", "Inactive", "On Leave"];
+const EMPLOYEE_TYPES = ["Regular Employee", "Contract Employee", "Intern", "Consultant"];
+const FULL_TIME_TYPES = ["Full Time", "Part Time", "Contract"];
+const DEPARTMENT_OPTIONS = ["Administration", "Accounts", "Sales", "Warehouse", "HR"];
+const GRADE_OPTIONS = ["Grade-1", "Grade-2", "Grade-3", "Grade-4"];
+const REPORTING_OPTIONS = ["Manager", "Supervisor", "Head Office", "Director"];
+const EDUCATION_OPTIONS = ["Bachelor's Degree", "Master's Degree", "HSC", "SSC", "Diploma"];
+const LEAVE_POLICY_OPTIONS = ["Default Leave Policy", "Factory Policy", "Corporate Policy"];
+const WEEKLY_OFF_OPTIONS = ["Friday", "Saturday", "Sunday"];
+const ATTENDANCE_OPTIONS = ["Monthly Attendance", "Biometric Attendance", "Shift Attendance"];
+const BANK_OPTIONS = ["City Bank PLC", "Dutch-Bangla Bank", "Brac Bank", "Eastern Bank"];
+const ACCOUNT_TYPES = ["Savings Account", "Current Account"];
+const TAX_CATEGORIES = ["Individual", "Corporate", "N/A"];
+const INCOME_TAX_REGIMES = ["Old Regime", "New Regime"];
+const MARITAL_OPTIONS = ["Single", "Married", "Divorced"];
+const RELIGION_OPTIONS = ["Islam", "Hinduism", "Christianity", "Buddhism", "Other"];
+
+function createPayHead(head, rate = 0) {
+  return {
+    id: `${head.section}-${head.name}`.replace(/\s+/g, "-").toLowerCase(),
+    section: head.section,
+    name: head.name,
+    rate,
+    per: "Month",
+    payHeadType: "Start Afresh",
+    calculationType: "As Per Rate",
+    computedOn: formatDateForInput(new Date()),
+  };
+}
+
+function createEmptyEmployee() {
+  return {
+    name: "",
+    alias: "",
+    under: UNDER_OPTIONS[0].label,
+    underCategory: UNDER_OPTIONS[0].category,
+    employeeNumber: "",
+    dateOfJoining: formatDateForInput(new Date()),
+    defineSalaryDetails: true,
+    photoName: "",
+    personalDetails: {
+      designation: "",
+      functionName: "",
+      location: "",
+      gender: "Male",
+      dateOfBirth: "",
+      bloodGroup: "",
+      fatherOrMotherName: "",
+      spouseName: "",
+      address: "",
+    },
+    contactDetails: {
+      phoneCountryCode: "+880",
+      phoneNumber: "",
+      email: "",
+    },
+    otherDetails: {
+      department: DEPARTMENT_OPTIONS[0],
+      employeeType: FULL_TIME_TYPES[0],
+      status: STATUS_OPTIONS[0],
+      grade: GRADE_OPTIONS[2],
+      reportingTo: REPORTING_OPTIONS[0],
+      classification: "Regular employee",
+    },
+    salaryDetails: {
+      paymentFrequency: "Monthly",
+      paymentMode: "Bank Transfer",
+      effectiveFrom: formatDateForInput(new Date()),
+      comments: "",
+      payHeads: COMMON_PAY_HEADS.map((head) => createPayHead(head)),
+    },
+    bankDetails: {
+      provideBankDetails: true,
+      bankAccountNo: "",
+      accountHolderName: "",
+      bankName: BANK_OPTIONS[0],
+      mobileBankingNo: "",
+      branchName: "",
+      swiftCode: "",
+      routingNo: "",
+      ibanNo: "",
+      accountType: ACCOUNT_TYPES[0],
+      currency: "",
+    },
+    statutoryDetails: {
+      identity: {
+        nid: "",
+        tin: "",
+        passport: "",
+      },
+      tax: {
+        applicable: true,
+        category: TAX_CATEGORIES[0],
+        rate: 0,
+      },
+      pf: {
+        applicable: true,
+        number: "",
+        contribution: 0,
+      },
+      esi: {
+        applicable: false,
+        number: "",
+      },
+      professionalTax: 0,
+      gratuityEligible: true,
+      lwfApplicable: false,
+      lwfNumber: "",
+      compliance: {
+        incomeTaxRegime: INCOME_TAX_REGIMES[0],
+        panNumber: "",
+        uanNumber: "",
+        dateOfBirth: "",
+      },
+      documents: {
+        idProof: "",
+        taxDocument: "",
+        pfDocument: "",
+        otherDocument: "",
+      },
+      notes: "",
+    },
+    additionalInformation: {
+      employmentDetails: {
+        employeeType: EMPLOYEE_TYPES[0],
+        employmentStatus: STATUS_OPTIONS[0],
+        probationPeriodDays: 90,
+        confirmationDate: "",
+      },
+      workDetails: {
+        workLocation: "Head Office",
+        department: DEPARTMENT_OPTIONS[0],
+        reportingTo: REPORTING_OPTIONS[0],
+        jobTitle: "",
+      },
+      leaveAttendance: {
+        leavePolicy: LEAVE_POLICY_OPTIONS[0],
+        weeklyOff: WEEKLY_OFF_OPTIONS[0],
+        attendanceType: ATTENDANCE_OPTIONS[0],
+        defaultLeaveBalanceDays: 12,
+      },
+      skillsQualifications: {
+        highestEducation: EDUCATION_OPTIONS[0],
+        professionalQualification: "",
+        skills: "",
+      },
+      emergencyContact: {
+        name: "",
+        relationship: "",
+        phone: "",
+        address: "",
+      },
+      previousEmployment: {
+        employer: "",
+        designation: "",
+        totalExperienceYears: 0,
+        relevantExperienceYears: 0,
+      },
+      otherInformation: {
+        maritalStatus: MARITAL_OPTIONS[0],
+        nationality: "Bangladeshi",
+        religion: RELIGION_OPTIONS[0],
+        languages: "Bangla, English",
+        hobbies: "",
+      },
+    },
+  };
+}
+
+function formatMoney(value, symbol = "") {
+  const amount = Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return symbol ? `${symbol} ${amount}` : amount;
+}
+
+function calculateSalarySummary(employee) {
+  const heads = employee.salaryDetails?.payHeads || [];
+  const totalEarnings = heads
+    .filter((head) => head.section !== "Deduction")
+    .reduce((sum, head) => sum + Number(head.rate || 0), 0);
+  const totalDeductions = heads
+    .filter((head) => head.section === "Deduction")
+    .reduce((sum, head) => sum + Number(head.rate || 0), 0);
+  const grossSalary = totalEarnings + totalDeductions;
+  return {
+    grossSalary,
+    totalEarnings,
+    totalDeductions,
+    netPayable: totalEarnings - totalDeductions,
+  };
+}
+
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border-b-2 px-2 pb-3 pt-1 text-[15px] font-semibold ${
+        active
+          ? "border-blue-600 text-blue-700"
+          : "border-transparent text-slate-600 hover:text-slate-900"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Field({ label, required = false, children }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-slate-700">
+        {label}
+        {required ? <span className="text-red-500"> *</span> : null}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function Input(props) {
+  return (
+    <input
+      {...props}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 ${
+        props.className || ""
+      }`}
+    />
+  );
+}
+
+function Textarea(props) {
+  return (
+    <textarea
+      {...props}
+      className={`min-h-[110px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 ${
+        props.className || ""
+      }`}
+    />
+  );
+}
+
+function Select({ value, onChange, options, className = "" }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 ${className}`}
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function TogglePills({ value, onChange, trueLabel = "Yes", falseLabel = "No" }) {
+  return (
+    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        className={`min-w-[96px] rounded-lg px-4 py-2 text-sm font-semibold ${
+          value ? "bg-blue-500 text-white" : "text-slate-600"
+        }`}
+      >
+        {trueLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        className={`min-w-[96px] rounded-lg px-4 py-2 text-sm font-semibold ${
+          !value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+        }`}
+      >
+        {falseLabel}
+      </button>
+    </div>
+  );
+}
+
+function RadioPair({ value, onChange, trueLabel = "Yes", falseLabel = "No" }) {
+  return (
+    <div className="flex gap-6 text-sm">
+      <label className="inline-flex items-center gap-2">
+        <input type="radio" checked={value === true} onChange={() => onChange(true)} />
+        {trueLabel}
+      </label>
+      <label className="inline-flex items-center gap-2">
+        <input type="radio" checked={value === false} onChange={() => onChange(false)} />
+        {falseLabel}
+      </label>
+    </div>
+  );
+}
+
+function RightSummaryCard({ currencySymbol, summary }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h3 className="text-xl font-semibold text-slate-900">Summary</h3>
+      <div className="mt-6 space-y-4 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600">Monthly Gross Salary</span>
+          <span className="font-semibold text-emerald-600">
+            {formatMoney(summary.grossSalary, currencySymbol)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600">Total Earnings</span>
+          <span className="font-semibold text-emerald-600">
+            {formatMoney(summary.totalEarnings, currencySymbol)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600">Total Deductions</span>
+          <span className="font-semibold text-rose-500">
+            {formatMoney(summary.totalDeductions, currencySymbol)}
+          </span>
+        </div>
+      </div>
+      <div className="mt-6 border-t border-slate-200 pt-5">
+        <div className="flex items-center justify-between">
+          <span className="text-lg font-semibold text-slate-900">Net Payable</span>
+          <span className="text-2xl font-bold text-blue-600">
+            {formatMoney(summary.netPayable, currencySymbol)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShortcutCard() {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h3 className="text-xl font-semibold text-slate-900">Shortcuts</h3>
+      <div className="mt-5 space-y-3">
+        {DEFAULT_SHORTCUTS.map((item) => {
+          const [key, ...rest] = item.split(" ");
+          return (
+            <div
+              key={item}
+              className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+            >
+              <span className="font-semibold text-blue-600">{key}</span>
+              <span className="text-slate-700">{rest.join(" ")}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ title, subtitle, children, icon = null, actions = null, className = "" }) {
+  return (
+    <section className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          {icon}
+          <div>
+            <h3 className="text-[28px] leading-none font-semibold text-slate-900">{title}</h3>
+            {subtitle ? <p className="mt-2 text-sm text-slate-500">{subtitle}</p> : null}
+          </div>
+        </div>
+        {actions}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function CardTitle({ title, subtitle }) {
+  return (
+    <div className="mb-5">
+      <h4 className="text-[20px] font-semibold text-slate-900">{title}</h4>
+      {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+    </div>
+  );
+}
+
+function EmployeeCreationPage({ mode = "create" }) {
+  const { companyId, selectedCompany } = useActiveCompany();
+  const isAlterMode = mode === "alter";
+  const [employees, setEmployees] = useState([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [employee, setEmployee] = useState(createEmptyEmployee);
+  const [activeTab, setActiveTab] = useState("general");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const fileRefs = useRef({});
+
+  const currency = getCompanyCurrency(selectedCompany);
+  const summary = useMemo(() => calculateSalarySummary(employee), [employee]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    async function loadEmployees() {
+      setLoading(true);
+      try {
+        const response = await api.get(`/companies/${companyId}/employees`);
+        const rows = response.data || [];
+        setEmployees(rows);
+        if (isAlterMode && rows.length && !selectedEmployeeId) {
+          setSelectedEmployeeId(rows[0]._id);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadEmployees();
+  }, [companyId, isAlterMode, selectedEmployeeId]);
+
+  useEffect(() => {
+    if (!companyId || !selectedEmployeeId) {
+      if (!isAlterMode) {
+        setEmployee(createEmptyEmployee());
+      }
+      return;
+    }
+
+    async function loadEmployee() {
+      setLoading(true);
+      try {
+        const response = await api.get(
+          `/companies/${companyId}/employees/${selectedEmployeeId}`,
+        );
+        const row = response.data;
+        setEmployee({
+          ...createEmptyEmployee(),
+          ...row,
+          salaryDetails: {
+            ...createEmptyEmployee().salaryDetails,
+            ...(row.salaryDetails || {}),
+            payHeads:
+              row.salaryDetails?.payHeads?.length
+                ? row.salaryDetails.payHeads
+                : createEmptyEmployee().salaryDetails.payHeads,
+          },
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadEmployee();
+  }, [companyId, selectedEmployeeId, isAlterMode]);
+
+  useEffect(() => {
+    if (!employee.bankDetails.currency && currency.code) {
+      setEmployee((current) => ({
+        ...current,
+        bankDetails: {
+          ...current.bankDetails,
+          currency: `${currency.code} (${currency.symbol || currency.code})`,
+        },
+      }));
+    }
+  }, [currency.code, currency.symbol, employee.bankDetails.currency]);
+
+  function updateGeneral(key, value) {
+    setEmployee((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "under") {
+        const match = UNDER_OPTIONS.find((option) => option.label === value);
+        next.underCategory = match?.category || "";
+      }
+      return next;
+    });
+  }
+
+  function updateNested(section, key, value) {
+    setEmployee((current) => ({
+      ...current,
+      [section]: {
+        ...current[section],
+        [key]: value,
+      },
+    }));
+  }
+
+  function updateDeep(section, group, key, value) {
+    setEmployee((current) => ({
+      ...current,
+      [section]: {
+        ...current[section],
+        [group]: {
+          ...current[section][group],
+          [key]: value,
+        },
+      },
+    }));
+  }
+
+  function updatePayHead(index, key, value) {
+    setEmployee((current) => {
+      const nextHeads = [...current.salaryDetails.payHeads];
+      nextHeads[index] = {
+        ...nextHeads[index],
+        [key]: key === "rate" ? Number(value || 0) : value,
+      };
+      return {
+        ...current,
+        salaryDetails: {
+          ...current.salaryDetails,
+          payHeads: nextHeads,
+        },
+      };
+    });
+  }
+
+  function addCommonPayHead(head) {
+    setEmployee((current) => {
+      const exists = current.salaryDetails.payHeads.some(
+        (row) => row.name === head.name,
+      );
+      if (exists) return current;
+      return {
+        ...current,
+        salaryDetails: {
+          ...current.salaryDetails,
+          payHeads: [...current.salaryDetails.payHeads, createPayHead(head)],
+        },
+      };
+    });
+  }
+
+  function setDocumentName(bucket, file) {
+    if (!file) return;
+    setEmployee((current) => ({
+      ...current,
+      statutoryDetails: {
+        ...current.statutoryDetails,
+        documents: {
+          ...current.statutoryDetails.documents,
+          [bucket]: file.name,
+        },
+      },
+    }));
+  }
+
+  async function persistEmployee({ resetAfterSave = false } = {}) {
+    if (!companyId) return;
+    if (!employee.name.trim()) {
+      setNotice("Employee name is required.");
+      setActiveTab("general");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (isAlterMode && selectedEmployeeId) {
+        const response = await api.put(
+          `/companies/${companyId}/employees/${selectedEmployeeId}`,
+          employee,
+        );
+        setEmployee(response.data);
+        setNotice("Employee updated successfully.");
+      } else {
+        const response = await api.post(
+          `/companies/${companyId}/employees`,
+          employee,
+        );
+        const created = response.data;
+        setEmployees((current) => [created, ...current]);
+        if (resetAfterSave) {
+          setEmployee(createEmptyEmployee());
+          setActiveTab("general");
+        } else {
+          setEmployee(created);
+          setSelectedEmployeeId(created._id);
+        }
+        setNotice("Employee saved successfully.");
+      }
+    } catch (error) {
+      setNotice(
+        error.response?.data?.message || "Unable to save employee right now.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const employeeOptions = employees.map((row) => ({
+    value: row._id,
+    label: `${row.name}${row.employeeNumber ? ` - ${row.employeeNumber}` : ""}`,
+  }));
+
+  const topSummaryRows = [
+    { label: "Employee Name", value: employee.name || "-" },
+    { label: "Under", value: employee.under || "-" },
+    {
+      label: "Employee Number",
+      value: employee.employeeNumber || "Auto on save",
+    },
+    { label: "Date of Joining", value: employee.dateOfJoining || "-" },
+  ];
+
+  const generalTab = (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_260px_130px]">
+          <div className="space-y-4">
+            <Field label="Employee Name" required>
+              <Input
+                value={employee.name}
+                onChange={(event) => updateGeneral("name", event.target.value)}
+              />
+            </Field>
+            <Field label="(Alias)">
+              <Input
+                value={employee.alias}
+                onChange={(event) => updateGeneral("alias", event.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="space-y-4">
+            <Field label="Under" required>
+              <Select
+                value={employee.under}
+                onChange={(event) => updateGeneral("under", event.target.value)}
+                options={UNDER_OPTIONS.map((option) => option.label)}
+              />
+            </Field>
+            <div className="text-sm italic text-slate-500">
+              ({employee.underCategory || "Office Employee"})
+            </div>
+          </div>
+          <div className="space-y-4">
+            <Field label="Date of Joining" required>
+              <TallyDateInput
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                value={employee.dateOfJoining}
+                onChange={(value) => updateGeneral("dateOfJoining", value)}
+              />
+            </Field>
+            <div>
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
+                Define Salary Details
+              </span>
+              <TogglePills
+                value={employee.defineSalaryDetails}
+                onChange={(value) => updateGeneral("defineSalaryDetails", value)}
+              />
+            </div>
+          </div>
+          <div>
+            <span className="mb-2 block text-sm font-semibold text-slate-700">Photo</span>
+            <button
+              type="button"
+              onClick={() => fileRefs.current.photo?.click()}
+              className="flex h-[160px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-slate-500"
+            >
+              <User className="h-8 w-8" />
+              <span className="mt-3 text-sm font-semibold">Upload Photo</span>
+              <span className="mt-1 text-xs">{employee.photoName || "No file selected"}</span>
+            </button>
+            <input
+              ref={(node) => {
+                fileRefs.current.photo = node;
+              }}
+              type="file"
+              className="hidden"
+              onChange={(event) =>
+                updateGeneral("photoName", event.target.files?.[0]?.name || "")
+              }
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[1.25fr_1fr_1fr]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CardTitle title="Personal Details" />
+          <div className="grid gap-4">
+            <Field label="Employee Number">
+              <Input
+                value={employee.employeeNumber}
+                onChange={(event) => updateGeneral("employeeNumber", event.target.value)}
+              />
+            </Field>
+            <Field label="Designation">
+              <Input
+                value={employee.personalDetails.designation}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      designation: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Function">
+              <Input
+                value={employee.personalDetails.functionName}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      functionName: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Location">
+              <Input
+                value={employee.personalDetails.location}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      location: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <div>
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Gender</span>
+              <div className="flex gap-6">
+                {["Male", "Female"].map((gender) => (
+                  <label key={gender} className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={employee.personalDetails.gender === gender}
+                      onChange={() =>
+                        setEmployee((current) => ({
+                          ...current,
+                          personalDetails: {
+                            ...current.personalDetails,
+                            gender,
+                          },
+                        }))
+                      }
+                    />
+                    {gender}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <Field label="Date of Birth">
+              <TallyDateInput
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                value={employee.personalDetails.dateOfBirth}
+                onChange={(value) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      dateOfBirth: value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Blood Group">
+              <Input
+                value={employee.personalDetails.bloodGroup}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      bloodGroup: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Father's / Mother's Name">
+              <Input
+                value={employee.personalDetails.fatherOrMotherName}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      fatherOrMotherName: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Spouse's Name">
+              <Input
+                value={employee.personalDetails.spouseName}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      spouseName: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Address">
+              <Textarea
+                className="min-h-[130px]"
+                value={employee.personalDetails.address}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    personalDetails: {
+                      ...current.personalDetails,
+                      address: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CardTitle title="Contact Details" />
+          <div className="grid gap-4">
+            <div>
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Phone No.</span>
+              <div className="grid grid-cols-[90px_minmax(0,1fr)] gap-3">
+                <Input
+                  value={employee.contactDetails.phoneCountryCode}
+                  onChange={(event) =>
+                    setEmployee((current) => ({
+                      ...current,
+                      contactDetails: {
+                        ...current.contactDetails,
+                        phoneCountryCode: event.target.value,
+                      },
+                    }))
+                  }
+                />
+                <Input
+                  value={employee.contactDetails.phoneNumber}
+                  onChange={(event) =>
+                    setEmployee((current) => ({
+                      ...current,
+                      contactDetails: {
+                        ...current.contactDetails,
+                        phoneNumber: event.target.value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <Field label="Email">
+              <Input
+                value={employee.contactDetails.email}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    contactDetails: {
+                      ...current.contactDetails,
+                      email: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CardTitle title="Other Details" />
+          <div className="grid gap-4">
+            <Field label="Department">
+              <Select
+                value={employee.otherDetails.department}
+                onChange={(event) => updateNested("otherDetails", "department", event.target.value)}
+                options={DEPARTMENT_OPTIONS}
+              />
+            </Field>
+            <Field label="Employee Type">
+              <Select
+                value={employee.otherDetails.employeeType}
+                onChange={(event) => updateNested("otherDetails", "employeeType", event.target.value)}
+                options={FULL_TIME_TYPES}
+              />
+            </Field>
+            <Field label="Status">
+              <Select
+                value={employee.otherDetails.status}
+                onChange={(event) => updateNested("otherDetails", "status", event.target.value)}
+                options={STATUS_OPTIONS}
+              />
+            </Field>
+            <Field label="Grade">
+              <Select
+                value={employee.otherDetails.grade}
+                onChange={(event) => updateNested("otherDetails", "grade", event.target.value)}
+                options={GRADE_OPTIONS}
+              />
+            </Field>
+            <Field label="Reporting To">
+              <Select
+                value={employee.otherDetails.reportingTo}
+                onChange={(event) => updateNested("otherDetails", "reportingTo", event.target.value)}
+                options={REPORTING_OPTIONS}
+              />
+            </Field>
+            <Field label="">
+              <Input
+                value={employee.otherDetails.classification}
+                onChange={(event) =>
+                  updateNested("otherDetails", "classification", event.target.value)
+                }
+              />
+            </Field>
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-[#f7fbff] p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <User className="h-5 w-5 text-slate-500" />
+          <h4 className="text-[22px] font-semibold text-slate-900">Summary</h4>
+        </div>
+        <div className="grid gap-4 md:grid-cols-5">
+          {[
+            ["Employee Name", employee.name || "-"],
+            ["Employee Number", employee.employeeNumber || "Auto on save"],
+            ["Under", employee.under || "-"],
+            ["Date of Joining", employee.dateOfJoining || "-"],
+            ["Status", employee.otherDetails.status || "-"],
+          ].map(([label, value]) => (
+            <div key={label} className="border-r border-slate-200 pr-4 last:border-r-0">
+              <p className="text-sm text-slate-500">{label}</p>
+              <p className="mt-3 text-xl font-semibold text-slate-900">{value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const salaryTab = (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-4 xl:grid-cols-[repeat(4,minmax(0,1fr))_240px]">
+            {topSummaryRows.map((row) => (
+              <div key={row.label}>
+                <p className="text-sm text-slate-500">{row.label}</p>
+                <p className="mt-3 text-[18px] font-semibold text-slate-900">{row.value}</p>
+                {row.label === "Under" ? (
+                  <p className="mt-1 text-sm italic text-slate-500">
+                    ({employee.underCategory || "Office Employee"})
+                  </p>
+                ) : null}
+              </div>
+            ))}
+            <div className="rounded-2xl border border-slate-200 bg-[#f8fbff] p-5 text-center">
+              <p className="text-sm text-slate-500">Monthly Gross Salary</p>
+              <p className="mt-4 text-[20px] font-bold text-emerald-600">
+                {formatMoney(summary.grossSalary, currency.symbol)}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CardTitle title="Salary Structure" />
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-slate-600">
+                <tr>
+                  <th className="px-4 py-3">Pay Head</th>
+                  <th className="px-4 py-3">Rate</th>
+                  <th className="px-4 py-3">Per</th>
+                  <th className="px-4 py-3">Pay Head Type</th>
+                  <th className="px-4 py-3">Calculation Type</th>
+                  <th className="px-4 py-3">Computed On</th>
+                </tr>
+              </thead>
+              <tbody>
+                {["Earning", "Deduction"].map((section) => (
+                  <Fragment key={section}>
+                    <tr key={`${section}-header`} className="border-t border-slate-100 bg-slate-50/60">
+                      <td className={`px-4 py-3 font-semibold ${section === "Deduction" ? "text-rose-500" : "text-emerald-600"}`}>
+                        {section === "Deduction" ? "Deductions" : "Earnings"}
+                      </td>
+                      <td colSpan={5} />
+                    </tr>
+                    {employee.salaryDetails.payHeads
+                      .filter((head) => head.section === section)
+                      .map((head) => {
+                        const index = employee.salaryDetails.payHeads.findIndex(
+                          (row) => row.id === head.id,
+                        );
+                        return (
+                          <tr key={head.id} className="border-t border-slate-100">
+                            <td className="px-4 py-3">{head.name}</td>
+                            <td className="px-4 py-3">
+                              <Input
+                                className="py-2"
+                                type="number"
+                                value={head.rate}
+                                onChange={(event) =>
+                                  updatePayHead(index, "rate", event.target.value)
+                                }
+                              />
+                            </td>
+                            <td className="px-4 py-3">{head.per}</td>
+                            <td className="px-4 py-3">{head.payHeadType}</td>
+                            <td className="px-4 py-3">{head.calculationType}</td>
+                            <td className="px-4 py-3">{head.computedOn}</td>
+                          </tr>
+                        );
+                      })}
+                  </Fragment>
+                ))}
+                <tr className="border-t border-slate-200 bg-slate-50">
+                  <td className="px-4 py-4 font-semibold">Total Earnings</td>
+                  <td className="px-4 py-4 font-semibold text-emerald-600">
+                    {formatMoney(summary.totalEarnings, currency.symbol)}
+                  </td>
+                  <td />
+                  <td className="px-4 py-4 font-semibold text-rose-500">
+                    Total Deductions
+                  </td>
+                  <td />
+                  <td className="px-4 py-4 font-semibold text-rose-500">
+                    {formatMoney(summary.totalDeductions, currency.symbol)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-6 grid gap-5 xl:grid-cols-[260px_repeat(3,minmax(0,1fr))]">
+            <div className="rounded-2xl bg-[#eef5ff] p-5 text-center">
+              <p className="text-lg font-semibold text-slate-900">Net Payable</p>
+              <p className="mt-2 text-xs text-slate-500">
+                (Total Earnings - Total Deductions)
+              </p>
+              <p className="mt-4 text-[28px] font-bold text-blue-600">
+                {formatMoney(summary.netPayable, currency.symbol)}
+              </p>
+            </div>
+            <Field label="Payment Frequency">
+              <Select
+                value={employee.salaryDetails.paymentFrequency}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    salaryDetails: {
+                      ...current.salaryDetails,
+                      paymentFrequency: event.target.value,
+                    },
+                  }))
+                }
+                options={["Monthly", "Bi-Monthly", "Weekly"]}
+              />
+            </Field>
+            <Field label="Payment Mode">
+              <Select
+                value={employee.salaryDetails.paymentMode}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    salaryDetails: {
+                      ...current.salaryDetails,
+                      paymentMode: event.target.value,
+                    },
+                  }))
+                }
+                options={["Bank Transfer", "Cash", "Mobile Banking"]}
+              />
+            </Field>
+            <Field label="Effective From">
+              <TallyDateInput
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                value={employee.salaryDetails.effectiveFrom}
+                onChange={(value) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    salaryDetails: {
+                      ...current.salaryDetails,
+                      effectiveFrom: value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </div>
+
+          <div className="mt-6">
+            <Field label="Salary Comments (Optional)">
+              <Textarea
+                value={employee.salaryDetails.comments}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    salaryDetails: {
+                      ...current.salaryDetails,
+                      comments: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </div>
+        </section>
+      </div>
+
+      <div className="space-y-4">
+        <RightSummaryCard currencySymbol={currency.symbol} summary={summary} />
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-semibold text-slate-900">Common Pay Heads</h3>
+          <div className="mt-5 space-y-3 text-sm">
+            {COMMON_PAY_HEADS.map((head) => (
+              <button
+                key={head.name}
+                type="button"
+                onClick={() => addCommonPayHead(head)}
+                className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left text-slate-700 hover:bg-slate-50"
+              >
+                <span>{head.name}</span>
+                <span className="text-lg text-slate-400">+</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <ShortcutCard />
+      </div>
+    </div>
+  );
+
+  const bankTab = (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="space-y-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-4">
+            {topSummaryRows.map((row) => (
+              <div key={row.label}>
+                <p className="text-sm text-slate-500">{row.label}</p>
+                <p className="mt-3 text-[18px] font-semibold text-slate-900">{row.value}</p>
+                {row.label === "Under" ? (
+                  <p className="mt-1 text-sm italic text-slate-500">
+                    ({employee.underCategory || "Office Employee"})
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <Landmark className="h-6 w-6 text-blue-600" />
+                <h4 className="text-[22px] font-semibold text-slate-900">Bank Details</h4>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                Provide bank details for salary transfer and statutory reports
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={employee.bankDetails.provideBankDetails}
+                onChange={(event) =>
+                  setEmployee((current) => ({
+                    ...current,
+                    bankDetails: {
+                      ...current.bankDetails,
+                      provideBankDetails: event.target.checked,
+                    },
+                  }))
+                }
+              />
+              Provide Bank Details
+            </label>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_280px]">
+            <div className="space-y-4">
+              <Field label="Bank Account No." required>
+                <Input
+                  value={employee.bankDetails.bankAccountNo}
+                  onChange={(event) => updateNested("bankDetails", "bankAccountNo", event.target.value)}
+                />
+              </Field>
+              <Field label="Bank Name" required>
+                <Select
+                  value={employee.bankDetails.bankName}
+                  onChange={(event) => updateNested("bankDetails", "bankName", event.target.value)}
+                  options={BANK_OPTIONS}
+                />
+              </Field>
+              <Field label="Branch Name" required>
+                <Input
+                  value={employee.bankDetails.branchName}
+                  onChange={(event) => updateNested("bankDetails", "branchName", event.target.value)}
+                />
+              </Field>
+              <Field label="Routing No. / Branch Code">
+                <Input
+                  value={employee.bankDetails.routingNo}
+                  onChange={(event) => updateNested("bankDetails", "routingNo", event.target.value)}
+                />
+              </Field>
+              <Field label="Account Type">
+                <Select
+                  value={employee.bankDetails.accountType}
+                  onChange={(event) => updateNested("bankDetails", "accountType", event.target.value)}
+                  options={ACCOUNT_TYPES}
+                />
+              </Field>
+            </div>
+            <div className="space-y-4">
+              <Field label="Account Holder Name" required>
+                <Input
+                  value={employee.bankDetails.accountHolderName}
+                  onChange={(event) =>
+                    updateNested("bankDetails", "accountHolderName", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Mobile Banking No.">
+                <Input
+                  value={employee.bankDetails.mobileBankingNo}
+                  onChange={(event) =>
+                    updateNested("bankDetails", "mobileBankingNo", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="SWIFT Code">
+                <Input
+                  value={employee.bankDetails.swiftCode}
+                  onChange={(event) => updateNested("bankDetails", "swiftCode", event.target.value)}
+                />
+              </Field>
+              <Field label="IBAN No.">
+                <Input
+                  value={employee.bankDetails.ibanNo}
+                  onChange={(event) => updateNested("bankDetails", "ibanNo", event.target.value)}
+                />
+              </Field>
+              <Field label="Currency">
+                <Select
+                  value={employee.bankDetails.currency}
+                  onChange={(event) => updateNested("bankDetails", "currency", event.target.value)}
+                  options={[employee.bankDetails.currency || `${currency.code} (${currency.symbol})`]}
+                />
+              </Field>
+            </div>
+            <div className="rounded-2xl bg-[#f8fbff] p-5">
+              <h5 className="text-lg font-semibold text-slate-900">Note</h5>
+              <p className="mt-4 text-sm text-slate-500">Bank details will be used for:</p>
+              <ul className="mt-4 space-y-3 text-sm text-slate-700">
+                <li>Salary Payment</li>
+                <li>Bank Transfer</li>
+                <li>Statutory Reports</li>
+                <li>Payslip Generation</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div className="space-y-4">
+        <ShortcutCard />
+        <RightSummaryCard currencySymbol={currency.symbol} summary={summary} />
+      </div>
+    </div>
+  );
+
+  const statutoryTab = (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="space-y-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_220px_220px_90px]">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <User className="h-8 w-8" />
+              </div>
+              <div>
+                <p className="text-[28px] leading-none font-semibold text-slate-900">
+                  {employee.name || "Employee"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {employee.employeeNumber || "Auto on save"} | {employee.under}
+                </p>
+                <p className="mt-2 text-sm font-medium text-slate-700">
+                  {employee.underCategory || "Office Employee"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Date of Joining</p>
+              <p className="mt-3 text-[18px] font-semibold text-slate-900">
+                {employee.dateOfJoining || "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Employee Type</p>
+              <p className="mt-3 text-[18px] font-semibold text-slate-900">
+                {employee.otherDetails.employeeType || "-"}
+              </p>
+            </div>
+            <div className="flex items-center justify-center text-blue-600">
+              <Building2 className="h-9 w-9" />
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-3">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Identity & Government Information" />
+            <div className="grid gap-4">
+              <Field label="NID / National ID No.">
+                <Input
+                  value={employee.statutoryDetails.identity.nid}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "identity", "nid", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="TIN Number">
+                <Input
+                  value={employee.statutoryDetails.identity.tin}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "identity", "tin", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Passport Number (Optional)">
+                <Input
+                  value={employee.statutoryDetails.identity.passport}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "identity", "passport", event.target.value)
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Tax Information" />
+            <div className="grid gap-4">
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Tax Applicable</span>
+                <RadioPair
+                  value={employee.statutoryDetails.tax.applicable}
+                  onChange={(value) =>
+                    updateDeep("statutoryDetails", "tax", "applicable", value)
+                  }
+                />
+              </div>
+              <Field label="Tax Category">
+                <Select
+                  value={employee.statutoryDetails.tax.category}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "tax", "category", event.target.value)
+                  }
+                  options={TAX_CATEGORIES}
+                />
+              </Field>
+              <Field label="Tax Rate (%)">
+                <Input
+                  type="number"
+                  value={employee.statutoryDetails.tax.rate}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "tax", "rate", Number(event.target.value))
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Social Security / PF / ESI" />
+            <div className="grid gap-4">
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">PF Applicable</span>
+                <RadioPair
+                  value={employee.statutoryDetails.pf.applicable}
+                  onChange={(value) =>
+                    updateDeep("statutoryDetails", "pf", "applicable", value)
+                  }
+                />
+              </div>
+              <Field label="PF Number">
+                <Input
+                  value={employee.statutoryDetails.pf.number}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "pf", "number", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="PF Contribution (%)">
+                <Input
+                  type="number"
+                  value={employee.statutoryDetails.pf.contribution}
+                  onChange={(event) =>
+                    updateDeep(
+                      "statutoryDetails",
+                      "pf",
+                      "contribution",
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </Field>
+              <div className="border-t border-slate-200 pt-4">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">ESI Applicable</span>
+                <RadioPair
+                  value={employee.statutoryDetails.esi.applicable}
+                  onChange={(value) =>
+                    updateDeep("statutoryDetails", "esi", "applicable", value)
+                  }
+                />
+              </div>
+              <Field label="ESI Number">
+                <Input
+                  value={employee.statutoryDetails.esi.number}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "esi", "number", event.target.value)
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Other Statutory Information" />
+            <div className="grid gap-4">
+              <Field label="Professional Tax">
+                <Input
+                  type="number"
+                  value={employee.statutoryDetails.professionalTax}
+                  onChange={(event) =>
+                    setEmployee((current) => ({
+                      ...current,
+                      statutoryDetails: {
+                        ...current.statutoryDetails,
+                        professionalTax: Number(event.target.value),
+                      },
+                    }))
+                  }
+                />
+              </Field>
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Gratuity Eligible</span>
+                <RadioPair
+                  value={employee.statutoryDetails.gratuityEligible}
+                  onChange={(value) =>
+                    setEmployee((current) => ({
+                      ...current,
+                      statutoryDetails: {
+                        ...current.statutoryDetails,
+                        gratuityEligible: value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">LWF Applicable</span>
+                <RadioPair
+                  value={employee.statutoryDetails.lwfApplicable}
+                  onChange={(value) =>
+                    setEmployee((current) => ({
+                      ...current,
+                      statutoryDetails: {
+                        ...current.statutoryDetails,
+                        lwfApplicable: value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <Field label="LWF Number">
+                <Input
+                  value={employee.statutoryDetails.lwfNumber}
+                  onChange={(event) =>
+                    setEmployee((current) => ({
+                      ...current,
+                      statutoryDetails: {
+                        ...current.statutoryDetails,
+                        lwfNumber: event.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Compliance & Additional" />
+            <div className="grid gap-4">
+              <Field label="Income Tax Regime">
+                <Select
+                  value={employee.statutoryDetails.compliance.incomeTaxRegime}
+                  onChange={(event) =>
+                    updateDeep(
+                      "statutoryDetails",
+                      "compliance",
+                      "incomeTaxRegime",
+                      event.target.value,
+                    )
+                  }
+                  options={INCOME_TAX_REGIMES}
+                />
+              </Field>
+              <Field label="PAN Number">
+                <Input
+                  value={employee.statutoryDetails.compliance.panNumber}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "compliance", "panNumber", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="UAN Number (PF)">
+                <Input
+                  value={employee.statutoryDetails.compliance.uanNumber}
+                  onChange={(event) =>
+                    updateDeep("statutoryDetails", "compliance", "uanNumber", event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Date of Birth">
+                <TallyDateInput
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                  value={employee.statutoryDetails.compliance.dateOfBirth}
+                  onChange={(value) =>
+                    updateDeep("statutoryDetails", "compliance", "dateOfBirth", value)
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Documents Upload" />
+            <div className="space-y-3">
+              {[
+                ["idProof", "Upload NID / ID Proof"],
+                ["taxDocument", "Upload Tax Documents"],
+                ["pfDocument", "Upload PF Documents"],
+                ["otherDocument", "Upload Other Documents"],
+              ].map(([key, label]) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{label}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {employee.statutoryDetails.documents[key] || "No file selected"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-600"
+                    onClick={() => fileRefs.current[key]?.click()}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </button>
+                  <input
+                    ref={(node) => {
+                      fileRefs.current[key] = node;
+                    }}
+                    type="file"
+                    className="hidden"
+                    onChange={(event) => setDocumentName(key, event.target.files?.[0])}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <Field label="Notes">
+            <Textarea
+              value={employee.statutoryDetails.notes}
+              onChange={(event) =>
+                setEmployee((current) => ({
+                  ...current,
+                  statutoryDetails: {
+                    ...current.statutoryDetails,
+                    notes: event.target.value,
+                  },
+                }))
+              }
+            />
+          </Field>
+        </section>
+      </div>
+      <div className="space-y-4">
+        <ShortcutCard />
+        <RightSummaryCard currencySymbol={currency.symbol} summary={summary} />
+      </div>
+    </div>
+  );
+
+  const additionalTab = (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="space-y-6">
+        <div className="grid gap-5 xl:grid-cols-3">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Employment Details" />
+            <div className="grid gap-4">
+              <Field label="Employee Type">
+                <Select
+                  value={employee.additionalInformation.employmentDetails.employeeType}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "employmentDetails",
+                      "employeeType",
+                      event.target.value,
+                    )
+                  }
+                  options={EMPLOYEE_TYPES}
+                />
+              </Field>
+              <Field label="Employment Status">
+                <Select
+                  value={employee.additionalInformation.employmentDetails.employmentStatus}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "employmentDetails",
+                      "employmentStatus",
+                      event.target.value,
+                    )
+                  }
+                  options={STATUS_OPTIONS}
+                />
+              </Field>
+              <Field label="Probation Period (Days)">
+                <Input
+                  type="number"
+                  value={employee.additionalInformation.employmentDetails.probationPeriodDays}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "employmentDetails",
+                      "probationPeriodDays",
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Confirmation Date">
+                <TallyDateInput
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                  value={employee.additionalInformation.employmentDetails.confirmationDate}
+                  onChange={(value) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "employmentDetails",
+                      "confirmationDate",
+                      value,
+                    )
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Work Details" />
+            <div className="grid gap-4">
+              <Field label="Work Location">
+                <Input
+                  value={employee.additionalInformation.workDetails.workLocation}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "workDetails",
+                      "workLocation",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Department">
+                <Select
+                  value={employee.additionalInformation.workDetails.department}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "workDetails",
+                      "department",
+                      event.target.value,
+                    )
+                  }
+                  options={DEPARTMENT_OPTIONS}
+                />
+              </Field>
+              <Field label="Reporting To">
+                <Select
+                  value={employee.additionalInformation.workDetails.reportingTo}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "workDetails",
+                      "reportingTo",
+                      event.target.value,
+                    )
+                  }
+                  options={REPORTING_OPTIONS}
+                />
+              </Field>
+              <Field label="Job Title">
+                <Input
+                  value={employee.additionalInformation.workDetails.jobTitle}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "workDetails",
+                      "jobTitle",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Leave & Attendance" />
+            <div className="grid gap-4">
+              <Field label="Leave Policy">
+                <Select
+                  value={employee.additionalInformation.leaveAttendance.leavePolicy}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "leaveAttendance",
+                      "leavePolicy",
+                      event.target.value,
+                    )
+                  }
+                  options={LEAVE_POLICY_OPTIONS}
+                />
+              </Field>
+              <Field label="Weekly Off">
+                <Select
+                  value={employee.additionalInformation.leaveAttendance.weeklyOff}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "leaveAttendance",
+                      "weeklyOff",
+                      event.target.value,
+                    )
+                  }
+                  options={WEEKLY_OFF_OPTIONS}
+                />
+              </Field>
+              <Field label="Attendance Type">
+                <Select
+                  value={employee.additionalInformation.leaveAttendance.attendanceType}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "leaveAttendance",
+                      "attendanceType",
+                      event.target.value,
+                    )
+                  }
+                  options={ATTENDANCE_OPTIONS}
+                />
+              </Field>
+              <Field label="Default Leave Balance (Days)">
+                <Input
+                  type="number"
+                  value={employee.additionalInformation.leaveAttendance.defaultLeaveBalanceDays}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "leaveAttendance",
+                      "defaultLeaveBalanceDays",
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Skills & Qualifications" />
+            <div className="grid gap-4">
+              <Field label="Highest Education">
+                <Select
+                  value={employee.additionalInformation.skillsQualifications.highestEducation}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "skillsQualifications",
+                      "highestEducation",
+                      event.target.value,
+                    )
+                  }
+                  options={EDUCATION_OPTIONS}
+                />
+              </Field>
+              <Field label="Professional Qualification">
+                <Input
+                  value={
+                    employee.additionalInformation.skillsQualifications.professionalQualification
+                  }
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "skillsQualifications",
+                      "professionalQualification",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Skills / Certifications">
+                <Textarea
+                  value={employee.additionalInformation.skillsQualifications.skills}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "skillsQualifications",
+                      "skills",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Emergency Contact" />
+            <div className="grid gap-4">
+              <Field label="Contact Person Name">
+                <Input
+                  value={employee.additionalInformation.emergencyContact.name}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "emergencyContact",
+                      "name",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-[minmax(0,1fr)_170px] gap-3">
+                <Field label="Relationship">
+                  <Input
+                    value={employee.additionalInformation.emergencyContact.relationship}
+                    onChange={(event) =>
+                      updateDeep(
+                        "additionalInformation",
+                        "emergencyContact",
+                        "relationship",
+                        event.target.value,
+                      )
+                    }
+                  />
+                </Field>
+                <Field label="Phone No.">
+                  <Input
+                    value={employee.additionalInformation.emergencyContact.phone}
+                    onChange={(event) =>
+                      updateDeep(
+                        "additionalInformation",
+                        "emergencyContact",
+                        "phone",
+                        event.target.value,
+                      )
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Address">
+                <Textarea
+                  value={employee.additionalInformation.emergencyContact.address}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "emergencyContact",
+                      "address",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CardTitle title="Previous Employment" />
+            <div className="grid gap-4">
+              <Field label="Previous Employer">
+                <Input
+                  value={employee.additionalInformation.previousEmployment.employer}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "previousEmployment",
+                      "employer",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Designation">
+                <Input
+                  value={employee.additionalInformation.previousEmployment.designation}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "previousEmployment",
+                      "designation",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Total Experience (Years)">
+                <Input
+                  type="number"
+                  value={employee.additionalInformation.previousEmployment.totalExperienceYears}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "previousEmployment",
+                      "totalExperienceYears",
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Relevant Experience (Years)">
+                <Input
+                  type="number"
+                  value={employee.additionalInformation.previousEmployment.relevantExperienceYears}
+                  onChange={(event) =>
+                    updateDeep(
+                      "additionalInformation",
+                      "previousEmployment",
+                      "relevantExperienceYears",
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CardTitle title="Other Information" />
+          <div className="grid gap-4 md:grid-cols-5">
+            <Field label="Marital Status">
+              <Select
+                value={employee.additionalInformation.otherInformation.maritalStatus}
+                onChange={(event) =>
+                  updateDeep(
+                    "additionalInformation",
+                    "otherInformation",
+                    "maritalStatus",
+                    event.target.value,
+                  )
+                }
+                options={MARITAL_OPTIONS}
+              />
+            </Field>
+            <Field label="Nationality">
+              <Input
+                value={employee.additionalInformation.otherInformation.nationality}
+                onChange={(event) =>
+                  updateDeep(
+                    "additionalInformation",
+                    "otherInformation",
+                    "nationality",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+            <Field label="Religion">
+              <Select
+                value={employee.additionalInformation.otherInformation.religion}
+                onChange={(event) =>
+                  updateDeep(
+                    "additionalInformation",
+                    "otherInformation",
+                    "religion",
+                    event.target.value,
+                  )
+                }
+                options={RELIGION_OPTIONS}
+              />
+            </Field>
+            <Field label="Language Known">
+              <Input
+                value={employee.additionalInformation.otherInformation.languages}
+                onChange={(event) =>
+                  updateDeep(
+                    "additionalInformation",
+                    "otherInformation",
+                    "languages",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+            <Field label="Hobbies / Interests">
+              <Textarea
+                className="min-h-[84px]"
+                value={employee.additionalInformation.otherInformation.hobbies}
+                onChange={(event) =>
+                  updateDeep(
+                    "additionalInformation",
+                    "otherInformation",
+                    "hobbies",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+          </div>
+        </section>
+      </div>
+      <div className="space-y-4">
+        <ShortcutCard />
+        <RightSummaryCard currencySymbol={currency.symbol} summary={summary} />
+      </div>
+    </div>
+  );
+
+  const tabContent = {
+    general: generalTab,
+    salary: salaryTab,
+    bank: bankTab,
+    statutory: statutoryTab,
+    additional: additionalTab,
+  };
+
+  return (
+    <div className="px-6 py-6">
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <SectionCard
+          title="Employee Creation"
+          subtitle={
+            isAlterMode
+              ? "Review existing employee masters and update salary, statutory, and bank details."
+              : "Create a new employee and define salary details."
+          }
+          icon={
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 p-2 text-slate-500"
+              onClick={() => window.history.back()}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          }
+          actions={
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+                onClick={() => setEmployee(createEmptyEmployee())}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+                onClick={() => persistEmployee({ resetAfterSave: true })}
+                disabled={saving}
+              >
+                <FilePlus2 className="h-4 w-4" />
+                Save & New
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
+                onClick={() => persistEmployee()}
+                disabled={saving}
+              >
+                <Check className="h-4 w-4" />
+                {saving ? "Saving..." : "Save Employee"}
+              </button>
+            </div>
+          }
+        >
+          {notice ? (
+            <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              {notice}
+            </div>
+          ) : null}
+
+          {isAlterMode ? (
+            <div className="mb-5 grid gap-4 md:grid-cols-[320px_minmax(0,1fr)]">
+              <Field label="Select Employee">
+                <SearchableSelect
+                  options={employeeOptions}
+                  value={selectedEmployeeId}
+                  onChange={setSelectedEmployeeId}
+                  placeholder={loading ? "Loading employees..." : "Search employee"}
+                />
+              </Field>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                Choose an existing employee to alter the same five-section master.
+              </div>
+            </div>
+          ) : null}
+
+          <div className="border-b border-slate-200">
+            <div className="flex flex-wrap gap-6">
+              <TabButton active={activeTab === "general"} onClick={() => setActiveTab("general")}>
+                General Information
+              </TabButton>
+              <TabButton active={activeTab === "salary"} onClick={() => setActiveTab("salary")}>
+                Salary Details
+              </TabButton>
+              <TabButton active={activeTab === "bank"} onClick={() => setActiveTab("bank")}>
+                Bank Details
+              </TabButton>
+              <TabButton active={activeTab === "statutory"} onClick={() => setActiveTab("statutory")}>
+                Statutory Details
+              </TabButton>
+              <TabButton active={activeTab === "additional"} onClick={() => setActiveTab("additional")}>
+                Additional Information
+              </TabButton>
+            </div>
+          </div>
+        </SectionCard>
+
+        {tabContent[activeTab]}
+      </div>
+    </div>
+  );
+}
+
+export default EmployeeCreationPage;

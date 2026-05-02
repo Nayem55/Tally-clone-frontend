@@ -11,6 +11,11 @@ import TallyDateInput from "../Component/TallyDateInput";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  buildSalesFamilyPrintData,
+  previewVoucherDocument,
+  printVoucherDocument,
+} from "../utils/printVoucher";
 
 const emptyRow = { itemId: "", qty: "1", rate: "" };
 
@@ -106,6 +111,51 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
   const lineAmount = (row) => Number((Number(row.qty || 0) * Number(row.rate || 0)).toFixed(2));
   const validRows = form.rows.filter((row) => row.itemId && Number(row.qty) > 0);
   const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const printData = useMemo(
+    () =>
+      buildSalesFamilyPrintData({
+        company,
+        voucherTypeLabel: "Credit Note",
+        voucherSubtitle: "Sales Return Print Preview",
+        voucherNumber: form.number,
+        voucherDate: form.date,
+        partyLabel: "Customer Details",
+        partyName: customerLedger?.name || "",
+        accountLabel: "Return Ledger",
+        accountName: returnLedger?.name || "",
+        rows: validRows.map((row) => {
+          const item = itemMap.get(row.itemId);
+          return {
+            name: item?.name || "-",
+            qty: `${Number(row.qty || 0)}`,
+            rate: formatVoucherMoney(row.rate, currency.symbol),
+            amount: formatVoucherMoney(lineAmount(row), currency.symbol),
+          };
+        }),
+        totals: [
+          {
+            label: "Credit Note Total",
+            value: formatVoucherMoney(totalAmount, currency.symbol),
+            emphasis: true,
+          },
+        ],
+        narration: form.narration,
+        currencySymbol: `${currency.code || ""} ${currency.symbol || ""}`.trim(),
+      }),
+    [
+      company,
+      form.number,
+      form.date,
+      form.narration,
+      customerLedger,
+      returnLedger,
+      validRows,
+      itemMap,
+      currency.symbol,
+      currency.code,
+      totalAmount,
+    ]
+  );
 
   function updateRow(index, key, value) {
     setForm((prev) => {
@@ -211,6 +261,8 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      onPreviewPrint={() => previewVoucherDocument(printData)}
+      onPrintAfterSave={() => printVoucherDocument(printData)}
       >
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-4">
