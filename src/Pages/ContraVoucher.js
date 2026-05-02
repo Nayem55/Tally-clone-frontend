@@ -8,6 +8,7 @@ import VoucherWorkspace, {
 } from "../Component/VoucherWorkspace";
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
@@ -26,11 +27,20 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
   const [contraTypeId, setContraTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyName =
+    companies.find((entry) => entry._id === companyId)?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
     rows: [emptyRow],
     narration: "",
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId,
+    voucherTypeId: contraTypeId,
+    companyName,
+    voucherLabel: "Contra",
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -92,6 +102,11 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     };
   }, [companyId, editVoucherId]);
 
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
+
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
 
@@ -135,9 +150,9 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     }));
   }
 
-  function resetForm() {
+  function resetForm(nextNumber = suggestedNumber) {
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       rows: [emptyRow],
       narration: "",
@@ -173,7 +188,10 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     } else {
       alert(isEditMode ? "Contra voucher updated" : "Contra voucher saved");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   }
 
   return (

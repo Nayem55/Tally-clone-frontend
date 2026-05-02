@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, FileText, Trash2 } from "lucide-react";
 import api from "../api/api";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
+import TallyDateInput from "../Component/TallyDateInput";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { formatDateForInput } from "../utils/voucherDates";
@@ -21,8 +23,9 @@ export default function InventoryVoucherPage({
 }) {
   const containerRef = useRef(null);
   const mode = getVoucherMode(voucherName);
-  const { companyId } = useActiveCompany();
+  const { companyId, selectedCompany } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
+  const companyName = selectedCompany?.name || "";
   const isEditMode = Boolean(editVoucherId);
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
@@ -43,6 +46,13 @@ export default function InventoryVoucherPage({
         toGodownId: "",
       },
     ],
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId: effectiveCompanyId,
+    voucherTypeId,
+    companyName,
+    voucherLabel: voucherName,
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -67,6 +77,11 @@ export default function InventoryVoucherPage({
     }
     loadData();
   }, [effectiveCompanyId, voucherName]);
+
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
 
   useEffect(() => {
     let alive = true;
@@ -106,6 +121,15 @@ export default function InventoryVoucherPage({
       alive = false;
     };
   }, [effectiveCompanyId, editVoucherId]);
+
+  useEffect(() => {
+    const handle = window.requestAnimationFrame(() => {
+      const target = containerRef.current?.querySelector("[data-voucher-date='true']");
+      target?.focus();
+      target?.select?.();
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, []);
 
   const validRows = useMemo(
     () => form.rows.filter((row) => row.itemId && Number(row.qty || 0) > 0),
@@ -166,9 +190,9 @@ export default function InventoryVoucherPage({
     }));
   };
 
-  function resetForm() {
+  function resetForm(nextNumber = suggestedNumber) {
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       narration: "",
       rows: [
@@ -227,7 +251,10 @@ export default function InventoryVoucherPage({
       } else {
         alert(isEditMode ? `${voucherName} updated successfully` : `${voucherName} saved successfully`);
       }
-      if (!isEditMode) resetForm();
+      if (!isEditMode) {
+        const nextNumber = await refreshSuggestedNumber();
+        resetForm(nextNumber);
+      }
     } catch (error) {
       alert(error.response?.data?.message || `Unable to save ${voucherName}`);
     }
@@ -264,11 +291,11 @@ export default function InventoryVoucherPage({
             />
             <div className="relative">
               <Calendar className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
-              <input
-                type="date"
+              <TallyDateInput
+                data-voucher-date="true"
                 className="w-full rounded-xl border border-slate-200 py-3 pl-11 pr-4 text-sm"
                 value={form.date}
-                onChange={(event) => updateVoucherDate(event.target.value)}
+                onChange={updateVoucherDate}
               />
             </div>
             <textarea

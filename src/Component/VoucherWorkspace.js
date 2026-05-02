@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Printer, Save, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { voucherShortcuts } from "../utils/shortcuts";
@@ -68,6 +68,18 @@ export default function VoucherWorkspace({
     onAddRow,
     onSaveRequest: () => setShowSaveConfirm(true),
   });
+
+  useEffect(() => {
+    const handle = window.requestAnimationFrame(() => {
+      const target =
+        containerRef.current?.querySelector("[data-voucher-date='true']") ||
+        containerRef.current?.querySelector("[data-default-focus='true']");
+      target?.focus();
+      target?.select?.();
+    });
+
+    return () => window.cancelAnimationFrame(handle);
+  }, []);
 
   async function handleSave(mode = "save") {
     setShowSaveConfirm(false);

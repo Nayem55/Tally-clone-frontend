@@ -8,6 +8,7 @@ import VoucherWorkspace, {
 } from "../Component/VoucherWorkspace";
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
@@ -36,6 +37,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const [priceLevels, setPriceLevels] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const companyName =
+    companies.find((entry) => entry._id === companyId)?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -46,6 +49,13 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     discountAmount: "",
     additionalCharges: "",
     rows: [emptyRow],
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId,
+    voucherTypeId: salesTypeId,
+    companyName,
+    voucherLabel: "Sales",
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -139,6 +149,11 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       rows: prev.rows.map((row) => recalculateRow(row, prev.date, activePriceLevelId)),
     }));
   }, [form.partyLedger, form.priceLevelId, items.length]);
+
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -315,9 +330,9 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     ]
   );
 
-  const resetForm = () =>
+  const resetForm = (nextNumber = suggestedNumber) =>
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       partyLedger: "",
       salesLedger: salesLedgerId,
@@ -370,7 +385,10 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     } else {
       alert(isEditMode ? "Sales voucher updated" : "Sales voucher saved");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   };
 
   if (loading) {

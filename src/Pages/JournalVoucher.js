@@ -8,6 +8,7 @@ import VoucherWorkspace, {
 } from "../Component/VoucherWorkspace";
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
@@ -18,12 +19,21 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
   const [journalTypeId, setJournalTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyName =
+    companies.find((entry) => entry._id === companyId)?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
     narration: "",
     referenceNo: "",
     rows: [emptyRow],
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId,
+    voucherTypeId: journalTypeId,
+    companyName,
+    voucherLabel: "Journal",
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -81,6 +91,11 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     };
   }, [companyId, editVoucherId]);
 
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
+
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
   const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
@@ -117,9 +132,9 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     }));
   }
 
-  function resetForm() {
+  function resetForm(nextNumber = suggestedNumber) {
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       narration: "",
       referenceNo: "",
@@ -165,7 +180,10 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     } else {
       alert(isEditMode ? "Journal voucher updated" : "Journal voucher saved");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   }
 
   return (

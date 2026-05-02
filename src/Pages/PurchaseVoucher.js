@@ -8,6 +8,7 @@ import VoucherWorkspace, {
 } from "../Component/VoucherWorkspace";
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
@@ -27,6 +28,8 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const [allLedgers, setAllLedgers] = useState([]);
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyName =
+    companies.find((entry) => entry._id === companyId)?.name || "";
   const [defaultPurchaseLedgerId, setDefaultPurchaseLedgerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -37,6 +40,13 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     purchaseLedger: "",
     narration: "",
     rows: [emptyRow],
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId,
+    voucherTypeId: purchaseTypeId,
+    companyName,
+    voucherLabel: "Purchase",
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -120,6 +130,11 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     };
   }, [companyId, editVoucherId, items.length, defaultPurchaseLedgerId]);
 
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
+
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
   const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
@@ -186,9 +201,9 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
   const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
 
-  const resetForm = () =>
+  const resetForm = (nextNumber = suggestedNumber) =>
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       supplierInvoiceNo: "",
       supplierLedger: "",
@@ -237,7 +252,10 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     } else {
       alert(isEditMode ? "Purchase voucher updated" : "Purchase voucher saved");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   };
 
   if (loading) {

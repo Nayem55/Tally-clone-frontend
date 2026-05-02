@@ -8,6 +8,7 @@ import VoucherWorkspace, {
 } from "../Component/VoucherWorkspace";
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
@@ -21,6 +22,8 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyName =
+    companies.find((entry) => entry._id === companyId)?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -28,6 +31,13 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     rows: [emptyRow],
     narration: "",
     referenceNo: "",
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId,
+    voucherTypeId: paymentTypeId,
+    companyName,
+    voucherLabel: "Payment",
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -86,6 +96,11 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     };
   }, [companyId, editVoucherId]);
 
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
+
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
 
@@ -127,9 +142,9 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     }));
   }
 
-  function resetForm() {
+  function resetForm(nextNumber = suggestedNumber) {
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       paymentLedger: "",
       rows: [emptyRow],
@@ -173,7 +188,10 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     } else {
       alert(isEditMode ? "Payment voucher updated" : "Payment voucher saved");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   }
 
   return (

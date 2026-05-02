@@ -8,6 +8,7 @@ import VoucherWorkspace, {
 } from "../Component/VoucherWorkspace";
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
@@ -26,6 +27,8 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
   const [ledgers, setLedgers] = useState([]);
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const companyName =
+    companies.find((entry) => entry._id === companyId)?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -33,6 +36,13 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     returnLedger: "",
     narration: "",
     rows: [emptyRow],
+  });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId,
+    voucherTypeId: creditTypeId,
+    companyName,
+    voucherLabel: "Credit Note",
+    disabled: isEditMode,
   });
 
   useEffect(() => {
@@ -88,6 +98,11 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
       alive = false;
     };
   }, [companyId, editVoucherId, items.length]);
+
+  useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
 
   const company = companies.find((entry) => entry._id === companyId);
   const currency = getCompanyCurrency(company);
@@ -189,9 +204,9 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     }));
   }
 
-  function resetForm() {
+  function resetForm(nextNumber = suggestedNumber) {
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       customerLedger: "",
       returnLedger: "",
@@ -233,7 +248,10 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     } else {
       alert(isEditMode ? "Credit note updated" : "Credit note saved");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   }
 
   return (

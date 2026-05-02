@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import api from "../api/api";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
+import TallyDateInput from "../Component/TallyDateInput";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
 import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
 import { voucherShortcuts } from "../utils/shortcuts";
@@ -44,6 +46,8 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
   const containerRef = useRef(null);
   const { companies, companyId } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
+  const companyName =
+    companies.find((entry) => entry._id === effectiveCompanyId)?.name || "";
   const isEditMode = Boolean(editVoucherId);
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
@@ -68,6 +72,13 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     cashTendered: "",
     rows: [emptyRow],
   });
+  const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
+    companyId: effectiveCompanyId,
+    voucherTypeId,
+    companyName,
+    voucherLabel: "POS Voucher",
+    disabled: isEditMode,
+  });
 
   useEffect(() => {
     async function loadMasters() {
@@ -91,6 +102,11 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
   }, [effectiveCompanyId]);
 
   useEffect(() => {
+    if (!suggestedNumber || isEditMode) return;
+    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+  }, [suggestedNumber, isEditMode]);
+
+  useEffect(() => {
     const phone = form.phone.replace(/\D/g, "");
     if (!effectiveCompanyId || phone.length < 6) {
       setCustomerSuggestions([]);
@@ -107,6 +123,15 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
 
     return () => clearTimeout(handle);
   }, [effectiveCompanyId, form.phone]);
+
+  useEffect(() => {
+    const handle = window.requestAnimationFrame(() => {
+      const target = containerRef.current?.querySelector("[data-voucher-date='true']");
+      target?.focus();
+      target?.select?.();
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -252,9 +277,9 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     setShowCustomerSuggestions(false);
   };
 
-  const resetForm = () => {
+  const resetForm = (nextNumber = suggestedNumber) => {
     setForm({
-      number: "",
+      number: nextNumber || "",
       date: formatDateForInput(new Date()),
       customerName: "",
       phone: "",
@@ -385,7 +410,10 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     } else {
       alert(isEditMode ? "POS voucher updated successfully" : "POS voucher completed successfully");
     }
-    if (!isEditMode) resetForm();
+    if (!isEditMode) {
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+    }
   };
 
   useVoucherShortcuts({
@@ -422,12 +450,12 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
-                <input
+                <TallyDateInput
                   data-voucher-date="true"
-                  type="date"
+                  data-vnav="true"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                   value={form.date}
-                  onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+                  onChange={(value) => setForm((current) => ({ ...current, date: value }))}
                 />
               </div>
             </div>
