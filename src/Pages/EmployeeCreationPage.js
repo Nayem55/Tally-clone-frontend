@@ -1,16 +1,18 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Building2,
   Check,
+  Edit3,
   FilePlus2,
   Landmark,
+  Search,
   Upload,
   User,
+  X,
 } from "lucide-react";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
-import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
@@ -211,6 +213,110 @@ function createEmptyEmployee() {
         religion: RELIGION_OPTIONS[0],
         languages: "Bangla, English",
         hobbies: "",
+      },
+    },
+  };
+}
+
+function hydrateEmployeeRecord(row = {}) {
+  const base = createEmptyEmployee();
+  const general = row.general || {};
+
+  return {
+    ...base,
+    ...row,
+    name: row.name || general.name || base.name,
+    alias: row.alias || general.alias || base.alias,
+    under: row.under || general.under || base.under,
+    underCategory: row.underCategory || general.underCategory || base.underCategory,
+    employeeNumber:
+      row.employeeNumber || general.employeeNumber || base.employeeNumber,
+    dateOfJoining: row.dateOfJoining || general.dateOfJoining || base.dateOfJoining,
+    defineSalaryDetails:
+      row.defineSalaryDetails ?? general.defineSalaryDetails ?? base.defineSalaryDetails,
+    photoName: row.photoName || general.photoName || base.photoName,
+    personalDetails: {
+      ...base.personalDetails,
+      ...(row.personalDetails || {}),
+    },
+    contactDetails: {
+      ...base.contactDetails,
+      ...(row.contactDetails || {}),
+    },
+    otherDetails: {
+      ...base.otherDetails,
+      ...(row.otherDetails || {}),
+    },
+    salaryDetails: {
+      ...base.salaryDetails,
+      ...(row.salaryDetails || {}),
+      payHeads:
+        row.salaryDetails?.payHeads?.length
+          ? row.salaryDetails.payHeads
+          : base.salaryDetails.payHeads,
+    },
+    bankDetails: {
+      ...base.bankDetails,
+      ...(row.bankDetails || {}),
+    },
+    statutoryDetails: {
+      ...base.statutoryDetails,
+      ...(row.statutoryDetails || {}),
+      identity: {
+        ...base.statutoryDetails.identity,
+        ...(row.statutoryDetails?.identity || {}),
+      },
+      tax: {
+        ...base.statutoryDetails.tax,
+        ...(row.statutoryDetails?.tax || {}),
+      },
+      pf: {
+        ...base.statutoryDetails.pf,
+        ...(row.statutoryDetails?.pf || {}),
+      },
+      esi: {
+        ...base.statutoryDetails.esi,
+        ...(row.statutoryDetails?.esi || {}),
+      },
+      compliance: {
+        ...base.statutoryDetails.compliance,
+        ...(row.statutoryDetails?.compliance || {}),
+      },
+      documents: {
+        ...base.statutoryDetails.documents,
+        ...(row.statutoryDetails?.documents || {}),
+      },
+    },
+    additionalInformation: {
+      ...base.additionalInformation,
+      ...(row.additionalInformation || {}),
+      employmentDetails: {
+        ...base.additionalInformation.employmentDetails,
+        ...(row.additionalInformation?.employmentDetails || {}),
+      },
+      workDetails: {
+        ...base.additionalInformation.workDetails,
+        ...(row.additionalInformation?.workDetails || {}),
+      },
+      leaveAttendance: {
+        ...base.additionalInformation.leaveAttendance,
+        ...(row.additionalInformation?.leaveAttendance || {}),
+      },
+      skillsQualifications: {
+        ...base.additionalInformation.skillsQualifications,
+        ...(row.additionalInformation?.skillsQualifications || {}),
+      },
+      emergencyContact: {
+        ...base.additionalInformation.emergencyContact,
+        ...(row.additionalInformation?.emergencyContact || {}),
+      },
+      previousEmployment: {
+        ...base.additionalInformation.previousEmployment,
+        ...(row.additionalInformation?.previousEmployment || {}),
+      },
+      otherInformation: {
+        ...base.additionalInformation.otherInformation,
+        ...(row.additionalInformation?.otherInformation || {}),
       },
     },
   };
@@ -437,6 +543,8 @@ function EmployeeCreationPage({ mode = "create" }) {
   const isAlterMode = mode === "alter";
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [search, setSearch] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
   const [employee, setEmployee] = useState(createEmptyEmployee);
   const [activeTab, setActiveTab] = useState("general");
   const [loading, setLoading] = useState(false);
@@ -447,23 +555,21 @@ function EmployeeCreationPage({ mode = "create" }) {
   const currency = getCompanyCurrency(selectedCompany);
   const summary = useMemo(() => calculateSalarySummary(employee), [employee]);
 
-  useEffect(() => {
+  const loadEmployees = useCallback(async () => {
     if (!companyId) return;
-    async function loadEmployees() {
-      setLoading(true);
-      try {
-        const response = await api.get(`/companies/${companyId}/employees`);
-        const rows = response.data || [];
-        setEmployees(rows);
-        if (isAlterMode && rows.length && !selectedEmployeeId) {
-          setSelectedEmployeeId(rows[0]._id);
-        }
-      } finally {
-        setLoading(false);
-      }
+    setLoading(true);
+    try {
+      const response = await api.get(`/companies/${companyId}/employees`);
+      const rows = (response.data || []).map(hydrateEmployeeRecord);
+      setEmployees(rows);
+    } finally {
+      setLoading(false);
     }
+  }, [companyId]);
+
+  useEffect(() => {
     loadEmployees();
-  }, [companyId, isAlterMode, selectedEmployeeId]);
+  }, [loadEmployees]);
 
   useEffect(() => {
     if (!companyId || !selectedEmployeeId) {
@@ -479,19 +585,7 @@ function EmployeeCreationPage({ mode = "create" }) {
         const response = await api.get(
           `/companies/${companyId}/employees/${selectedEmployeeId}`,
         );
-        const row = response.data;
-        setEmployee({
-          ...createEmptyEmployee(),
-          ...row,
-          salaryDetails: {
-            ...createEmptyEmployee().salaryDetails,
-            ...(row.salaryDetails || {}),
-            payHeads:
-              row.salaryDetails?.payHeads?.length
-                ? row.salaryDetails.payHeads
-                : createEmptyEmployee().salaryDetails.payHeads,
-          },
-        });
+        setEmployee(hydrateEmployeeRecord(response.data));
       } finally {
         setLoading(false);
       }
@@ -594,11 +688,6 @@ function EmployeeCreationPage({ mode = "create" }) {
 
   async function persistEmployee({ resetAfterSave = false } = {}) {
     if (!companyId) return;
-    if (!employee.name.trim()) {
-      setNotice("Employee name is required.");
-      setActiveTab("general");
-      return;
-    }
 
     setSaving(true);
     try {
@@ -607,15 +696,18 @@ function EmployeeCreationPage({ mode = "create" }) {
           `/companies/${companyId}/employees/${selectedEmployeeId}`,
           employee,
         );
-        setEmployee(response.data);
+        const updated = hydrateEmployeeRecord(response.data);
+        setEmployee(updated);
+        await loadEmployees();
         setNotice("Employee updated successfully.");
+        setShowEditModal(false);
       } else {
         const response = await api.post(
           `/companies/${companyId}/employees`,
           employee,
         );
-        const created = response.data;
-        setEmployees((current) => [created, ...current]);
+        const created = hydrateEmployeeRecord(response.data);
+        await loadEmployees();
         if (resetAfterSave) {
           setEmployee(createEmptyEmployee());
           setActiveTab("general");
@@ -634,10 +726,15 @@ function EmployeeCreationPage({ mode = "create" }) {
     }
   }
 
-  const employeeOptions = employees.map((row) => ({
-    value: row._id,
-    label: `${row.name}${row.employeeNumber ? ` - ${row.employeeNumber}` : ""}`,
-  }));
+  const filteredEmployees = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return employees;
+    return employees.filter((row) =>
+      [row.name, row.employeeNumber, row.personalDetails?.designation, row.otherDetails?.department]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    );
+  }, [employees, search]);
 
   const topSummaryRows = [
     { label: "Employee Name", value: employee.name || "-" },
@@ -654,7 +751,7 @@ function EmployeeCreationPage({ mode = "create" }) {
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_260px_130px]">
           <div className="space-y-4">
-            <Field label="Employee Name" required>
+            <Field label="Employee Name">
               <Input
                 value={employee.name}
                 onChange={(event) => updateGeneral("name", event.target.value)}
@@ -668,7 +765,7 @@ function EmployeeCreationPage({ mode = "create" }) {
             </Field>
           </div>
           <div className="space-y-4">
-            <Field label="Under" required>
+            <Field label="Under">
               <Select
                 value={employee.under}
                 onChange={(event) => updateGeneral("under", event.target.value)}
@@ -680,7 +777,7 @@ function EmployeeCreationPage({ mode = "create" }) {
             </div>
           </div>
           <div className="space-y-4">
-            <Field label="Date of Joining" required>
+            <Field label="Date of Joining">
               <TallyDateInput
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
                 value={employee.dateOfJoining}
@@ -1235,20 +1332,20 @@ function EmployeeCreationPage({ mode = "create" }) {
           </div>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_280px]">
             <div className="space-y-4">
-              <Field label="Bank Account No." required>
+              <Field label="Bank Account No.">
                 <Input
                   value={employee.bankDetails.bankAccountNo}
                   onChange={(event) => updateNested("bankDetails", "bankAccountNo", event.target.value)}
                 />
               </Field>
-              <Field label="Bank Name" required>
+              <Field label="Bank Name">
                 <Select
                   value={employee.bankDetails.bankName}
                   onChange={(event) => updateNested("bankDetails", "bankName", event.target.value)}
                   options={BANK_OPTIONS}
                 />
               </Field>
-              <Field label="Branch Name" required>
+              <Field label="Branch Name">
                 <Input
                   value={employee.bankDetails.branchName}
                   onChange={(event) => updateNested("bankDetails", "branchName", event.target.value)}
@@ -1269,7 +1366,7 @@ function EmployeeCreationPage({ mode = "create" }) {
               </Field>
             </div>
             <div className="space-y-4">
-              <Field label="Account Holder Name" required>
+              <Field label="Account Holder Name">
                 <Input
                   value={employee.bankDetails.accountHolderName}
                   onChange={(event) =>
@@ -2103,9 +2200,9 @@ function EmployeeCreationPage({ mode = "create" }) {
     additional: additionalTab,
   };
 
-  return (
-    <div className="px-6 py-6">
-      <div className="mx-auto max-w-[1500px] space-y-6">
+  function renderEditorShell({ inModal = false } = {}) {
+    return (
+      <div className={inModal ? "space-y-6" : "mx-auto max-w-[1500px] space-y-6"}>
         <SectionCard
           title="Employee Creation"
           subtitle={
@@ -2117,7 +2214,13 @@ function EmployeeCreationPage({ mode = "create" }) {
             <button
               type="button"
               className="rounded-full border border-slate-200 p-2 text-slate-500"
-              onClick={() => window.history.back()}
+              onClick={() => {
+                if (inModal) {
+                  setShowEditModal(false);
+                } else {
+                  window.history.back();
+                }
+              }}
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
@@ -2127,20 +2230,28 @@ function EmployeeCreationPage({ mode = "create" }) {
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
-                onClick={() => setEmployee(createEmptyEmployee())}
+                onClick={() => {
+                  if (inModal) {
+                    setShowEditModal(false);
+                  } else {
+                    setEmployee(createEmptyEmployee());
+                  }
+                }}
               >
-                <ArrowLeft className="h-4 w-4" />
-                Cancel
+                {inModal ? <X className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
+                {inModal ? "Close" : "Cancel"}
               </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
-                onClick={() => persistEmployee({ resetAfterSave: true })}
-                disabled={saving}
-              >
-                <FilePlus2 className="h-4 w-4" />
-                Save & New
-              </button>
+              {!inModal ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+                  onClick={() => persistEmployee({ resetAfterSave: true })}
+                  disabled={saving}
+                >
+                  <FilePlus2 className="h-4 w-4" />
+                  Save & New
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
@@ -2148,7 +2259,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                 disabled={saving}
               >
                 <Check className="h-4 w-4" />
-                {saving ? "Saving..." : "Save Employee"}
+                {saving ? "Saving..." : isAlterMode ? "Update Employee" : "Save Employee"}
               </button>
             </div>
           }
@@ -2156,22 +2267,6 @@ function EmployeeCreationPage({ mode = "create" }) {
           {notice ? (
             <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {notice}
-            </div>
-          ) : null}
-
-          {isAlterMode ? (
-            <div className="mb-5 grid gap-4 md:grid-cols-[320px_minmax(0,1fr)]">
-              <Field label="Select Employee">
-                <SearchableSelect
-                  options={employeeOptions}
-                  value={selectedEmployeeId}
-                  onChange={setSelectedEmployeeId}
-                  placeholder={loading ? "Loading employees..." : "Search employee"}
-                />
-              </Field>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                Choose an existing employee to alter the same five-section master.
-              </div>
             </div>
           ) : null}
 
@@ -2198,6 +2293,118 @@ function EmployeeCreationPage({ mode = "create" }) {
 
         {tabContent[activeTab]}
       </div>
+    );
+  }
+
+  if (!isAlterMode) {
+    return <div className="px-6 py-6">{renderEditorShell()}</div>;
+  }
+
+  return (
+    <div className="px-6 py-6">
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        <SectionCard
+          title="Alter Employee"
+          subtitle="Browse employee masters and open any record in the edit modal."
+          icon={
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 p-2 text-slate-500"
+              onClick={() => window.history.back()}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          }
+        >
+          {notice ? (
+            <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              {notice}
+            </div>
+          ) : null}
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                className="pl-11"
+                placeholder="Search employee by name, employee number, designation..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              {loading
+                ? "Loading employees..."
+                : `${filteredEmployees.length} employee record(s) found.`}
+            </div>
+          </div>
+        </SectionCard>
+
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="grid grid-cols-[minmax(0,1.6fr)_180px_180px_160px_130px] gap-4 border-b border-slate-200 px-6 py-4 text-sm font-semibold text-slate-500">
+            <span>Employee</span>
+            <span>Department</span>
+            <span>Designation</span>
+            <span>Status</span>
+            <span className="text-right">Action</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {filteredEmployees.map((row) => (
+              <div
+                key={row._id}
+                className="grid grid-cols-[minmax(0,1.6fr)_180px_180px_160px_130px] gap-4 px-6 py-4 text-sm"
+              >
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    {row.name || "Unnamed Employee"}
+                  </p>
+                  <p className="mt-1 text-slate-500">
+                    {row.employeeNumber || "Auto Number"}{row.alias ? ` | ${row.alias}` : ""}
+                  </p>
+                </div>
+                <div className="text-slate-700">
+                  {row.otherDetails?.department || row.additionalInformation?.workDetails?.department || "-"}
+                </div>
+                <div className="text-slate-700">
+                  {row.personalDetails?.designation || row.additionalInformation?.workDetails?.jobTitle || "-"}
+                </div>
+                <div>
+                  <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    {row.otherDetails?.status || row.additionalInformation?.employmentDetails?.employmentStatus || "-"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+                    onClick={() => {
+                      setSelectedEmployeeId(row._id);
+                      setActiveTab("general");
+                      setShowEditModal(true);
+                      setNotice("");
+                    }}
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!loading && filteredEmployees.length === 0 ? (
+              <div className="px-6 py-10 text-center text-sm text-slate-500">
+                No employee found for this search.
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+
+      {showEditModal ? (
+        <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/45 px-6 py-8">
+          <div className="mx-auto max-w-[1520px]">
+            {renderEditorShell({ inModal: true })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
