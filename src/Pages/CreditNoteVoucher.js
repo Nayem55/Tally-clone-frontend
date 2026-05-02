@@ -28,7 +28,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
   const companyName =
-    companies.find((entry) => entry._id === companyId)?.name || "";
+    companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -104,7 +104,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
-  const company = companies.find((entry) => entry._id === companyId);
+  const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
   const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);

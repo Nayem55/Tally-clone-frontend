@@ -18,6 +18,7 @@ const emptyRow = {
   actualQty: "1",
   billedQty: "1",
   rate: "",
+  billedManuallyEdited: false,
 };
 
 export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
@@ -29,7 +30,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
   const companyName =
-    companies.find((entry) => entry._id === companyId)?.name || "";
+    companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [defaultPurchaseLedgerId, setDefaultPurchaseLedgerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -85,7 +86,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
         setDefaultPurchaseLedgerId(defaultPurchaseId);
         setForm((prev) => ({
           ...prev,
-          purchaseLedger: prev.purchaseLedger || defaultPurchaseId,
+          purchaseLedger: defaultPurchaseId,
         }));
       } catch (error) {
         alert("Failed to load purchase master data");
@@ -120,6 +121,9 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             actualQty: String(line.qty || line.billedQty || 1),
             billedQty: String(line.billedQty || line.qty || 1),
             rate: Number(line.rate || 0),
+            billedManuallyEdited:
+              String(line.billedQty || line.qty || 1) !==
+              String(line.qty || line.billedQty || 1),
           })) || [emptyRow],
       });
     }
@@ -135,7 +139,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
-  const company = companies.find((entry) => entry._id === companyId);
+  const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
   const ledgerMap = useMemo(
@@ -147,10 +151,6 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const supplierOptions = useMemo(
     () => suppliers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
     [suppliers]
-  );
-  const purchaseLedgerOptions = useMemo(
-    () => purchaseLedgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
-    [purchaseLedgers]
   );
   const itemOptions = useMemo(
     () => items.map((item) => ({ value: item._id, label: item.name })),
@@ -176,7 +176,10 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       if (key === "itemId") {
         rows[index] = recalculateRow(rows[index], prev.date);
       }
-      if (key === "actualQty" && !rows[index].billedQty) {
+      if (key === "billedQty") {
+        rows[index].billedManuallyEdited = true;
+      }
+      if (key === "actualQty" && !rows[index].billedManuallyEdited) {
         rows[index].billedQty = value;
       }
       return { ...prev, rows };
@@ -277,7 +280,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
         { label: "Voucher No.", value: form.number || "-" },
         { label: "Date", value: form.date },
         { label: "Supplier", value: supplierLedger?.name || "-" },
-        { label: "Purchase Ledger", value: purchaseLedger?.name || "-" },
+        { label: "Purchase Ledger", value: purchaseLedger?.name || "Purchase" },
       ]}
       amountSummaryItems={[
         {
@@ -322,7 +325,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Supplier</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Party A/c Name</label>
             <SearchableSelect
               options={supplierOptions}
               value={form.supplierLedger}
@@ -337,27 +340,6 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                 ? renderBalance(
                     supplierLedger.currentBalanceAbs,
                     supplierLedger.currentBalanceSide,
-                    currency.symbol
-                  )
-                : "-"}
-            </p>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Purchase Ledger</label>
-            <SearchableSelect
-              options={purchaseLedgerOptions}
-              value={form.purchaseLedger}
-              onChange={(newValue) =>
-                setForm((prev) => ({ ...prev, purchaseLedger: newValue }))
-              }
-              placeholder="Search purchase ledger"
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Current Balance:{" "}
-              {purchaseLedger
-                ? renderBalance(
-                    purchaseLedger.currentBalanceAbs,
-                    purchaseLedger.currentBalanceSide,
                     currency.symbol
                   )
                 : "-"}

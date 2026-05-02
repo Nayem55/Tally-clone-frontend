@@ -24,6 +24,7 @@ const emptyRow = {
   billedQty: "1",
   rate: "",
   discountPercent: "",
+  billedManuallyEdited: false,
 };
 
 export default function SalesVoucher({ companyId, editVoucherId = "" }) {
@@ -38,7 +39,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const companyName =
-    companies.find((entry) => entry._id === companyId)?.name || "";
+    companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -95,7 +96,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         setSalesLedgerId(defaultSalesId);
         setForm((prev) => ({
           ...prev,
-          salesLedger: prev.salesLedger || defaultSalesId,
+          salesLedger: defaultSalesId,
         }));
       } catch (error) {
         alert("Failed to load sales master data");
@@ -133,6 +134,9 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             billedQty: String(line.billedQty || line.qty || 1),
             rate: Number(line.rate || 0),
             discountPercent: "",
+            billedManuallyEdited:
+              String(line.billedQty || line.qty || 1) !==
+              String(line.qty || line.billedQty || 1),
           })) || [emptyRow],
       });
     }
@@ -155,7 +159,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
-  const company = companies.find((entry) => entry._id === companyId);
+  const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const ledgerMap = useMemo(
     () => new Map(allLedgers.map((ledger) => [ledger._id, ledger])),
@@ -169,10 +173,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     () => partyLedgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
     [partyLedgers]
   );
-  const salesLedgerOptions = useMemo(
-    () => salesLedgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
-    [salesLedgers]
-  );
   const priceLevelOptions = useMemo(
     () => priceLevels.map((level) => ({ value: level._id, label: level.name || level.code })),
     [priceLevels]
@@ -181,6 +181,15 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     () => items.map((item) => ({ value: item._id, label: item.name })),
     [items]
   );
+
+  useEffect(() => {
+    if (!partyLedger?.priceLevelId) return;
+    setForm((prev) =>
+      prev.priceLevelId === partyLedger.priceLevelId
+        ? prev
+        : { ...prev, priceLevelId: partyLedger.priceLevelId }
+    );
+  }, [partyLedger?.priceLevelId]);
 
   const lineAmount = (row) => {
     const qty = Number(row.billedQty || row.actualQty || 0);
@@ -204,7 +213,10 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       if (key === "itemId") {
         rows[index] = recalculateRow(rows[index], prev.date, activePriceLevelId);
       }
-      if (key === "actualQty" && !rows[index].billedQty) {
+      if (key === "billedQty") {
+        rows[index].billedManuallyEdited = true;
+      }
+      if (key === "actualQty" && !rows[index].billedManuallyEdited) {
         rows[index].billedQty = value;
       }
       return { ...prev, rows };
@@ -410,7 +422,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         { label: "Voucher No.", value: form.number || "-" },
         { label: "Date", value: form.date },
         { label: "Party A/c", value: partyLedger?.name || "-" },
-        { label: "Sales Ledger", value: salesLedger?.name || "-" },
+        { label: "Sales Ledger", value: salesLedger?.name || "Sales" },
       ]}
       amountSummaryItems={[
         { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
@@ -447,15 +459,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Price Level</label>
-            <SearchableSelect
-              options={[{ value: "", label: "Party Default / Not Applicable" }, ...priceLevelOptions]}
-              value={form.priceLevelId}
-              onChange={updatePriceLevel}
-              placeholder="Search price level"
-            />
-          </div>
-          <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Party A/c Name</label>
             <SearchableSelect
               options={partyOptions}
@@ -475,22 +478,18 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             </p>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Sales Ledger</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Price Level</label>
             <SearchableSelect
-              options={salesLedgerOptions}
-              value={form.salesLedger}
-              onChange={(newValue) => setForm((prev) => ({ ...prev, salesLedger: newValue }))}
-              placeholder="Search sales ledger"
+              options={[{ value: "", label: "Party Default / Not Applicable" }, ...priceLevelOptions]}
+              value={form.priceLevelId}
+              onChange={updatePriceLevel}
+              placeholder="Search price level"
             />
             <p className="mt-2 text-xs text-slate-500">
-              Current Balance:{" "}
-              {salesLedger
-                ? renderBalance(
-                    salesLedger.currentBalanceAbs,
-                    salesLedger.currentBalanceSide,
-                    currency.symbol
-                  )
-                : "-"}
+              Selected:{" "}
+              {priceLevels.find((level) => String(level._id) === String(activePriceLevelId))?.name ||
+                priceLevels.find((level) => String(level._id) === String(activePriceLevelId))?.code ||
+                (partyLedger?.priceLevelId ? "Party Fixed Price Level" : "Party Default / Not Applicable")}
             </p>
           </div>
         </div>

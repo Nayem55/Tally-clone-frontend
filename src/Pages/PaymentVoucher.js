@@ -23,7 +23,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const companyName =
-    companies.find((entry) => entry._id === companyId)?.name || "";
+    companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -101,7 +101,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
-  const company = companies.find((entry) => entry._id === companyId);
+  const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
 
   const ledgerMap = useMemo(

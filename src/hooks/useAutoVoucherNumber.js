@@ -18,26 +18,8 @@ export default function useAutoVoucherNumber({
 }) {
   const [suggestedNumber, setSuggestedNumber] = useState("");
 
-  const refreshSuggestedNumber = useCallback(async () => {
-    if (!companyId || !voucherTypeId || disabled) {
-      setSuggestedNumber("");
-      return "";
-    }
-
-    try {
-      const response = await api.get(`/companies/${companyId}/vouchers/next-number`, {
-        params: { voucherTypeId },
-      });
-      const nextValue =
-        response.data?.formattedNumber ||
-        String(response.data?.nextNumber || "");
-      setSuggestedNumber(nextValue);
-      return nextValue;
-    } catch (error) {
-      const voucherResponse = await api.get(`/companies/${companyId}/vouchers`, {
-        params: { type: voucherTypeId },
-      });
-      const vouchers = voucherResponse.data || [];
+  const buildFallbackNumber = useCallback(
+    (vouchers = []) => {
       const companySlug = slugifySegment(companyName) || "company";
       const voucherSlug = slugifySegment(voucherLabel) || "voucher";
       const prefix = `${companySlug}-${voucherSlug}-`;
@@ -51,17 +33,45 @@ export default function useAutoVoucherNumber({
         }
       });
 
-      const fallbackNumber = `${prefix}${String(maxSequence + 1).padStart(2, "0")}`;
+      return `${prefix}${String(maxSequence + 1).padStart(2, "0")}`;
+    },
+    [companyName, voucherLabel]
+  );
+
+  const refreshSuggestedNumber = useCallback(async () => {
+    if (!companyId || !voucherTypeId || disabled) {
+      setSuggestedNumber("");
+      return "";
+    }
+
+    try {
+      const response = await api.get(`/companies/${companyId}/vouchers/next-number`, {
+        params: { voucherTypeId },
+      });
+      const nextValue =
+        response.data?.formattedNumber ||
+        String(response.data?.nextNumber || "");
+      if (nextValue) {
+        setSuggestedNumber(nextValue);
+        return nextValue;
+      }
+      throw new Error("Missing next voucher number");
+    } catch (error) {
+      const voucherResponse = await api.get(`/companies/${companyId}/vouchers`, {
+        params: { type: voucherTypeId },
+      });
+      const vouchers = voucherResponse.data || [];
+      const fallbackNumber = buildFallbackNumber(vouchers);
       setSuggestedNumber(fallbackNumber);
       return fallbackNumber;
     }
-  }, [companyId, companyName, disabled, voucherLabel, voucherTypeId]);
+  }, [buildFallbackNumber, companyId, disabled, voucherTypeId]);
 
   useEffect(() => {
     refreshSuggestedNumber().catch(() => {
-      setSuggestedNumber("");
+      setSuggestedNumber((current) => current || buildFallbackNumber([]));
     });
-  }, [refreshSuggestedNumber]);
+  }, [buildFallbackNumber, refreshSuggestedNumber]);
 
   return {
     suggestedNumber,
