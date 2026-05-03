@@ -34,16 +34,16 @@ function toWords(value) {
   return `${amount.toLocaleString("en-IN")} only`;
 }
 
-const emptyRow = {
-  itemId: "",
-  qty: "1",
-  rate: 0,
-  mrpRate: 0,
-  discountPercent: 0,
-};
-
-export default function PosVoucherPage({ editVoucherId = "", companyIdOverride = "" }) {
+export default function PosVoucherPage({
+  editVoucherId = "",
+  companyIdOverride = "",
+}) {
   const containerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const scannerBufferRef = useRef("");
+  const scannerLastKeyTimeRef = useRef(0);
+  const scannerTimerRef = useRef(null);
+
   const { companies, companyId } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
   const companyName =
@@ -70,8 +70,9 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     cardPayment: "",
     cashPayment: "",
     cashTendered: "",
-    rows: [emptyRow],
+    rows: [],
   });
+
   const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
     companyId: effectiveCompanyId,
     voucherTypeId,
@@ -80,16 +81,25 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     disabled: isEditMode,
   });
 
+  const inputClass =
+    "w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]";
+  const numberInputClass =
+    "w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]";
+
   useEffect(() => {
     async function loadMasters() {
       if (!effectiveCompanyId) return;
-      const [voucherTypeResponse, itemResponse, levelResponse, defaultResponse] =
-        await Promise.all([
-          api.get(`/companies/${effectiveCompanyId}/voucher-types`),
-          api.get(`/companies/${effectiveCompanyId}/items`),
-          api.get(`/companies/${effectiveCompanyId}/price-levels`),
-          api.get(`/companies/${effectiveCompanyId}/ledgers/defaults`),
-        ]);
+      const [
+        voucherTypeResponse,
+        itemResponse,
+        levelResponse,
+        defaultResponse,
+      ] = await Promise.all([
+        api.get(`/companies/${effectiveCompanyId}/voucher-types`),
+        api.get(`/companies/${effectiveCompanyId}/items`),
+        api.get(`/companies/${effectiveCompanyId}/price-levels`),
+        api.get(`/companies/${effectiveCompanyId}/ledgers/defaults`),
+      ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
       setDefaults(defaultResponse.data || {});
@@ -103,7 +113,9 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
 
   useEffect(() => {
     if (!suggestedNumber || isEditMode) return;
-    setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
+    setForm((prev) =>
+      prev.number ? prev : { ...prev, number: suggestedNumber },
+    );
   }, [suggestedNumber, isEditMode]);
 
   useEffect(() => {
@@ -114,9 +126,12 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     }
 
     const handle = setTimeout(async () => {
-      const response = await api.get(`/companies/${effectiveCompanyId}/customers`, {
-        params: { phone, limit: 8 },
-      });
+      const response = await api.get(
+        `/companies/${effectiveCompanyId}/customers`,
+        {
+          params: { phone, limit: 8 },
+        },
+      );
       setCustomerSuggestions(response.data);
       setShowCustomerSuggestions(true);
     }, 250);
@@ -126,7 +141,9 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
 
   useEffect(() => {
     const handle = window.requestAnimationFrame(() => {
-      const target = containerRef.current?.querySelector("[data-voucher-date='true']");
+      const target = containerRef.current?.querySelector(
+        "[data-voucher-date='true']",
+      );
       target?.focus();
       target?.select?.();
     });
@@ -138,12 +155,16 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
 
     async function loadVoucherForEdit() {
       if (!effectiveCompanyId || !editVoucherId || items.length === 0) return;
-      const response = await api.get(`/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`);
+      const response = await api.get(
+        `/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`,
+      );
       const voucher = response.data;
       if (!alive) return;
       setForm({
         number: voucher.number || "",
-        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        date: voucher.date
+          ? String(voucher.date).slice(0, 10)
+          : formatDateForInput(new Date()),
         customerName: voucher.customerSnapshot?.name || "",
         phone: voucher.customerSnapshot?.phone || "",
         address: voucher.customerSnapshot?.address || "",
@@ -161,7 +182,7 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
             rate: Number(line.rate || 0),
             mrpRate: Number(line.mrpRate || line.rate || 0),
             discountPercent: Number(line.discountValue || 0),
-          })) || [emptyRow],
+          })) || [],
       });
     }
 
@@ -171,10 +192,14 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     };
   }, [effectiveCompanyId, editVoucherId, items.length]);
 
-  const selectedCompany = companies.find((company) => company._id === effectiveCompanyId);
+  const selectedCompany = companies.find(
+    (company) => company._id === effectiveCompanyId,
+  );
   const currency = getCompanyCurrency(selectedCompany);
   const mrpPriceLevelId =
-    priceLevels.find((level) => String(level.code || "").toUpperCase() === "MRP")?._id || "";
+    priceLevels.find(
+      (level) => String(level.code || "").toUpperCase() === "MRP",
+    )?._id || "";
   const selectedCustomer = customerSuggestions.find(
     (customer) => customer.phone === form.phone.replace(/\D/g, ""),
   );
@@ -197,40 +222,100 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     return Number((gross - discount).toFixed(2));
   };
 
+  const focusSearchInput = () => {
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select?.();
+    });
+  };
+
+  const findItemByScanValue = (value) => {
+    const code = String(value || "").trim().toLowerCase();
+    if (!code) return null;
+
+    return (
+      items.find(
+        (item) =>
+          String(item.barcode || "").trim().toLowerCase() === code ||
+          String(item.alias || "").trim().toLowerCase() === code,
+      ) ||
+      items.find(
+        (item) => String(item.name || "").trim().toLowerCase() === code,
+      ) ||
+      null
+    );
+  };
+
   const addItemById = (itemId) => {
     const item = items.find((entry) => entry._id === itemId);
     if (!item) return;
     const mrpRate = resolveItemRateByDate(item, mrpPriceLevelId, form.date);
-    setForm((current) => ({
-      ...current,
-      rows: [
-        ...current.rows,
-        {
-          itemId: item._id,
-          qty: "1",
-          rate: mrpRate,
-          mrpRate,
-          discountPercent: 0,
-        },
-      ],
-    }));
+
+    setForm((current) => {
+      const existingIndex = current.rows.findIndex(
+        (row) => String(row.itemId) === String(item._id),
+      );
+
+      if (existingIndex >= 0) {
+        const nextRows = [...current.rows];
+        const existingRow = nextRows[existingIndex];
+        nextRows[existingIndex] = {
+          ...existingRow,
+          qty: String(Number(existingRow.qty || 0) + 1),
+        };
+        return { ...current, rows: nextRows };
+      }
+
+      return {
+        ...current,
+        rows: [
+          ...current.rows,
+          {
+            itemId: item._id,
+            qty: "1",
+            rate: mrpRate,
+            mrpRate,
+            discountPercent: 0,
+          },
+        ],
+      };
+    });
+
     setSearchTerm("");
+    focusSearchInput();
+  };
+
+  const handleBarcodeSubmit = (value) => {
+    const scanValue = String(value || "").trim();
+    if (!scanValue) return false;
+
+    const exactItem = findItemByScanValue(scanValue);
+    if (exactItem) {
+      addItemById(exactItem._id);
+      return true;
+    }
+
+    const singleFilteredItem =
+      filteredItems.length === 1 ? filteredItems[0] : null;
+
+    if (singleFilteredItem) {
+      addItemById(singleFilteredItem._id);
+      return true;
+    }
+
+    setSearchTerm(scanValue);
+    focusSearchInput();
+    return false;
   };
 
   const addRow = () => {
-    setForm((current) => ({ ...current, rows: [...current.rows, emptyRow] }));
+    focusSearchInput();
   };
 
   const updateRow = (index, field, value) => {
     setForm((current) => {
       const nextRows = [...current.rows];
       const row = { ...nextRows[index], [field]: value };
-      if (field === "itemId") {
-        const item = items.find((entry) => entry._id === value);
-        const mrpRate = resolveItemRateByDate(item, mrpPriceLevelId, current.date);
-        row.rate = mrpRate;
-        row.mrpRate = mrpRate;
-      }
       nextRows[index] = row;
       return { ...current, rows: nextRows };
     });
@@ -239,11 +324,14 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
   const removeRow = (index) => {
     setForm((current) => ({
       ...current,
-      rows: current.rows.length === 1 ? [emptyRow] : current.rows.filter((_, idx) => idx !== index),
+      rows: current.rows.filter((_, idx) => idx !== index),
     }));
+    focusSearchInput();
   };
 
-  const validRows = form.rows.filter((row) => row.itemId && Number(row.qty) > 0);
+  const validRows = form.rows.filter(
+    (row) => row.itemId && Number(row.qty) > 0,
+  );
   const subtotal = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
   const rowDiscountTotal = validRows.reduce((sum, row) => {
     const gross = Number(row.qty || 0) * Number(row.rate || 0);
@@ -257,15 +345,130 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     Number(form.redeemPoints || 0),
     Number(selectedCustomer?.rewardPoints || 0),
   );
-  const totalAmount = Math.max(0, Number((subtotal - invoiceDiscount - redeemPoints).toFixed(2)));
-  const totalItems = validRows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const totalAmount = Math.max(
+    0,
+    Number((subtotal - invoiceDiscount - redeemPoints).toFixed(2)),
+  );
+  const totalItems = validRows.reduce(
+    (sum, row) => sum + Number(row.qty || 0),
+    0,
+  );
   const rewardToEarn = validRows.reduce(
-    (sum, row) => sum + Number(row.mrpRate || row.rate || 0) * Number(row.qty || 0),
+    (sum, row) =>
+      sum + Number(row.mrpRate || row.rate || 0) * Number(row.qty || 0),
     0,
   );
   const cardPayment = Number(form.cardPayment || 0);
   const cashPayment = Number(form.cashPayment || 0);
-  const changeAmount = Math.max(0, Number(form.cashTendered || 0) - cashPayment);
+  const changeAmount = Math.max(
+    0,
+    Number(form.cashTendered || 0) - cashPayment,
+  );
+
+  useEffect(() => {
+    const safeCardPayment = Math.min(
+      Math.max(0, Number(form.cardPayment || 0)),
+      totalAmount,
+    );
+    const autoCashPayment = Math.max(
+      0,
+      Number((totalAmount - safeCardPayment).toFixed(2)),
+    );
+    const nextCardPayment = safeCardPayment > 0 ? String(safeCardPayment) : "";
+    const nextCashPayment = String(autoCashPayment);
+
+    if (
+      Number(form.cardPayment || 0) !== safeCardPayment ||
+      String(form.cashPayment) !== nextCashPayment
+    ) {
+      setForm((current) => ({
+        ...current,
+        cardPayment: nextCardPayment,
+        cashPayment: nextCashPayment,
+      }));
+    }
+  }, [totalAmount, form.cardPayment, form.cashPayment]);
+
+  useEffect(() => {
+    const handleGlobalScannerInput = (event) => {
+      if (showSaveConfirm) return;
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+      const activeElement = document.activeElement;
+      const activeTag = activeElement?.tagName?.toLowerCase();
+      const isSearchFocused = activeElement === searchInputRef.current;
+      const isTypingInEditable =
+        activeTag === "input" ||
+        activeTag === "textarea" ||
+        activeTag === "select" ||
+        activeElement?.isContentEditable;
+
+      if (event.key === "Enter") {
+        const bufferedCode = scannerBufferRef.current.trim();
+        scannerBufferRef.current = "";
+
+        if (scannerTimerRef.current) {
+          window.clearTimeout(scannerTimerRef.current);
+          scannerTimerRef.current = null;
+        }
+
+        if (bufferedCode.length >= 4) {
+          event.preventDefault();
+          handleBarcodeSubmit(bufferedCode);
+          return;
+        }
+
+        if (isSearchFocused && searchTerm.trim()) {
+          event.preventDefault();
+          handleBarcodeSubmit(searchTerm);
+          return;
+        }
+
+        return;
+      }
+
+      if (event?.key?.length !== 1) return;
+
+      const now = Date.now();
+      const elapsed = now - scannerLastKeyTimeRef.current;
+      scannerLastKeyTimeRef.current = now;
+
+      if (elapsed > 80) {
+        scannerBufferRef.current = "";
+      }
+
+      scannerBufferRef.current += event.key;
+
+      if (scannerTimerRef.current) {
+        window.clearTimeout(scannerTimerRef.current);
+      }
+
+      scannerTimerRef.current = window.setTimeout(() => {
+        scannerBufferRef.current = "";
+        scannerTimerRef.current = null;
+      }, 120);
+
+      const looksLikeScannerInput =
+        scannerBufferRef.current.length >= 4 && elapsed > 0 && elapsed <= 80;
+
+      if (looksLikeScannerInput && !isSearchFocused) {
+        searchInputRef.current?.focus();
+      }
+
+      if (looksLikeScannerInput && !isSearchFocused && !isTypingInEditable) {
+        setSearchTerm(scannerBufferRef.current);
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalScannerInput, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleGlobalScannerInput, true);
+      if (scannerTimerRef.current) {
+        window.clearTimeout(scannerTimerRef.current);
+      }
+    };
+  }, [filteredItems, items, searchTerm, showSaveConfirm]);
 
   const applyCustomer = (customer) => {
     setForm((current) => ({
@@ -275,6 +478,7 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
       address: customer.address || "",
     }));
     setShowCustomerSuggestions(false);
+    focusSearchInput();
   };
 
   const resetForm = (nextNumber = suggestedNumber) => {
@@ -289,25 +493,31 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
       discountValue: "",
       redeemPoints: "",
       cardPayment: "",
-      cashPayment: "",
+      cashPayment: "0",
       cashTendered: "",
-      rows: [emptyRow],
+      rows: [],
     });
     setCustomerSuggestions([]);
     setShowCustomerSuggestions(false);
     setSearchTerm("");
+    focusSearchInput();
   };
 
   const submit = async (options = {}) => {
     if (!voucherTypeId) return alert("POS Voucher type is missing");
     if (!form.customerName.trim()) return alert("Customer name is required");
-    if (form.phone.replace(/\D/g, "").length < 6) return alert("Valid phone number is required");
+    if (form.phone.replace(/\D/g, "").length < 6)
+      return alert("Valid phone number is required");
     if (validRows.length === 0) return alert("Please add at least one item");
-    if (Number((cardPayment + cashPayment).toFixed(2)) !== Number(totalAmount.toFixed(2))) {
+    if (
+      Number((cardPayment + cashPayment).toFixed(2)) !==
+      Number(totalAmount.toFixed(2))
+    ) {
       return alert("Cash payment + card payment must match total payable");
     }
 
-    const primaryBankLedgerId = defaults.bankLedger?._id || defaults.bankLedgers?.[0]?._id || "";
+    const primaryBankLedgerId =
+      defaults.bankLedger?._id || defaults.bankLedgers?.[0]?._id || "";
     const payload = {
       voucherTypeId,
       voucherName: "POS Voucher",
@@ -321,12 +531,22 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
       },
       lines: [
         ...(cashPayment > 0 && defaults.cashLedger?._id
-          ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
+          ? [
+              {
+                ledgerId: defaults.cashLedger._id,
+                debit: cashPayment,
+                credit: 0,
+              },
+            ]
           : []),
         ...(cardPayment > 0 && primaryBankLedgerId
           ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
           : []),
-        { ledgerId: defaults.salesLedger?._id || "", debit: 0, credit: totalAmount },
+        {
+          ledgerId: defaults.salesLedger?._id || "",
+          debit: 0,
+          credit: totalAmount,
+        },
       ],
       inventoryLines: validRows.map((row) => {
         const item = items.find((entry) => entry._id === row.itemId);
@@ -368,7 +588,10 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     };
 
     if (isEditMode) {
-      await api.put(`/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`, payload);
+      await api.put(
+        `/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`,
+        payload,
+      );
     } else {
       await api.post(`/companies/${effectiveCompanyId}/pos-vouchers`, {
         voucherTypeId,
@@ -408,12 +631,58 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
     if (options.printAfterSave) {
       await options.printVoucher?.();
     } else {
-      alert(isEditMode ? "POS voucher updated successfully" : "POS voucher completed successfully");
+      alert(
+        isEditMode
+          ? "POS voucher updated successfully"
+          : "POS voucher completed successfully",
+      );
     }
     if (!isEditMode) {
       const nextNumber = await refreshSuggestedNumber();
       resetForm(nextNumber);
     }
+  };
+
+  const handleEnterNavigation = (event) => {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey
+    )
+      return;
+    if (showSaveConfirm) return;
+
+    const target = event.target;
+    const tagName = target.tagName?.toLowerCase();
+
+    if (tagName === "button") return;
+
+    if (target === searchInputRef.current) {
+      event.preventDefault();
+      handleBarcodeSubmit(searchTerm);
+      return;
+    }
+
+    event.preventDefault();
+
+    const fields = Array.from(
+      containerRef.current?.querySelectorAll(
+        "[data-vnav='true'], [data-voucher-date='true']",
+      ) || [],
+    ).filter((field) => {
+      const isDisabled =
+        field.disabled || field.getAttribute("aria-disabled") === "true";
+      const isHidden = field.type === "hidden" || field.offsetParent === null;
+      return !isDisabled && !isHidden;
+    });
+
+    const currentIndex = fields.indexOf(target);
+    const nextField = fields[currentIndex + 1] || fields[0];
+
+    nextField?.focus();
+    nextField?.select?.();
   };
 
   useVoucherShortcuts({
@@ -424,7 +693,11 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
   });
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
+    <div
+      ref={containerRef}
+      onKeyDownCapture={handleEnterNavigation}
+      className="min-h-screen bg-slate-100 p-6"
+    >
       <div className="mx-auto max-w-[1500px] space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -433,29 +706,44 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
                 <ShoppingCart className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">POS Sales Voucher</h1>
+                <h1 className="text-3xl font-bold text-slate-900">
+                  POS Sales Voucher
+                </h1>
                 <p className="mt-2 text-sm text-slate-500">
-                  Fast checkout with customer lookup, rewards, redemption, and POS-style payment capture.
+                  Fast checkout with customer lookup, rewards, redemption, and
+                  barcode scanner billing.
                 </p>
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Voucher No.
+                </label>
                 <input
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  data-vnav="true"
+                  className={inputClass}
                   value={form.number}
-                  onChange={(event) => setForm((current) => ({ ...current, number: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      number: event.target.value,
+                    }))
+                  }
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher Date</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Voucher Date
+                </label>
                 <TallyDateInput
                   data-voucher-date="true"
                   data-vnav="true"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  className={inputClass}
                   value={form.date}
-                  onChange={(value) => setForm((current) => ({ ...current, date: value }))}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, date: value }))
+                  }
                 />
               </div>
             </div>
@@ -465,26 +753,29 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-6">
             <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <h2 className="text-xl font-bold text-slate-900">Customer Details</h2>
+              <h2 className="text-xl font-bold text-slate-900">
+                Customer Details
+              </h2>
+
               <div className="mt-5 grid gap-4 lg:grid-cols-4">
-                <div className="lg:col-span-2">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Customer Name</label>
-                  <input
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                    value={form.customerName}
-                    onChange={(event) => setForm((current) => ({ ...current, customerName: event.target.value }))}
-                  />
-                </div>
                 <div className="relative">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Mobile Number</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Mobile Number
+                  </label>
                   <div className="relative">
                     <input
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-11 text-sm"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 pr-11 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={form.phone}
                       onFocus={() => setShowCustomerSuggestions(true)}
-                      onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          phone: event.target.value,
+                        }))
+                      }
                     />
-                    <UserRoundSearch className="absolute right-3 top-3.5 h-4 w-4 text-blue-600" />
+                    <UserRoundSearch className="absolute right-3 top-2.5 h-4 w-4 text-blue-600" />
                   </div>
                   {showCustomerSuggestions && customerSuggestions.length > 0 ? (
                     <div className="absolute z-30 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
@@ -496,29 +787,65 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
                           onClick={() => applyCustomer(customer)}
                         >
                           <div>
-                            <p className="font-medium text-slate-900">{customer.name}</p>
-                            <p className="text-xs text-slate-500">{customer.phone}</p>
+                            <p className="font-medium text-slate-900">
+                              {customer.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {customer.phone}
+                            </p>
                           </div>
                           <p className="text-xs text-emerald-600">
-                            {Number(customer.rewardPoints || 0).toLocaleString("en-IN")} pts
+                            {Number(customer.rewardPoints || 0).toLocaleString(
+                              "en-IN",
+                            )}{" "}
+                            pts
                           </p>
                         </button>
                       ))}
                     </div>
                   ) : null}
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="text-sm font-medium text-slate-500">Available Reward Points</p>
+                <div className="lg:col-span-2">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Customer Name
+                  </label>
+                  <input
+                    data-vnav="true"
+                    className={inputClass}
+                    value={form.customerName}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        customerName: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+                  <p className="text-sm font-medium text-emerald-700">
+                    Available Reward Points
+                  </p>
                   <p className="mt-2 text-2xl font-bold text-emerald-700">
-                    {Number(selectedCustomer?.rewardPoints || 0).toLocaleString("en-IN")}
+                    {Number(selectedCustomer?.rewardPoints || 0).toLocaleString(
+                      "en-IN",
+                    )}
                   </p>
                 </div>
                 <div className="lg:col-span-4">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Address (Optional)</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Address (Optional)
+                  </label>
                   <input
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                    data-vnav="true"
+                    className={inputClass}
                     value={form.address}
-                    onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        address: event.target.value,
+                      }))
+                    }
                   />
                 </div>
               </div>
@@ -527,12 +854,23 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
             <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
               <div className="flex flex-col gap-4 lg:flex-row">
                 <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <input
-                    className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 text-sm"
+                    ref={searchInputRef}
+                    data-vnav="true"
+                    data-barcode-search="true"
+                    className="w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-10 pr-4 text-[14px] outline-none focus:border-[#3f83f8]"
                     placeholder="Scan barcode or search item by name / code"
                     value={searchTerm}
+                    onFocus={() => {
+                      scannerBufferRef.current = "";
+                    }}
                     onChange={(event) => setSearchTerm(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      handleBarcodeSubmit(searchTerm);
+                    }}
                   />
                   {searchTerm && filteredItems.length > 0 ? (
                     <div className="absolute z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
@@ -544,8 +882,12 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
                           onClick={() => addItemById(item._id)}
                         >
                           <div>
-                            <p className="font-medium text-slate-900">{item.name}</p>
-                            <p className="text-xs text-slate-500">{item.barcode || item.alias || "-"}</p>
+                            <p className="font-medium text-slate-900">
+                              {item.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {item.barcode || item.alias || "-"}
+                            </p>
                           </div>
                           <span className="text-xs text-emerald-600">Add</span>
                         </button>
@@ -555,15 +897,15 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
                 </div>
                 <button
                   type="button"
-                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-                  onClick={() => setForm((current) => ({ ...current, rows: [...current.rows, emptyRow] }))}
+                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  onClick={focusSearchInput}
                 >
-                  + Add Item
+                  Focus Scanner
                 </button>
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-                <table className="min-w-full text-sm">
+              <div className="mt-5 overflow-visible rounded-2xl border border-slate-200">
+                <table className="min-w-full text-sm table-head">
                   <thead className="bg-slate-50 text-left text-slate-500">
                     <tr>
                       <th className="px-4 py-3 font-medium">#</th>
@@ -572,70 +914,91 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
                       <th className="px-4 py-3 font-medium">Qty</th>
                       <th className="px-4 py-3 font-medium">Rate</th>
                       <th className="px-4 py-3 font-medium">Disc %</th>
-                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                      <th className="px-4 py-3 text-right font-medium">
+                        Amount
+                      </th>
                       <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {form.rows.map((row, index) => {
-                      const item = items.find((entry) => entry._id === row.itemId);
-                      return (
-                        <tr key={index} className="border-t border-slate-100">
-                          <td className="px-4 py-3 text-slate-500">{index + 1}</td>
-                          <td className="px-4 py-3">
-                            <select
-                              className="w-full rounded-xl border border-slate-200 px-3 py-3"
-                              value={row.itemId}
-                              onChange={(event) => updateRow(index, "itemId", event.target.value)}
-                            >
-                              <option value="">Select item</option>
-                              {items.map((entry) => (
-                                <option key={entry._id} value={entry._id}>
-                                  {entry.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">{item?.barcode || item?.alias || "-"}</td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              className="w-full rounded-xl border border-slate-200 px-3 py-3"
-                              value={row.qty}
-                              onChange={(event) => updateRow(index, "qty", event.target.value)}
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              className="w-full rounded-xl border border-slate-200 px-3 py-3"
-                              value={row.rate}
-                              onChange={(event) => updateRow(index, "rate", event.target.value)}
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              className="w-full rounded-xl border border-slate-200 px-3 py-3"
-                              value={row.discountPercent}
-                              onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                            {formatMoney(lineAmount(row), currency.symbol)}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              className="rounded-lg border border-rose-200 p-2 text-rose-500 hover:bg-rose-50"
-                              onClick={() => removeRow(index)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {form?.rows?.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-4 py-10 text-center text-sm text-slate-500"
+                        >
+                          Scan barcode or search item above to add products.
+                        </td>
+                      </tr>
+                    ) : (
+                      form.rows.map((row, index) => {
+                        const item = items.find(
+                          (entry) => entry._id === row.itemId,
+                        );
+                        return (
+                          <tr key={index} className="border-t border-slate-100">
+                            <td className="px-4 py-4 align-top text-slate-500">
+                              {index + 1}
+                            </td>
+                            <td className="px-4 py-4 align-top font-medium text-slate-900">
+                              {item?.name || "-"}
+                            </td>
+                            <td className="px-4 py-4 align-top text-slate-600">
+                              {item?.barcode || item?.alias || "-"}
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <input
+                                type="number"
+                                data-vnav="true"
+                                className={numberInputClass}
+                                value={row.qty}
+                                onChange={(event) =>
+                                  updateRow(index, "qty", event.target.value)
+                                }
+                              />
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <input
+                                type="number"
+                                data-vnav="true"
+                                className={numberInputClass}
+                                value={row.rate}
+                                onChange={(event) =>
+                                  updateRow(index, "rate", event.target.value)
+                                }
+                              />
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <input
+                                type="number"
+                                data-vnav="true"
+                                className={numberInputClass}
+                                value={row.discountPercent}
+                                onChange={(event) =>
+                                  updateRow(
+                                    index,
+                                    "discountPercent",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </td>
+                            <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
+                              {formatMoney(lineAmount(row), currency.symbol)}
+                            </td>
+                            <td className="px-4 py-4 align-top text-right">
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                                onClick={() => removeRow(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -644,50 +1007,88 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Discount Type</label>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">
+                        Discount Type
+                      </label>
                       <select
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                        data-vnav="true"
+                        className={inputClass}
                         value={form.discountType}
-                        onChange={(event) => setForm((current) => ({ ...current, discountType: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            discountType: event.target.value,
+                          }))
+                        }
                       >
                         <option value="fixed">Fixed</option>
                         <option value="percentage">Percentage</option>
                       </select>
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Discount Value</label>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">
+                        Discount Value
+                      </label>
                       <input
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                        data-vnav="true"
+                        className={numberInputClass}
                         value={form.discountValue}
-                        onChange={(event) => setForm((current) => ({ ...current, discountValue: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            discountValue: event.target.value,
+                          }))
+                        }
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Redeem Points</label>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">
+                        Redeem Points
+                      </label>
                       <input
                         type="number"
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                        data-vnav="true"
+                        className={numberInputClass}
                         value={form.redeemPoints}
-                        onChange={(event) => setForm((current) => ({ ...current, redeemPoints: event.target.value }))}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            redeemPoints: event.target.value,
+                          }))
+                        }
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Note (Optional)</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Note (Optional)
+                    </label>
                     <textarea
                       rows={4}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                      data-vnav="true"
+                      className="min-h-28 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={form.note}
-                      onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          note: event.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
 
                 <div className="rounded-3xl border border-blue-100 bg-blue-50 px-6 py-6 text-center">
-                  <p className="text-sm font-medium text-blue-700">Total Payable</p>
-                  <p className="mt-3 text-5xl font-bold text-blue-700">{formatMoney(totalAmount, currency.symbol)}</p>
-                  <p className="mt-3 text-sm text-blue-700">{toWords(totalAmount)}</p>
+                  <p className="text-sm font-medium text-blue-700">
+                    Total Payable
+                  </p>
+                  <p className="mt-3 text-5xl font-bold text-blue-700">
+                    {formatMoney(totalAmount, currency.symbol)}
+                  </p>
+                  <p className="mt-3 text-sm text-blue-700">
+                    {toWords(totalAmount)}
+                  </p>
                 </div>
               </div>
             </section>
@@ -696,7 +1097,9 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => previewVoucherNode(containerRef.current, "POS Sales Voucher")}
+                onClick={() =>
+                  previewVoucherNode(containerRef.current, "POS Sales Voucher")
+                }
               >
                 <Printer className="h-4 w-4" />
                 Print Preview
@@ -721,74 +1124,112 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
           </div>
 
           <aside className="space-y-6">
-            <section data-print-hide="true" className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Amount Summary</h3>
+            <section
+              data-print-hide="true"
+              className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+            >
+              <h3 className="text-lg font-semibold text-slate-900">
+                Amount Summary
+              </h3>
               <div className="mt-4 space-y-4 text-sm">
-                <div className="flex items-center justify-between"><span>Total Items</span><span>{totalItems}</span></div>
-                <div className="flex items-center justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency.symbol)}</span></div>
-                <div className="flex items-center justify-between"><span>Total Discount</span><span>{formatMoney(rowDiscountTotal + invoiceDiscount, currency.symbol)}</span></div>
-                <div className="flex items-center justify-between"><span>Redeemed Points</span><span>{formatMoney(redeemPoints, currency.symbol)}</span></div>
-                <div className="flex items-center justify-between border-t border-slate-200 pt-4 font-semibold text-emerald-600"><span>Total Amount</span><span>{formatMoney(totalAmount, currency.symbol)}</span></div>
-                <div className="flex items-center justify-between"><span>Reward to Earn</span><span>{rewardToEarn.toLocaleString("en-IN")} pts</span></div>
+                <div className="flex items-center justify-between">
+                  <span>Total Items</span>
+                  <span>{totalItems}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Subtotal</span>
+                  <span>{formatMoney(subtotal, currency.symbol)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Total Discount</span>
+                  <span>
+                    {formatMoney(
+                      rowDiscountTotal + invoiceDiscount,
+                      currency.symbol,
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Redeemed Points</span>
+                  <span>{formatMoney(redeemPoints, currency.symbol)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-200 pt-4 font-semibold text-emerald-600">
+                  <span>Total Amount</span>
+                  <span>{formatMoney(totalAmount, currency.symbol)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Reward to Earn</span>
+                  <span>{rewardToEarn.toLocaleString("en-IN")} pts</span>
+                </div>
               </div>
             </section>
 
             <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Payment Details</h3>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Payment Details
+              </h3>
               <div className="mt-4 space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Card Payment (F5)</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Card Payment (F5)
+                  </label>
                   <div className="relative">
-                    <CreditCard className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                    <CreditCard className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <input
                       type="number"
-                      className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 text-right text-sm"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-10 pr-4 text-right text-[14px] outline-none focus:border-[#3f83f8]"
                       value={form.cardPayment}
-                      onChange={(event) => setForm((current) => ({ ...current, cardPayment: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          cardPayment: event.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Cash (F6)</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Cash (Auto)
+                  </label>
                   <input
                     type="number"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-right text-sm"
+                    data-vnav="true"
+                    readOnly
+                    className={`${numberInputClass} cursor-not-allowed text-slate-700`}
                     value={form.cashPayment}
-                    onChange={(event) => setForm((current) => ({ ...current, cashPayment: event.target.value }))}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        cashPayment: event.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Cash Tendered</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Cash Tendered
+                  </label>
                   <input
                     type="number"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-right text-sm"
+                    data-vnav="true"
+                    className={numberInputClass}
                     value={form.cashTendered}
-                    onChange={(event) => setForm((current) => ({ ...current, cashTendered: event.target.value }))}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        cashTendered: event.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="rounded-2xl bg-emerald-50 px-4 py-4">
                   <p className="text-sm font-medium text-emerald-700">Change</p>
-                  <p className="mt-2 text-2xl font-bold text-emerald-700">{formatMoney(changeAmount, currency.symbol)}</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-700">
+                    {formatMoney(changeAmount, currency.symbol)}
+                  </p>
                 </div>
-              </div>
-            </section>
-
-            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Quick Shortcuts</h3>
-              <div className="mt-4 grid gap-3 grid-cols-2">
-                {[
-                  ["F2", "Customer"],
-                  ["F3", "Product"],
-                  ["F4", "Voucher"],
-                  ["F5", "Card"],
-                  ["F6", "Cash"],
-                  ["F7", "Hold Bill"],
-                ].map(([key, label]) => (
-                  <div key={key} className="rounded-xl border border-slate-200 px-3 py-3 text-sm">
-                    <span className="font-semibold text-blue-600">{key}</span>
-                    <span className="ml-2 text-slate-700">{label}</span>
-                  </div>
-                ))}
               </div>
             </section>
           </aside>
@@ -797,7 +1238,10 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
 
       <SaveVoucherModal
         open={showSaveConfirm}
-        onClose={() => setShowSaveConfirm(false)}
+        onClose={() => {
+          setShowSaveConfirm(false);
+          focusSearchInput();
+        }}
         onSave={async () => {
           setShowSaveConfirm(false);
           await submit();
@@ -806,7 +1250,8 @@ export default function PosVoucherPage({ editVoucherId = "", companyIdOverride =
           setShowSaveConfirm(false);
           await submit({
             printAfterSave: true,
-            printVoucher: () => printVoucherNode(containerRef.current, "POS Sales Voucher"),
+            printVoucher: () =>
+              printVoucherNode(containerRef.current, "POS Sales Voucher"),
           });
         }}
         title="Complete POS sale?"
