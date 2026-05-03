@@ -7,8 +7,8 @@ export const voucherShortcuts = [
   { primary: "F8", alternate: "S", label: "Sales", route: "/transactions/accounting/sales" },
   { primary: "F9", alternate: "H", label: "Purchase", route: "/transactions/accounting/purchase" },
   { primary: "F10", alternate: "O", label: "POS Voucher", route: "/transactions/accounting/pos-voucher" },
-  { primary: "F11", alternate: "A", label: "Add Row", action: "addRow" },
-  { primary: "F12", alternate: "V", label: "Save Voucher", action: "saveVoucher" },
+  { primary: "+", alternate: "A", label: "Add Row", action: "addRow" },
+  { primary: "Tab", alternate: "V", label: "Save Voucher", action: "saveVoucher" },
 ];
 
 export const sidebarParentShortcuts = [
