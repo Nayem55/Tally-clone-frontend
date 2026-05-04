@@ -173,7 +173,7 @@ export default function ShortcutReferencePage() {
               {voucherShortcuts.map((shortcut) => (
                 <div
                   key={shortcut.label}
-                  className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 md:grid-cols-[1fr_auto_auto]"
+                  className="grid gap-3 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 md:grid-cols-[1fr_auto_auto]"
                 >
                   <div>
                     <div className="text-sm font-semibold text-slate-900">{shortcut.label}</div>
