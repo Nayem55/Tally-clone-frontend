@@ -125,8 +125,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         salesLedger: String(creditLine?.ledgerId || salesLedgerId || ""),
         priceLevelId: "",
         narration: voucher.narration || "",
-        discountAmount: "",
-        additionalCharges: "",
+        discountAmount: String(voucher.commercialMeta?.invoiceDiscount || ""),
+        additionalCharges: String(voucher.commercialMeta?.additionalCharges || ""),
         rows:
           (voucher.inventoryLines || []).map((line) => ({
             itemId: String(line.itemId || ""),
@@ -379,6 +379,13 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       number: form.number,
       date: form.date,
       narration: form.narration || "Sales Voucher",
+      commercialMeta: {
+        subtotal,
+        lineDiscountTotal: totalDiscount,
+        invoiceDiscount,
+        additionalCharges,
+        totalAmount,
+      },
       lines: [
         { ledgerId: form.partyLedger, debit: totalAmount, credit: 0 },
         { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: totalAmount },

@@ -239,6 +239,13 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       date: form.date,
       narration: form.narration || "Purchase Voucher",
       referenceNo: form.supplierInvoiceNo,
+      commercialMeta: {
+        subtotal: totalAmount,
+        lineDiscountTotal: 0,
+        invoiceDiscount: 0,
+        additionalCharges: 0,
+        totalAmount,
+      },
       lines: [
         { ledgerId: form.purchaseLedger || defaultPurchaseLedgerId, debit: totalAmount, credit: 0 },
         { ledgerId: form.supplierLedger, debit: 0, credit: totalAmount },
