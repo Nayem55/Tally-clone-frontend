@@ -15,7 +15,10 @@ import TallyDateInput from "../Component/TallyDateInput";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
-import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
+import {
+  previewPosInvoiceDocument,
+  printPosInvoiceDocument,
+} from "../utils/printVoucher";
 import { voucherShortcuts } from "../utils/shortcuts";
 import { getCompanyCurrency } from "../utils/currency";
 import { resolveItemRateByDate } from "../utils/pricing";
@@ -47,7 +50,8 @@ export default function PosVoucherPage({
   const { companies, companyId } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
   const companyName =
-    companies.find((entry) => entry._id === effectiveCompanyId)?.name || "";
+    companies.find((entry) => String(entry._id) === String(effectiveCompanyId))
+      ?.name || "";
   const isEditMode = Boolean(editVoucherId);
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
@@ -193,7 +197,7 @@ export default function PosVoucherPage({
   }, [effectiveCompanyId, editVoucherId, items.length]);
 
   const selectedCompany = companies.find(
-    (company) => company._id === effectiveCompanyId,
+    (company) => String(company._id) === String(effectiveCompanyId),
   );
   const currency = getCompanyCurrency(selectedCompany);
   const mrpPriceLevelId =
@@ -364,6 +368,129 @@ export default function PosVoucherPage({
     0,
     Number(form.cashTendered || 0) - cashPayment,
   );
+  const customerLine = [form.customerName, form.phone].filter(Boolean).join(" ");
+  const printData = useMemo(() => {
+    const voucherDate = form.date ? new Date(form.date) : new Date();
+    const formatCompactMoney = (value) =>
+      Number(value || 0).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    const uniformRowDiscount =
+      validRows.length > 0 &&
+      validRows.every(
+        (row) =>
+          Number(row.discountPercent || 0) ===
+          Number(validRows[0]?.discountPercent || 0),
+      )
+        ? Number(validRows[0]?.discountPercent || 0)
+        : 0;
+    const promotionAmount = rowDiscountTotal + invoiceDiscount;
+
+    return {
+      documentTitle: `POS Invoice - ${form.number || "Preview"}`,
+      voucherTitle: "Invoice",
+      companyName:
+        selectedCompany?.mailingName || selectedCompany?.name || "Company",
+      companyLines: [
+        selectedCompany?.formalName &&
+        selectedCompany?.formalName !== selectedCompany?.name
+          ? selectedCompany.formalName
+          : "",
+        selectedCompany?.address || "",
+        [selectedCompany?.city, selectedCompany?.state, selectedCompany?.country]
+          .filter(Boolean)
+          .join(", "),
+        selectedCompany?.mobile
+          ? `Mobile Number: ${selectedCompany.mobile}`
+          : selectedCompany?.telephone
+            ? `Mobile Number: ${selectedCompany.telephone}`
+            : "",
+        selectedCompany?.vatTinNumber
+          ? `BIN NUMBER: ${selectedCompany.vatTinNumber}`
+          : "",
+        "MUSHAK 6.3",
+      ].filter(Boolean),
+      billNo: form.number || "-",
+      timeText:
+        voucherDate.toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }) + " hrs",
+      dateText: form.date
+        ? new Date(form.date).toLocaleDateString("en-GB").replace(/\//g, "-")
+        : "-",
+      userName: "Admin",
+      buyerLine: customerLine || "POS Sales",
+      items: validRows.map((row) => {
+        const item = items.find((entry) => entry._id === row.itemId);
+        return {
+          description: item?.name || "-",
+          qty: String(Number(row.qty || 0)),
+          rate: formatCompactMoney(row.rate),
+          amount: formatCompactMoney(lineAmount(row)),
+        };
+      }),
+      discountLine:
+        promotionAmount > 0
+          ? {
+              label:
+                uniformRowDiscount > 0
+                  ? `Product Promotion ${uniformRowDiscount}% (-)`
+                  : "Product Promotion (-)",
+              value:
+                uniformRowDiscount > 0
+                  ? `${formatCompactMoney(promotionAmount)} (-)${uniformRowDiscount} %`
+                  : formatCompactMoney(promotionAmount),
+            }
+          : null,
+      redeemLine:
+        redeemPoints > 0
+          ? {
+              label: "Reward Redeem (-)",
+              value: formatCompactMoney(redeemPoints),
+            }
+          : null,
+      totalText: formatCompactMoney(totalAmount),
+      totalQtyText: String(totalItems),
+      payments: [
+        ...(cardPayment > 0
+          ? [{ label: "Card :", value: formatCompactMoney(cardPayment) }]
+          : []),
+        { label: "Cash :", value: formatCompactMoney(cashPayment) },
+        {
+          label: "Cash Tendered :",
+          value: formatCompactMoney(form.cashTendered || 0),
+        },
+        { label: "Balance :", value: formatCompactMoney(changeAmount) },
+        { label: "Total Paid", value: formatCompactMoney(totalAmount) },
+      ],
+      customerLine,
+      footerLines: [
+        "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.",
+        `Thank you for shopping at ${selectedCompany?.name || "our store"}. Your business is greatly appreciated.`,
+      ],
+    };
+  }, [
+    selectedCompany,
+    form.number,
+    form.date,
+    form.customerName,
+    form.phone,
+    form.cashTendered,
+    validRows,
+    items,
+    rowDiscountTotal,
+    invoiceDiscount,
+    redeemPoints,
+    totalAmount,
+    totalItems,
+    cardPayment,
+    cashPayment,
+    changeAmount,
+    customerLine,
+  ]);
 
   useEffect(() => {
     const safeCardPayment = Math.min(
@@ -1097,9 +1224,7 @@ export default function PosVoucherPage({
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() =>
-                  previewVoucherNode(containerRef.current, "POS Sales Voucher")
-                }
+                onClick={() => previewPosInvoiceDocument(printData)}
               >
                 <Printer className="h-4 w-4" />
                 Print Preview
@@ -1250,8 +1375,7 @@ export default function PosVoucherPage({
           setShowSaveConfirm(false);
           await submit({
             printAfterSave: true,
-            printVoucher: () =>
-              printVoucherNode(containerRef.current, "POS Sales Voucher"),
+            printVoucher: () => printPosInvoiceDocument(printData),
           });
         }}
         title="Complete POS sale?"

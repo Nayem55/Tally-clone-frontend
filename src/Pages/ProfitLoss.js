@@ -325,6 +325,7 @@ export default function ProfitLoss() {
                         { label: "Opening Stock", value: report.trading?.openingStock },
                         { label: "Add: Purchase Accounts", value: report.trading?.purchases },
                         { label: "Less: Closing Stock", value: -Number(report.trading?.closingStock || 0) },
+                        { label: "COGS: ", value: report.trading?.openingStock+report.trading?.purchases-Number(report.trading?.closingStock || 0) },
                       ]}
                       company={selectedCompany}
                       negative

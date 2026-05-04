@@ -603,6 +603,130 @@ export async function printVoucherDocument(data) {
   return openWindowWithMarkup(buildProfessionalVoucherMarkup(data), true);
 }
 
+function buildPosInvoiceMarkup(data) {
+  const companyName = data.companyName || "Company";
+  const companyLines = (data.companyLines || []).filter(Boolean);
+  const items = data.items || [];
+  const payments = (data.payments || []).filter((row) => row?.label);
+  const footerLines = (data.footerLines || []).filter(Boolean);
+
+  const styles = `
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    body { padding: 24px; }
+    .sheet { width: 88mm; max-width: 100%; margin: 0 auto; background: #fff; border: 1px solid #d1d5db; box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16); }
+    .sheet-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 14px 0; }
+    .sheet-actions button { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; padding: 8px 12px; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .sheet-actions .primary { border-color: #2563eb; background: #2563eb; color: #fff; }
+    .sheet-body { padding: 12px 14px 18px; }
+    .center { text-align: center; }
+    .company-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+    .company-line { font-size: 11px; line-height: 1.45; margin: 0; }
+    .title { text-align: center; font-size: 15px; font-weight: 700; margin: 8px 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .meta-line { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; line-height: 1.55; margin: 0; }
+    .meta-stack { margin-bottom: 8px; }
+    .buyer-line { font-size: 11px; line-height: 1.55; margin: 8px 0; border-top: 1px dashed #111827; border-bottom: 1px dashed #111827; padding: 6px 0; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 8px; }
+    th, td { font-size: 10.5px; padding: 4px 2px; vertical-align: top; word-wrap: break-word; }
+    thead th { border-bottom: 1px solid #111827; border-top: 1px solid #111827; text-align: left; font-weight: 700; }
+    tbody td { border-bottom: 1px dashed #d1d5db; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .sl { width: 18px; }
+    .qty { width: 34px; text-align: right; }
+    .rate { width: 52px; text-align: right; }
+    .amount { width: 60px; text-align: right; }
+    .desc { width: auto; }
+    .summary-block { margin-top: 10px; border-top: 1px solid #111827; border-bottom: 1px solid #111827; padding: 6px 0; }
+    .summary-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 11px; line-height: 1.55; }
+    .summary-line.total { font-size: 13px; font-weight: 700; margin-top: 2px; }
+    .payment-block { margin-top: 8px; font-size: 11px; }
+    .payment-line { display: flex; justify-content: space-between; gap: 10px; line-height: 1.55; }
+    .customer-foot { margin-top: 8px; font-size: 11px; line-height: 1.55; }
+    .footer-text { margin-top: 10px; font-size: 10px; line-height: 1.5; text-align: center; }
+    @media print {
+      html, body { background: #fff; padding: 0; }
+      .sheet { width: auto; max-width: none; border: 0; box-shadow: none; }
+      .sheet-actions { display: none !important; }
+      .sheet-body { padding: 8mm 6mm 10mm; }
+    }
+  `;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${escapeHtml(data.documentTitle || "POS Invoice")}</title>
+        <style>${styles}</style>
+      </head>
+      <body>
+        <div class="sheet">
+          <div class="sheet-actions">
+            <button onclick="window.close()">Close</button>
+            <button class="primary" onclick="window.print()">Print</button>
+          </div>
+          <div class="sheet-body">
+            <div class="center">
+              <div class="company-name">${escapeHtml(companyName)}</div>
+              ${companyLines.map((line) => `<p class="company-line">${escapeHtml(line)}</p>`).join("")}
+            </div>
+            <div class="title">${escapeHtml(data.voucherTitle || "Invoice")}</div>
+            <div class="meta-stack">
+              <div class="meta-line"><span>Bill No. : ${escapeHtml(data.billNo || "-")}</span><span>Time : ${escapeHtml(data.timeText || "-")}</span></div>
+              <div class="meta-line"><span>Date : ${escapeHtml(data.dateText || "-")}</span><span>User : ${escapeHtml(data.userName || "Admin")}</span></div>
+            </div>
+            <div class="buyer-line">Buyer (Bill to) : ${escapeHtml(data.buyerLine || "POS Sales")}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th class="sl">Sl</th>
+                  <th class="desc">Description</th>
+                  <th class="qty">Qty</th>
+                  <th class="rate">Rate</th>
+                  <th class="amount">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((row, index) => `
+                  <tr>
+                    <td class="sl">${index + 1}</td>
+                    <td class="desc">${escapeHtml(row.description || "-")}</td>
+                    <td class="qty">${escapeHtml(row.qty || "-")}</td>
+                    <td class="rate">${escapeHtml(row.rate || "-")}</td>
+                    <td class="amount">${escapeHtml(row.amount || "-")}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+            <div class="summary-block">
+              ${data.discountLine ? `<div class="summary-line"><span>${escapeHtml(data.discountLine.label)}</span><span>${escapeHtml(data.discountLine.value)}</span></div>` : ""}
+              ${data.redeemLine ? `<div class="summary-line"><span>${escapeHtml(data.redeemLine.label)}</span><span>${escapeHtml(data.redeemLine.value)}</span></div>` : ""}
+              <div class="summary-line total">
+                <span>Total Tk</span>
+                <span>${escapeHtml(data.totalText || "-")}${data.totalQtyText ? ` ${escapeHtml(data.totalQtyText)}` : ""}</span>
+              </div>
+            </div>
+            <div class="payment-block">
+              ${payments.map((row) => `<div class="payment-line"><span>${escapeHtml(row.label)}</span><span>${escapeHtml(row.value)}</span></div>`).join("")}
+            </div>
+            ${data.customerLine ? `<div class="customer-foot">${escapeHtml(data.customerLine)}</div>` : ""}
+            <div class="footer-text">
+              ${footerLines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+export async function previewPosInvoiceDocument(data) {
+  return openWindowWithMarkup(buildPosInvoiceMarkup(data), false);
+}
+
+export async function printPosInvoiceDocument(data) {
+  return openWindowWithMarkup(buildPosInvoiceMarkup(data), true);
+}
+
 export async function printVoucherNode(node, title = "Voucher Print") {
   return openPrintableWindow(node, title, true);
 }
