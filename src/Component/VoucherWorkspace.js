@@ -43,6 +43,7 @@ export default function VoucherWorkspace({
   shortcuts = [],
   onPreviewPrint,
   onPrintAfterSave,
+  extraActions = null,
   children,
 }) {
   const Icon = icon;
@@ -148,6 +149,7 @@ export default function VoucherWorkspace({
             </div>
 
             <div data-print-hide="true" className="flex flex-wrap gap-3">
+              {extraActions}
               <button
                 type="button"
                 className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"

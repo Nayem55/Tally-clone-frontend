@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Download,
+  FileSpreadsheet,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -21,11 +28,117 @@ const emptyRow = {
   billedManuallyEdited: false,
 };
 
+const PURCHASE_TEMPLATE_SHEET = "Purchase Voucher";
+const PURCHASE_INSTRUCTION_SHEET = "Instructions";
+const PURCHASE_REFERENCE_SHEET = "Reference Data";
+
+function normalizeText(value = "") {
+  return String(value || "").trim();
+}
+
+function normalizeNameKey(value = "") {
+  return normalizeText(value).toLowerCase();
+}
+
+function normalizeImportedDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatDateForInput(value);
+  }
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      return formatDateForInput(
+        new Date(parsed.y, (parsed.m || 1) - 1, parsed.d || 1),
+      );
+    }
+  }
+  const text = normalizeText(value);
+  if (!text) return formatDateForInput(new Date());
+  const normalized = text.replace(/[./]/g, "-");
+  const ddmmyyyy = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  const directDate = new Date(text);
+  if (!Number.isNaN(directDate.getTime())) {
+    return formatDateForInput(directDate);
+  }
+  return text;
+}
+
+function createEmptyRow() {
+  return { ...emptyRow };
+}
+
+function padRows(rows, minRows = 8) {
+  const nextRows = [...rows];
+  while (nextRows.length < minRows) {
+    nextRows.push(["", "", "", "", ""]);
+  }
+  return nextRows;
+}
+
+function buildPurchasePayload({
+  form,
+  purchaseTypeId,
+  defaultPurchaseLedgerId,
+  itemMap,
+  validRows,
+  totalAmount,
+}) {
+  const inventoryLines = validRows.map((row) => {
+    const item = itemMap.get(row.itemId);
+    return {
+      itemId: item._id,
+      itemName: item.name,
+      qty: Number(row.billedQty || row.actualQty),
+      billedQty: Number(row.billedQty || row.actualQty),
+      rate: Number(row.rate),
+      amount: Number(
+        (
+          Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0)
+        ).toFixed(2),
+      ),
+      productSnapshot: { name: item.name, prices: item.prices },
+    };
+  });
+
+  return {
+    voucherTypeId: purchaseTypeId,
+    voucherName: "Purchase",
+    number: normalizeText(form.number),
+    date: form.date,
+    narration: normalizeText(form.narration) || "Purchase Voucher",
+    referenceNo: normalizeText(form.supplierInvoiceNo),
+    commercialMeta: {
+      subtotal: totalAmount,
+      lineDiscountTotal: 0,
+      invoiceDiscount: 0,
+      additionalCharges: 0,
+      totalAmount,
+    },
+    lines: [
+      {
+        ledgerId: form.purchaseLedger || defaultPurchaseLedgerId,
+        debit: totalAmount,
+        credit: 0,
+      },
+      {
+        ledgerId: form.supplierLedger,
+        debit: 0,
+        credit: totalAmount,
+      },
+    ],
+    inventoryLines,
+  };
+}
+
 export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
+  const fileInputRef = useRef(null);
   const [purchaseTypeId, setPurchaseTypeId] = useState("");
   const [suppliers, setSuppliers] = useState([]);
-  const [purchaseLedgers, setPurchaseLedgers] = useState([]);
   const [allLedgers, setAllLedgers] = useState([]);
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -33,6 +146,8 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [defaultPurchaseLedgerId, setDefaultPurchaseLedgerId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [importBusy, setImportBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -40,7 +155,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     supplierLedger: "",
     purchaseLedger: "",
     narration: "",
-    rows: [emptyRow],
+    rows: [createEmptyRow()],
   });
   const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
     companyId,
@@ -62,19 +177,19 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           defaultsResponse,
           companyResponse,
           balanceResponse,
-          purchaseLedgerResponse,
         ] = await Promise.all([
           api.get(`/companies/${companyId}/voucher-types`),
           api.get(`/companies/${companyId}/ledgers/by-group?names=Sundry Creditors`),
           api.get(`/companies/${companyId}/items`),
           api.get(`/companies/${companyId}/ledgers/defaults`),
           api.get("/companies"),
-          api.get(`/companies/${companyId}/ledgers/with-balances`, { params: { to: form.date } }),
-          api.get(`/companies/${companyId}/ledgers/by-group?names=Purchase Accounts`),
+          api.get(`/companies/${companyId}/ledgers/with-balances`, {
+            params: { to: form.date },
+          }),
         ]);
 
         const purchaseType = voucherResponse.data.find(
-          (row) => row.name.toLowerCase() === "purchase"
+          (row) => row.name.toLowerCase() === "purchase",
         );
         const defaultPurchaseId = defaultsResponse.data.purchaseLedger?._id || "";
         setPurchaseTypeId(purchaseType?._id || "");
@@ -82,11 +197,10 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
         setItems(itemResponse.data);
         setCompanies(companyResponse.data);
         setAllLedgers(balanceResponse.data);
-        setPurchaseLedgers(purchaseLedgerResponse.data);
         setDefaultPurchaseLedgerId(defaultPurchaseId);
         setForm((prev) => ({
           ...prev,
-          purchaseLedger: defaultPurchaseId,
+          purchaseLedger: prev.purchaseLedger || defaultPurchaseId,
         }));
       } catch (error) {
         alert("Failed to load purchase master data");
@@ -110,7 +224,9 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       if (!alive) return;
       setForm({
         number: voucher.number || "",
-        date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
+        date: voucher.date
+          ? String(voucher.date).slice(0, 10)
+          : formatDateForInput(new Date()),
         supplierInvoiceNo: voucher.referenceNo || "",
         supplierLedger: String(creditLine?.ledgerId || ""),
         purchaseLedger: String(debitLine?.ledgerId || defaultPurchaseLedgerId || ""),
@@ -124,7 +240,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             billedManuallyEdited:
               String(line.billedQty || line.qty || 1) !==
               String(line.qty || line.billedQty || 1),
-          })) || [emptyRow],
+          })) || [createEmptyRow()],
       });
     }
 
@@ -142,19 +258,27 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
+  const itemNameMap = useMemo(
+    () => new Map(items.map((item) => [normalizeNameKey(item.name), item])),
+    [items],
+  );
   const ledgerMap = useMemo(
     () => new Map(allLedgers.map((ledger) => [ledger._id, ledger])),
-    [allLedgers]
+    [allLedgers],
+  );
+  const supplierNameMap = useMemo(
+    () => new Map(suppliers.map((ledger) => [normalizeNameKey(ledger.name), ledger])),
+    [suppliers],
   );
   const supplierLedger = ledgerMap.get(form.supplierLedger);
   const purchaseLedger = ledgerMap.get(form.purchaseLedger || defaultPurchaseLedgerId);
   const supplierOptions = useMemo(
     () => suppliers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
-    [suppliers]
+    [suppliers],
   );
   const itemOptions = useMemo(
     () => items.map((item) => ({ value: item._id, label: item.name })),
-    [items]
+    [items],
   );
 
   const lineAmount = (row) =>
@@ -186,7 +310,8 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     });
   };
 
-  const addRow = () => setForm((prev) => ({ ...prev, rows: [...prev.rows, emptyRow] }));
+  const addRow = () =>
+    setForm((prev) => ({ ...prev, rows: [...prev.rows, createEmptyRow()] }));
   const removeRow = (index) =>
     setForm((prev) => ({
       ...prev,
@@ -200,9 +325,14 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       rows: prev.rows.map((row) => recalculateRow(row, value)),
     }));
 
-  const validRows = form.rows.filter((row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0);
+  const validRows = form.rows.filter(
+    (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,
+  );
   const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
-  const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
+  const totalQty = validRows.reduce(
+    (sum, row) => sum + Number(row.billedQty || row.actualQty || 0),
+    0,
+  );
 
   const resetForm = (nextNumber = suggestedNumber) =>
     setForm({
@@ -212,46 +342,10 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       supplierLedger: "",
       purchaseLedger: defaultPurchaseLedgerId,
       narration: "",
-      rows: [emptyRow],
+      rows: [createEmptyRow()],
     });
 
-  const save = async (options = {}) => {
-    if (!form.supplierLedger) return alert("Please select a supplier");
-    if (!form.purchaseLedger && !defaultPurchaseLedgerId) return alert("Purchase ledger is missing");
-    if (validRows.length === 0) return alert("Please add at least one item");
-
-    const inventoryLines = validRows.map((row) => {
-      const item = itemMap.get(row.itemId);
-      return {
-        itemId: item._id,
-        itemName: item.name,
-        qty: Number(row.billedQty || row.actualQty),
-        rate: Number(row.rate),
-        amount: lineAmount(row),
-        productSnapshot: { name: item.name, prices: item.prices },
-      };
-    });
-
-    const payload = {
-      voucherTypeId: purchaseTypeId,
-      voucherName: "Purchase",
-      number: form.number,
-      date: form.date,
-      narration: form.narration || "Purchase Voucher",
-      referenceNo: form.supplierInvoiceNo,
-      commercialMeta: {
-        subtotal: totalAmount,
-        lineDiscountTotal: 0,
-        invoiceDiscount: 0,
-        additionalCharges: 0,
-        totalAmount,
-      },
-      lines: [
-        { ledgerId: form.purchaseLedger || defaultPurchaseLedgerId, debit: totalAmount, credit: 0 },
-        { ledgerId: form.supplierLedger, debit: 0, credit: totalAmount },
-      ],
-      inventoryLines,
-    };
+  async function submitPayload(payload, options = {}) {
     if (isEditMode) {
       await api.put(`/companies/${companyId}/vouchers/${editVoucherId}`, payload);
     } else {
@@ -259,14 +353,300 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     }
     if (options.printAfterSave) {
       await options.printVoucher?.();
-    } else {
+    } else if (!options.silentSuccess) {
       alert(isEditMode ? "Purchase voucher updated" : "Purchase voucher saved");
     }
     if (!isEditMode) {
       const nextNumber = await refreshSuggestedNumber();
       resetForm(nextNumber);
     }
+  }
+
+  const save = async (options = {}) => {
+    if (!form.supplierLedger) return alert("Please select a supplier");
+    if (!form.purchaseLedger && !defaultPurchaseLedgerId) {
+      return alert("Purchase ledger is missing");
+    }
+    if (validRows.length === 0) return alert("Please add at least one item");
+
+    const payload = buildPurchasePayload({
+      form,
+      purchaseTypeId,
+      defaultPurchaseLedgerId,
+      itemMap,
+      validRows,
+      totalAmount,
+    });
+
+    await submitPayload(payload, options);
   };
+
+  function buildTemplateWorkbook() {
+    const workbook = XLSX.utils.book_new();
+
+    const instructionRows = [
+      ["Purchase Voucher Excel Import"],
+      [""],
+      ["How to use"],
+      ["1. Fill only the yellow input cells in the Purchase Voucher sheet."],
+      ["2. Supplier name must exactly match an existing Sundry Creditor ledger."],
+      ["3. Item names must exactly match existing stock item names."],
+      ["4. Billed Qty can be blank; it will follow Actual Qty automatically."],
+      ["5. Rate is required for every item row."],
+      ["6. You can keep Voucher No. blank to use the next automatic number."],
+      ["7. Delete unused item rows before import if you want a cleaner file."],
+    ];
+    const instructionSheet = XLSX.utils.aoa_to_sheet(instructionRows);
+    instructionSheet["!cols"] = [{ wch: 90 }];
+    XLSX.utils.book_append_sheet(workbook, instructionSheet, PURCHASE_INSTRUCTION_SHEET);
+
+    const firstItem = items[0];
+    const itemRows = padRows(
+      [
+        [
+          firstItem?.name || "",
+          1,
+          1,
+          firstItem ? resolveItemRateByDate(firstItem, null, form.date) : "",
+          "",
+        ],
+      ],
+      8,
+    );
+
+    const templateRows = [
+      ["Purchase Voucher Import Template"],
+      [""],
+      ["Field", "Value"],
+      ["Voucher No.", suggestedNumber || ""],
+      ["Voucher Date", form.date],
+      ["Supplier Invoice No.", ""],
+      ["Party A/c Name", ""],
+      ["Narration", "Imported from Excel"],
+      [""],
+      ["Items"],
+      ["Item Name", "Actual Qty", "Billed Qty", "Rate", "Notes"],
+      ...itemRows,
+    ];
+    const templateSheet = XLSX.utils.aoa_to_sheet(templateRows);
+    templateSheet["!cols"] = [
+      { wch: 36 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 28 },
+    ];
+    templateSheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+    XLSX.utils.book_append_sheet(workbook, templateSheet, PURCHASE_TEMPLATE_SHEET);
+
+    const referenceRows = [
+      ["Suppliers", "", "", "Items", "", ""],
+      ["Supplier Name", "Current Balance", "", "Item Name", "Stock Group", "Last Known Rate"],
+      ...Array.from({
+        length: Math.max(suppliers.length, items.length),
+      }).map((_, index) => {
+        const supplier = suppliers[index];
+        const item = items[index];
+        return [
+          supplier?.name || "",
+          supplier
+            ? renderBalance(
+                supplier.currentBalanceAbs,
+                supplier.currentBalanceSide,
+                currency.symbol,
+              )
+            : "",
+          "",
+          item?.name || "",
+          item?.groupName || "",
+          item ? resolveItemRateByDate(item, null, form.date) : "",
+        ];
+      }),
+    ];
+    const referenceSheet = XLSX.utils.aoa_to_sheet(referenceRows);
+    referenceSheet["!cols"] = [
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 4 },
+      { wch: 34 },
+      { wch: 22 },
+      { wch: 18 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, referenceSheet, PURCHASE_REFERENCE_SHEET);
+
+    return workbook;
+  }
+
+  function handleExportTemplate() {
+    const workbook = buildTemplateWorkbook();
+    const companySlug = normalizeNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
+    XLSX.writeFile(workbook, `${companySlug}-purchase-import-template.xlsx`);
+    setStatusMessage({
+      tone: "success",
+      title: "Demo Excel exported",
+      description:
+        "Use the Purchase Voucher sheet, keep the same structure, and then import the filled file back here.",
+    });
+  }
+
+  function parseTemplateSheet(workbook) {
+    const sheet =
+      workbook.Sheets[PURCHASE_TEMPLATE_SHEET] ||
+      workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) {
+      throw new Error("Purchase Voucher sheet not found in the workbook.");
+    }
+
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      blankrows: false,
+      defval: "",
+      raw: true,
+    });
+
+    const valueMap = new Map();
+    rows.forEach((row) => {
+      const key = normalizeText(row[0]);
+      if (key && key !== "Field" && key !== "Items" && key !== "Item Name") {
+        valueMap.set(key, row[1]);
+      }
+    });
+
+    const itemHeaderIndex = rows.findIndex(
+      (row) => normalizeText(row[0]) === "Item Name" && normalizeText(row[1]) === "Actual Qty",
+    );
+    if (itemHeaderIndex === -1) {
+      throw new Error("Item table header is missing from the template.");
+    }
+
+    const importedRows = rows
+      .slice(itemHeaderIndex + 1)
+      .map((row) => ({
+        itemName: normalizeText(row[0]),
+        actualQty: normalizeText(row[1]),
+        billedQty: normalizeText(row[2]),
+        rate: normalizeText(row[3]),
+      }))
+      .filter(
+        (row) => row.itemName || row.actualQty || row.billedQty || row.rate,
+      );
+
+    return {
+      number: valueMap.get("Voucher No.") || "",
+      date: normalizeImportedDate(valueMap.get("Voucher Date")),
+      supplierInvoiceNo: valueMap.get("Supplier Invoice No.") || "",
+      supplierName: valueMap.get("Party A/c Name") || "",
+      narration: valueMap.get("Narration") || "",
+      rows: importedRows,
+    };
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImportBusy(true);
+    setStatusMessage(null);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+      const parsed = parseTemplateSheet(workbook);
+
+      if (!parsed.supplierName) {
+        throw new Error("Party A/c Name is required in the Excel file.");
+      }
+      const supplier = supplierNameMap.get(normalizeNameKey(parsed.supplierName));
+      if (!supplier) {
+        throw new Error(
+          `Supplier "${parsed.supplierName}" was not found. Use an existing Sundry Creditor ledger name exactly as listed in Reference Data.`,
+        );
+      }
+      if (!parsed.rows.length) {
+        throw new Error("At least one item row is required in the Excel file.");
+      }
+
+      const resolvedRows = parsed.rows.map((row, index) => {
+        const item = itemNameMap.get(normalizeNameKey(row.itemName));
+        if (!item) {
+          throw new Error(
+            `Row ${index + 1}: Item "${row.itemName}" was not found. Use an existing item name exactly as listed in Reference Data.`,
+          );
+        }
+        const actualQty = Number(row.actualQty || 0);
+        const billedQty = Number(row.billedQty || row.actualQty || 0);
+        const rate = Number(row.rate || 0);
+        if (!(actualQty > 0)) {
+          throw new Error(`Row ${index + 1}: Actual Qty must be greater than 0.`);
+        }
+        if (!(billedQty > 0)) {
+          throw new Error(`Row ${index + 1}: Billed Qty must be greater than 0.`);
+        }
+        if (!(rate > 0)) {
+          throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
+        }
+        return {
+          itemId: item._id,
+          actualQty: String(actualQty),
+          billedQty: String(billedQty),
+          rate: String(rate),
+          billedManuallyEdited: normalizeText(row.billedQty) !== "",
+        };
+      });
+
+      const nextAutoNumber =
+        normalizeText(parsed.number) || (await refreshSuggestedNumber());
+
+      const importedForm = {
+        number: nextAutoNumber,
+        date: parsed.date,
+        supplierInvoiceNo: parsed.supplierInvoiceNo,
+        supplierLedger: supplier._id,
+        purchaseLedger: defaultPurchaseLedgerId,
+        narration: parsed.narration || "Imported from Excel",
+        rows: resolvedRows,
+      };
+
+      const importedValidRows = resolvedRows.filter(
+        (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,
+      );
+      const importedTotalAmount = importedValidRows.reduce(
+        (sum, row) =>
+          sum +
+          Number(
+            (
+              Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0)
+            ).toFixed(2),
+          ),
+        0,
+      );
+
+      const payload = buildPurchasePayload({
+        form: importedForm,
+        purchaseTypeId,
+        defaultPurchaseLedgerId,
+        itemMap,
+        validRows: importedValidRows,
+        totalAmount: importedTotalAmount,
+      });
+
+      await submitPayload(payload, { silentSuccess: true });
+
+      setStatusMessage({
+        tone: "success",
+        title: "Purchase voucher imported successfully",
+        description: `${payload.number} was created for ${supplier.name} with ${importedValidRows.length} item row(s) totaling ${formatVoucherMoney(importedTotalAmount, currency.symbol)}.`,
+      });
+    } catch (error) {
+      setStatusMessage({
+        tone: "error",
+        title: "Import failed",
+        description: error?.message || "The Excel file could not be imported.",
+      });
+    } finally {
+      setImportBusy(false);
+    }
+  }
 
   if (loading) {
     return <div className="p-10 text-center text-slate-500">Loading purchase voucher...</div>;
@@ -297,7 +677,50 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
-      >
+      extraActions={
+        !isEditMode ? (
+          <>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+              onClick={handleExportTemplate}
+            >
+              <Download className="h-4 w-4" />
+              Export Demo Excel
+            </button>
+            <button
+              type="button"
+              disabled={importBusy}
+              className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4" />
+              {importBusy ? "Importing..." : "Import Excel"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+          </>
+        ) : null
+      }
+    >
+      {statusMessage ? (
+        <section
+          className={`border px-4 py-3 text-sm shadow-sm ${
+            statusMessage.tone === "error"
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          <p className="font-semibold">{statusMessage.title}</p>
+          <p className="mt-1">{statusMessage.description}</p>
+        </section>
+      ) : null}
+
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           <div>
@@ -347,7 +770,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                 ? renderBalance(
                     supplierLedger.currentBalanceAbs,
                     supplierLedger.currentBalanceSide,
-                    currency.symbol
+                    currency.symbol,
                   )
                 : "-"}
             </p>
