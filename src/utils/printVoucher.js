@@ -613,12 +613,12 @@ function buildPosInvoiceMarkup(data) {
   const styles = `
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-    body { padding: 24px; }
+    body { padding: 0 24px 24px; }
     .sheet { width: 88mm; max-width: 100%; margin: 0 auto; background: #fff; border: 1px solid #d1d5db; box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16); }
-    .sheet-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 14px 0; }
+    .sheet-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 0 14px 0; }
     .sheet-actions button { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; padding: 8px 12px; font-size: 11px; font-weight: 700; cursor: pointer; }
     .sheet-actions .primary { border-color: #2563eb; background: #2563eb; color: #fff; }
-    .sheet-body { padding: 12px 14px 18px; }
+    .sheet-body { padding: 6px 14px 18px; }
     .center { text-align: center; }
     .company-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
     .company-line { font-size: 11px; line-height: 1.45; margin: 0; }

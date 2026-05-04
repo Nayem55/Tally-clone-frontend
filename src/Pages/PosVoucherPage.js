@@ -393,10 +393,6 @@ export default function PosVoucherPage({
       companyName:
         selectedCompany?.mailingName || selectedCompany?.name || "Company",
       companyLines: [
-        selectedCompany?.formalName &&
-        selectedCompany?.formalName !== selectedCompany?.name
-          ? selectedCompany.formalName
-          : "",
         selectedCompany?.address || "",
         [selectedCompany?.city, selectedCompany?.state, selectedCompany?.country]
           .filter(Boolean)
