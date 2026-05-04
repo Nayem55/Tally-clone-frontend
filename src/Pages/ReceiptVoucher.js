@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDownCircle, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownCircle, Download, Plus, Trash2, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -11,14 +12,27 @@ import TallyDateInput from "../Component/TallyDateInput";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  exportWorkbookToFile,
+  normalizeExcelNameKey,
+  normalizeExcelText,
+  normalizeImportedExcelDate,
+  padExcelRows,
+  parseFieldValueMap,
+  parseWorksheetRows,
+} from "../utils/voucherExcel";
 
 const emptyRow = { ledgerId: "", amount: "", narration: "" };
+const RECEIPT_TEMPLATE_SHEET = "Receipt Voucher";
 
 export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
+  const fileInputRef = useRef(null);
   const [receiptTypeId, setReceiptTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const companyName =
     companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [form, setForm] = useState({
@@ -96,6 +110,10 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
+  const ledgerNameMap = useMemo(
+    () => new Map(ledgers.map((ledger) => [normalizeExcelNameKey(ledger.name), ledger])),
+    [ledgers]
+  );
   const ledgerOptions = useMemo(
     () =>
       ledgers.map((ledger) => ({
@@ -136,6 +154,122 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
       rows: [emptyRow],
       narration: "",
     });
+  }
+
+  function buildTemplateWorkbook() {
+    const workbook = XLSX.utils.book_new();
+    const rows = [
+      ["Receipt Voucher Import Template"],
+      [""],
+      ["Field", "Value"],
+      ["Voucher No.", suggestedNumber || ""],
+      ["Voucher Date", form.date],
+      ["Receive Into", ""],
+      ["Narration", "Imported from Excel"],
+      [""],
+      ["Rows"],
+      ["Received From (Account)", "Amount", "Narration"],
+      ...padExcelRows([["", "", ""]], 8, () => ["", "", ""]),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet["!cols"] = [{ wch: 34 }, { wch: 14 }, { wch: 28 }];
+    sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
+    XLSX.utils.book_append_sheet(workbook, sheet, RECEIPT_TEMPLATE_SHEET);
+    const refs = [
+      ["Ledger Name", "Group", "Current Balance"],
+      ...ledgers.map((ledger) => [
+        ledger.name,
+        ledger.groupName || ledger.parentGroupName || "",
+        renderBalance(ledger.currentBalanceAbs, ledger.currentBalanceSide, currency.symbol),
+      ]),
+    ];
+    const refSheet = XLSX.utils.aoa_to_sheet(refs);
+    refSheet["!cols"] = [{ wch: 34 }, { wch: 24 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, refSheet, "Reference Data");
+    return workbook;
+  }
+
+  function handleExportTemplate() {
+    const workbook = buildTemplateWorkbook();
+    const companySlug = normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
+    exportWorkbookToFile(workbook, `${companySlug}-receipt-import-template.xlsx`);
+    setStatusMessage({
+      tone: "success",
+      title: "Demo Excel exported",
+      description: "Fill the same structure and import it back to create a receipt voucher.",
+    });
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setStatusMessage(null);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rows = parseWorksheetRows(workbook, RECEIPT_TEMPLATE_SHEET);
+      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Received From (Account)"]);
+      const headerIndex = rows.findIndex(
+        (row) =>
+          normalizeExcelText(row[0]) === "Received From (Account)" &&
+          normalizeExcelText(row[1]) === "Amount"
+      );
+      if (headerIndex === -1) throw new Error("Receipt row table is missing.");
+      const receiveIntoName = normalizeExcelText(fieldMap.get("Receive Into"));
+      if (!receiveIntoName) throw new Error("Receive Into is required in the Excel file.");
+      const receiptLedgerImport = ledgerNameMap.get(normalizeExcelNameKey(receiveIntoName));
+      if (!receiptLedgerImport) throw new Error(`Ledger "${receiveIntoName}" was not found.`);
+      const importedRows = rows
+        .slice(headerIndex + 1)
+        .map((row) => ({
+          ledgerName: normalizeExcelText(row[0]),
+          amount: normalizeExcelText(row[1]),
+          narration: normalizeExcelText(row[2]),
+        }))
+        .filter((row) => row.ledgerName || row.amount || row.narration);
+      if (!importedRows.length) throw new Error("At least one receipt row is required.");
+      const resolvedRows = importedRows.map((row, index) => {
+        const ledger = ledgerNameMap.get(normalizeExcelNameKey(row.ledgerName));
+        if (!ledger) throw new Error(`Row ${index + 1}: Ledger "${row.ledgerName}" was not found.`);
+        const amount = Number(row.amount || 0);
+        if (!(amount > 0)) throw new Error(`Row ${index + 1}: Amount must be greater than 0.`);
+        return { ledgerId: ledger._id, amount, narration: row.narration };
+      });
+      const totalAmountImport = resolvedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const numberImport = normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber());
+      const payload = {
+        voucherTypeId: receiptTypeId,
+        voucherName: "Receipt",
+        number: numberImport,
+        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
+        narration: normalizeExcelText(fieldMap.get("Narration")),
+        lines: [
+          { ledgerId: receiptLedgerImport._id, debit: totalAmountImport, credit: 0 },
+          ...resolvedRows.map((row) => ({
+            ledgerId: row.ledgerId,
+            debit: 0,
+            credit: Number(row.amount),
+          })),
+        ],
+      };
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+      setStatusMessage({
+        tone: "success",
+        title: "Receipt voucher imported successfully",
+        description: `${payload.number} was created with ${resolvedRows.length} receipt row(s) totaling ${formatVoucherMoney(totalAmountImport, currency.symbol)}.`,
+      });
+    } catch (error) {
+      setStatusMessage({
+        tone: "error",
+        title: "Import failed",
+        description: error?.message || "The Excel file could not be imported.",
+      });
+    } finally {
+      setImportBusy(false);
+    }
   }
 
   async function save(options = {}) {
@@ -201,7 +335,28 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      extraActions={
+        !isEditMode ? (
+          <>
+            <button type="button" className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700" onClick={handleExportTemplate}>
+              <Download className="h-4 w-4" />
+              Export Demo Excel
+            </button>
+            <button type="button" disabled={importBusy} className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-4 w-4" />
+              {importBusy ? "Importing..." : "Import Excel"}
+            </button>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportFile} />
+          </>
+        ) : null
+      }
       >
+      {statusMessage ? (
+        <section className={`border px-4 py-3 text-sm shadow-sm ${statusMessage.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+          <p className="font-semibold">{statusMessage.title}</p>
+          <p className="mt-1">{statusMessage.description}</p>
+        </section>
+      ) : null}
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3">
           <div>

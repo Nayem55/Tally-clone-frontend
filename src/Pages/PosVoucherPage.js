@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CreditCard,
+  Download,
   Printer,
   Search,
   ShoppingCart,
   Trash2,
+  Upload,
   UserRoundSearch,
   X,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../api/api";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
 import TallyDateInput from "../Component/TallyDateInput";
@@ -23,6 +26,17 @@ import { voucherShortcuts } from "../utils/shortcuts";
 import { getCompanyCurrency } from "../utils/currency";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  exportWorkbookToFile,
+  normalizeExcelNameKey,
+  normalizeExcelText,
+  normalizeImportedExcelDate,
+  padExcelRows,
+  parseFieldValueMap,
+  parseWorksheetRows,
+} from "../utils/voucherExcel";
+
+const POS_TEMPLATE_SHEET = "POS Voucher";
 
 function formatMoney(value, symbol = "Tk") {
   return `${symbol} ${Number(value || 0).toLocaleString("en-IN", {
@@ -42,6 +56,7 @@ export default function PosVoucherPage({
   companyIdOverride = "",
 }) {
   const containerRef = useRef(null);
+  const fileInputRef = useRef(null);
   const searchInputRef = useRef(null);
   const scannerBufferRef = useRef("");
   const scannerLastKeyTimeRef = useRef(0);
@@ -58,6 +73,8 @@ export default function PosVoucherPage({
   const [priceLevels, setPriceLevels] = useState([]);
   const [defaults, setDefaults] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
@@ -204,6 +221,10 @@ export default function PosVoucherPage({
     priceLevels.find(
       (level) => String(level.code || "").toUpperCase() === "MRP",
     )?._id || "";
+  const itemNameMap = useMemo(
+    () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
+    [items],
+  );
   const selectedCustomer = customerSuggestions.find(
     (customer) => customer.phone === form.phone.replace(/\D/g, ""),
   );
@@ -604,6 +625,201 @@ export default function PosVoucherPage({
     focusSearchInput();
   };
 
+  const buildTemplateWorkbook = () => {
+    const workbook = XLSX.utils.book_new();
+    const rows = [
+      ["POS Voucher Import Template"],
+      [""],
+      ["Field", "Value"],
+      ["Voucher No.", suggestedNumber || ""],
+      ["Voucher Date", form.date],
+      ["Customer Name", ""],
+      ["Customer Phone", ""],
+      ["Customer Address", ""],
+      ["Discount Type", "fixed"],
+      ["Discount Value", "0"],
+      ["Redeem Points", "0"],
+      ["Card Payment", "0"],
+      ["Cash Payment", "0"],
+      ["Cash Tendered", "0"],
+      ["Note", "Imported from Excel"],
+      [""],
+      ["Rows"],
+      ["Item Name", "Qty", "Rate", "Disc %"],
+      ...padExcelRows([["", "", "", ""]], 8, () => ["", "", "", ""]),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet["!cols"] = [{ wch: 34 }, { wch: 12 }, { wch: 14 }, { wch: 12 }];
+    sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+    XLSX.utils.book_append_sheet(workbook, sheet, POS_TEMPLATE_SHEET);
+    const refs = [
+      ["Item Name", "MRP / Current Rate", "Barcode / Alias"],
+      ...items.map((item) => [
+        item.name,
+        resolveItemRateByDate(item, mrpPriceLevelId, form.date),
+        item.barcode || item.alias || "",
+      ]),
+    ];
+    const refSheet = XLSX.utils.aoa_to_sheet(refs);
+    refSheet["!cols"] = [{ wch: 36 }, { wch: 18 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(workbook, refSheet, "Reference Data");
+    return workbook;
+  };
+
+  const handleExportTemplate = () => {
+    const workbook = buildTemplateWorkbook();
+    const companySlug =
+      normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
+    exportWorkbookToFile(workbook, `${companySlug}-pos-voucher-import-template.xlsx`);
+    setStatusMessage({
+      tone: "success",
+      title: "Demo Excel exported",
+      description: "Fill the same structure and import it back to create a POS voucher.",
+    });
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setStatusMessage(null);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rows = parseWorksheetRows(workbook, POS_TEMPLATE_SHEET);
+      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Item Name"]);
+      const headerIndex = rows.findIndex(
+        (row) =>
+          normalizeExcelText(row[0]) === "Item Name" &&
+          normalizeExcelText(row[1]) === "Qty",
+      );
+      if (headerIndex === -1) throw new Error("POS item table is missing.");
+
+      const customerName = normalizeExcelText(fieldMap.get("Customer Name"));
+      const customerPhone = normalizeExcelText(fieldMap.get("Customer Phone"));
+      if (!customerName) throw new Error("Customer Name is required.");
+      if (customerPhone.replace(/\D/g, "").length < 6) {
+        throw new Error("Customer Phone must be a valid number.");
+      }
+
+      const importedRows = rows
+        .slice(headerIndex + 1)
+        .map((row) => ({
+          itemName: normalizeExcelText(row[0]),
+          qty: normalizeExcelText(row[1]),
+          rate: normalizeExcelText(row[2]),
+          discountPercent: normalizeExcelText(row[3]),
+        }))
+        .filter((row) => row.itemName || row.qty || row.rate || row.discountPercent);
+      if (!importedRows.length) throw new Error("At least one POS item row is required.");
+
+      const resolvedRows = importedRows.map((row, index) => {
+        const item = itemNameMap.get(normalizeExcelNameKey(row.itemName));
+        if (!item) throw new Error(`Row ${index + 1}: Item "${row.itemName}" was not found.`);
+        const qty = Number(row.qty || 0);
+        const rate =
+          Number(row.rate || 0) ||
+          Number(resolveItemRateByDate(item, mrpPriceLevelId, form.date) || 0);
+        const discountPercent = Number(row.discountPercent || 0);
+        if (!(qty > 0)) throw new Error(`Row ${index + 1}: Qty must be greater than 0.`);
+        if (!(rate > 0)) throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
+        return {
+          itemId: item._id,
+          qty,
+          rate,
+          mrpRate: Number(resolveItemRateByDate(item, mrpPriceLevelId, form.date) || rate),
+          discountPercent,
+          groupName: item.groupName || "",
+          stockCategoryName: item.stockCategory || "",
+        };
+      });
+
+      const lineAmountImport = (row) => {
+        const gross = Number(row.qty || 0) * Number(row.rate || 0);
+        const discount = gross * (Number(row.discountPercent || 0) / 100);
+        return Number((gross - discount).toFixed(2));
+      };
+      const subtotalImport = resolvedRows.reduce((sum, row) => sum + lineAmountImport(row), 0);
+      const discountType =
+        normalizeExcelText(fieldMap.get("Discount Type")).toLowerCase() === "percentage"
+          ? "percentage"
+          : "fixed";
+      const discountValue = Number(fieldMap.get("Discount Value") || 0);
+      const invoiceDiscountImport =
+        discountType === "percentage"
+          ? subtotalImport * (discountValue / 100)
+          : discountValue;
+      const redeemPointsImport = Number(fieldMap.get("Redeem Points") || 0);
+      const totalAmountImport = Math.max(
+        0,
+        Number((subtotalImport - invoiceDiscountImport - redeemPointsImport).toFixed(2)),
+      );
+      const cardImport = Number(fieldMap.get("Card Payment") || 0);
+      const cashImport =
+        normalizeExcelText(fieldMap.get("Cash Payment")) !== ""
+          ? Number(fieldMap.get("Cash Payment") || 0)
+          : Number((totalAmountImport - cardImport).toFixed(2));
+      const tenderedImport =
+        normalizeExcelText(fieldMap.get("Cash Tendered")) !== ""
+          ? Number(fieldMap.get("Cash Tendered") || 0)
+          : cashImport;
+      if (
+        Number((cardImport + cashImport).toFixed(2)) !== Number(totalAmountImport.toFixed(2))
+      ) {
+        throw new Error("Card Payment + Cash Payment must match the total payable.");
+      }
+
+      const payload = {
+        voucherTypeId,
+        number:
+          normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber()),
+        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
+        narration: normalizeExcelText(fieldMap.get("Note")),
+        customer: {
+          name: customerName,
+          phone: customerPhone,
+          address: normalizeExcelText(fieldMap.get("Customer Address")),
+        },
+        salesLedgerId: defaults.salesLedger?._id || "",
+        discountType,
+        discountValue,
+        redeemedPoints: redeemPointsImport,
+        payments: {
+          card: cardImport,
+          cash: cashImport,
+          cashTendered: tenderedImport,
+        },
+        items: resolvedRows.map((row) => ({
+          itemId: row.itemId,
+          qty: Number(row.qty || 0),
+          rate: Number(row.rate || 0),
+          mrpRate: Number(row.mrpRate || row.rate || 0),
+          discountType: "percent",
+          discountValue: Number(row.discountPercent || 0),
+          groupName: row.groupName,
+          stockCategoryName: row.stockCategoryName,
+        })),
+      };
+
+      await api.post(`/companies/${effectiveCompanyId}/pos-vouchers`, payload);
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+      setStatusMessage({
+        tone: "success",
+        title: "POS voucher imported successfully",
+        description: `${payload.number} was created with ${resolvedRows.length} item row(s).`,
+      });
+    } catch (error) {
+      setStatusMessage({
+        tone: "error",
+        title: "Import failed",
+        description: error?.message || "Unable to import POS voucher from Excel.",
+      });
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const resetForm = (nextNumber = suggestedNumber) => {
     setForm({
       number: nextNumber || "",
@@ -839,6 +1055,34 @@ export default function PosVoucherPage({
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
+              {!isEditMode ? (
+                <div className="md:col-span-2 flex flex-wrap justify-end gap-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                    onClick={handleExportTemplate}
+                  >
+                    <Download className="h-4 w-4" />
+                    Export Demo Excel
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importBusy}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {importBusy ? "Importing..." : "Import Excel"}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={handleImportFile}
+                  />
+                </div>
+              ) : null}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Voucher No.
@@ -872,6 +1116,19 @@ export default function PosVoucherPage({
             </div>
           </div>
         </section>
+
+        {statusMessage ? (
+          <section
+            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${
+              statusMessage.tone === "error"
+                ? "border-rose-200 bg-rose-50 text-rose-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            <p className="font-semibold">{statusMessage.title}</p>
+            <p className="mt-1">{statusMessage.description}</p>
+          </section>
+        ) : null}
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-6">

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, FileText, Plus, Trash2, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -17,6 +18,15 @@ import {
   previewVoucherDocument,
   printVoucherDocument,
 } from "../utils/printVoucher";
+import {
+  exportWorkbookToFile,
+  normalizeExcelNameKey,
+  normalizeExcelText,
+  normalizeImportedExcelDate,
+  padExcelRows,
+  parseFieldValueMap,
+  parseWorksheetRows,
+} from "../utils/voucherExcel";
 
 const emptyRow = {
   itemId: "",
@@ -27,8 +37,13 @@ const emptyRow = {
   billedManuallyEdited: false,
 };
 
+const SALES_TEMPLATE_SHEET = "Sales Voucher";
+const SALES_INSTRUCTION_SHEET = "Instructions";
+const SALES_REFERENCE_SHEET = "Reference Data";
+
 export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
+  const fileInputRef = useRef(null);
   const [salesTypeId, setSalesTypeId] = useState("");
   const [salesLedgerId, setSalesLedgerId] = useState("");
   const [partyLedgers, setPartyLedgers] = useState([]);
@@ -38,6 +53,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const [priceLevels, setPriceLevels] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importBusy, setImportBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const companyName =
     companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [form, setForm] = useState({
@@ -166,7 +183,15 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     [allLedgers]
   );
   const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
+  const itemNameMap = useMemo(
+    () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
+    [items]
+  );
   const partyLedger = ledgerMap.get(form.partyLedger) || partyLedgers.find((row) => row._id === form.partyLedger);
+  const partyNameMap = useMemo(
+    () => new Map(partyLedgers.map((ledger) => [normalizeExcelNameKey(ledger.name), ledger])),
+    [partyLedgers]
+  );
   const activePriceLevelId = form.priceLevelId || partyLedger?.priceLevelId || "";
   const salesLedger = ledgerMap.get(form.salesLedger || salesLedgerId);
   const partyOptions = useMemo(
@@ -355,6 +380,273 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       rows: [emptyRow],
     });
 
+  function buildTemplateWorkbook() {
+    const workbook = XLSX.utils.book_new();
+
+    const instructionRows = [
+      ["Sales Voucher Excel Import"],
+      [""],
+      ["How to use"],
+      ["1. Fill the Sales Voucher sheet only."],
+      ["2. Party A/c Name must exactly match an existing Sundry Debtor ledger."],
+      ["3. Item names must exactly match existing stock items."],
+      ["4. If Billed Qty is blank it will follow Actual Qty."],
+      ["5. Discount % is optional and works item-wise."],
+      ["6. Voucher No. can be blank to use the next automatic number."],
+    ];
+    const instructionSheet = XLSX.utils.aoa_to_sheet(instructionRows);
+    instructionSheet["!cols"] = [{ wch: 90 }];
+    XLSX.utils.book_append_sheet(workbook, instructionSheet, SALES_INSTRUCTION_SHEET);
+
+    const firstItem = items[0];
+    const itemRows = padExcelRows(
+      [[firstItem?.name || "", 1, 1, firstItem ? resolveItemRateByDate(firstItem, activePriceLevelId || null, form.date) : "", "", ""]],
+      8,
+      () => ["", "", "", "", "", ""]
+    );
+
+    const templateRows = [
+      ["Sales Voucher Import Template"],
+      [""],
+      ["Field", "Value"],
+      ["Voucher No.", suggestedNumber || ""],
+      ["Voucher Date", form.date],
+      ["Party A/c Name", ""],
+      ["Price Level", priceLevels.find((level) => String(level._id) === String(activePriceLevelId))?.name || ""],
+      ["Invoice Discount", ""],
+      ["Additional Charges", ""],
+      ["Narration", "Imported from Excel"],
+      [""],
+      ["Items"],
+      ["Item Name", "Actual Qty", "Billed Qty", "Rate", "Disc %", "Notes"],
+      ...itemRows,
+    ];
+    const templateSheet = XLSX.utils.aoa_to_sheet(templateRows);
+    templateSheet["!cols"] = [
+      { wch: 34 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 26 },
+    ];
+    templateSheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+    XLSX.utils.book_append_sheet(workbook, templateSheet, SALES_TEMPLATE_SHEET);
+
+    const referenceRows = [
+      ["Customers", "", "", "Items", "", "", "Price Levels"],
+      ["Customer Name", "Current Balance", "", "Item Name", "Stock Group", "Last Known Rate", "Price Level Name"],
+      ...Array.from({ length: Math.max(partyLedgers.length, items.length, priceLevels.length) }).map((_, index) => {
+        const party = partyLedgers[index];
+        const item = items[index];
+        const level = priceLevels[index];
+        return [
+          party?.name || "",
+          party
+            ? renderBalance(
+                party.currentBalanceAbs,
+                party.currentBalanceSide,
+                currency.symbol
+              )
+            : "",
+          "",
+          item?.name || "",
+          item?.groupName || "",
+          item ? resolveItemRateByDate(item, activePriceLevelId || null, form.date) : "",
+          level?.name || level?.code || "",
+        ];
+      }),
+    ];
+    const referenceSheet = XLSX.utils.aoa_to_sheet(referenceRows);
+    referenceSheet["!cols"] = [
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 4 },
+      { wch: 34 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 22 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, referenceSheet, SALES_REFERENCE_SHEET);
+    return workbook;
+  }
+
+  function handleExportTemplate() {
+    const workbook = buildTemplateWorkbook();
+    const companySlug = normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
+    exportWorkbookToFile(workbook, `${companySlug}-sales-import-template.xlsx`);
+    setStatusMessage({
+      tone: "success",
+      title: "Demo Excel exported",
+      description:
+        "Use the Sales Voucher sheet, keep the same structure, and import the filled file back here.",
+    });
+  }
+
+  function parseTemplate(workbook) {
+    const rows = parseWorksheetRows(workbook, SALES_TEMPLATE_SHEET);
+    const valueMap = parseFieldValueMap(rows, ["Field", "Items", "Item Name"]);
+    const itemHeaderIndex = rows.findIndex(
+      (row) => normalizeExcelText(row[0]) === "Item Name" && normalizeExcelText(row[1]) === "Actual Qty"
+    );
+    if (itemHeaderIndex === -1) {
+      throw new Error("Item table header is missing from the Sales template.");
+    }
+    const importedRows = rows
+      .slice(itemHeaderIndex + 1)
+      .map((row) => ({
+        itemName: normalizeExcelText(row[0]),
+        actualQty: normalizeExcelText(row[1]),
+        billedQty: normalizeExcelText(row[2]),
+        rate: normalizeExcelText(row[3]),
+        discountPercent: normalizeExcelText(row[4]),
+      }))
+      .filter((row) => row.itemName || row.actualQty || row.billedQty || row.rate || row.discountPercent);
+
+    return {
+      number: normalizeExcelText(valueMap.get("Voucher No.")),
+      date: normalizeImportedExcelDate(valueMap.get("Voucher Date")),
+      partyName: normalizeExcelText(valueMap.get("Party A/c Name")),
+      priceLevelName: normalizeExcelText(valueMap.get("Price Level")),
+      invoiceDiscount: normalizeExcelText(valueMap.get("Invoice Discount")),
+      additionalCharges: normalizeExcelText(valueMap.get("Additional Charges")),
+      narration: normalizeExcelText(valueMap.get("Narration")),
+      rows: importedRows,
+    };
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setStatusMessage(null);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const parsed = parseTemplate(workbook);
+      if (!parsed.partyName) {
+        throw new Error("Party A/c Name is required in the Excel file.");
+      }
+      const party = partyNameMap.get(normalizeExcelNameKey(parsed.partyName));
+      if (!party) {
+        throw new Error(`Customer "${parsed.partyName}" was not found. Use an existing Sundry Debtor ledger name exactly as listed in Reference Data.`);
+      }
+      const matchingPriceLevel = priceLevels.find(
+        (level) =>
+          normalizeExcelNameKey(level.name || level.code) ===
+          normalizeExcelNameKey(parsed.priceLevelName)
+      );
+      const importedPriceLevelId = matchingPriceLevel?._id || party.priceLevelId || "";
+      const resolvedRows = parsed.rows.map((row, index) => {
+        const item = itemNameMap.get(normalizeExcelNameKey(row.itemName));
+        if (!item) {
+          throw new Error(`Row ${index + 1}: Item "${row.itemName}" was not found.`);
+        }
+        const actualQty = Number(row.actualQty || 0);
+        const billedQty = Number(row.billedQty || row.actualQty || 0);
+        const rate =
+          Number(row.rate || 0) ||
+          resolveItemRateByDate(item, importedPriceLevelId || null, parsed.date);
+        if (!(actualQty > 0)) throw new Error(`Row ${index + 1}: Actual Qty must be greater than 0.`);
+        if (!(billedQty > 0)) throw new Error(`Row ${index + 1}: Billed Qty must be greater than 0.`);
+        if (!(rate > 0)) throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
+        return {
+          itemId: item._id,
+          actualQty: String(actualQty),
+          billedQty: String(billedQty),
+          rate: Number(rate),
+          discountPercent: String(Number(row.discountPercent || 0) || ""),
+          billedManuallyEdited: normalizeExcelText(row.billedQty) !== "",
+        };
+      });
+      const importedNumber = parsed.number || (await refreshSuggestedNumber());
+      const importedForm = {
+        number: importedNumber,
+        date: parsed.date,
+        partyLedger: party._id,
+        salesLedger: salesLedgerId,
+        priceLevelId: importedPriceLevelId,
+        narration: parsed.narration || "Imported from Excel",
+        discountAmount: String(Number(parsed.invoiceDiscount || 0) || ""),
+        additionalCharges: String(Number(parsed.additionalCharges || 0) || ""),
+        rows: resolvedRows,
+      };
+      const importValidRows = resolvedRows.filter((row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0);
+      const importSubtotal = importValidRows.reduce((sum, row) => {
+        const qty = Number(row.billedQty || row.actualQty || 0);
+        const rate = Number(row.rate || 0);
+        const gross = qty * rate;
+        const discount = (gross * Number(row.discountPercent || 0)) / 100;
+        return sum + Number((gross - discount).toFixed(2));
+      }, 0);
+      const importLineDiscount = importValidRows.reduce((sum, row) => {
+        const qty = Number(row.billedQty || row.actualQty || 0);
+        const rate = Number(row.rate || 0);
+        return sum + (qty * rate * Number(row.discountPercent || 0)) / 100;
+      }, 0);
+      const importInvoiceDiscount = Number(importedForm.discountAmount || 0);
+      const importAdditionalCharges = Number(importedForm.additionalCharges || 0);
+      const importTotal = Number(
+        (importSubtotal - importInvoiceDiscount + importAdditionalCharges).toFixed(2)
+      );
+      const payload = {
+        voucherTypeId: salesTypeId,
+        voucherName: "Sales",
+        number: importedForm.number,
+        date: importedForm.date,
+        narration: importedForm.narration || "Sales Voucher",
+        commercialMeta: {
+          subtotal: importSubtotal,
+          lineDiscountTotal: importLineDiscount,
+          invoiceDiscount: importInvoiceDiscount,
+          additionalCharges: importAdditionalCharges,
+          totalAmount: importTotal,
+        },
+        lines: [
+          { ledgerId: importedForm.partyLedger, debit: importTotal, credit: 0 },
+          { ledgerId: importedForm.salesLedger || salesLedgerId, debit: 0, credit: importTotal },
+        ],
+        inventoryLines: importValidRows.map((row) => {
+          const item = itemMap.get(row.itemId);
+          return {
+            itemId: item._id,
+            itemName: item.name,
+            qty: Number(row.billedQty || row.actualQty),
+            billedQty: Number(row.billedQty || row.actualQty),
+            rate: Number(row.rate),
+            discount: Number(row.discountPercent || 0),
+            amount: Number(
+              (
+                Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0) -
+                (Number(row.billedQty || row.actualQty || 0) *
+                  Number(row.rate || 0) *
+                  Number(row.discountPercent || 0)) /
+                  100
+              ).toFixed(2)
+            ),
+            productSnapshot: { name: item.name, prices: item.prices },
+          };
+        }),
+      };
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+      setStatusMessage({
+        tone: "success",
+        title: "Sales voucher imported successfully",
+        description: `${payload.number} was created for ${party.name} with ${importValidRows.length} item row(s) totaling ${formatVoucherMoney(importTotal, currency.symbol)}.`,
+      });
+    } catch (error) {
+      setStatusMessage({
+        tone: "error",
+        title: "Import failed",
+        description: error?.message || "The Excel file could not be imported.",
+      });
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   const save = async (options = {}) => {
     if (!form.partyLedger) return alert("Please select a party account");
     if (!form.salesLedger && !salesLedgerId) return alert("Sales ledger is missing for this company");
@@ -444,7 +736,49 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       ]}
       onPreviewPrint={() => previewVoucherDocument(printData)}
       onPrintAfterSave={() => printVoucherDocument(printData)}
+      extraActions={
+        !isEditMode ? (
+          <>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+              onClick={handleExportTemplate}
+            >
+              <Download className="h-4 w-4" />
+              Export Demo Excel
+            </button>
+            <button
+              type="button"
+              disabled={importBusy}
+              className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4" />
+              {importBusy ? "Importing..." : "Import Excel"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+          </>
+        ) : null
+      }
       >
+      {statusMessage ? (
+        <section
+          className={`border px-4 py-3 text-sm shadow-sm ${
+            statusMessage.tone === "error"
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          <p className="font-semibold">{statusMessage.title}</p>
+          <p className="mt-1">{statusMessage.description}</p>
+        </section>
+      ) : null}
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           <div>

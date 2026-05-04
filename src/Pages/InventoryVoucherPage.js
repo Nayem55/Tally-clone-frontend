@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, FileText, Trash2 } from "lucide-react";
+import { Calendar, Download, FileText, Trash2, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../api/api";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
 import TallyDateInput from "../Component/TallyDateInput";
@@ -8,6 +9,15 @@ import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
 import { resolveItemRateByDate } from "../utils/pricing";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  exportWorkbookToFile,
+  normalizeExcelNameKey,
+  normalizeExcelText,
+  normalizeImportedExcelDate,
+  padExcelRows,
+  parseFieldValueMap,
+  parseWorksheetRows,
+} from "../utils/voucherExcel";
 
 function getVoucherMode(voucherName) {
   const key = voucherName.toLowerCase();
@@ -22,6 +32,7 @@ export default function InventoryVoucherPage({
   companyIdOverride = "",
 }) {
   const containerRef = useRef(null);
+  const fileInputRef = useRef(null);
   const mode = getVoucherMode(voucherName);
   const { companyId, selectedCompany } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
@@ -31,6 +42,8 @@ export default function InventoryVoucherPage({
   const [items, setItems] = useState([]);
   const [godowns, setGodowns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importBusy, setImportBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [form, setForm] = useState({
     number: "",
@@ -135,6 +148,14 @@ export default function InventoryVoucherPage({
     () => form.rows.filter((row) => row.itemId && Number(row.qty || 0) > 0),
     [form.rows]
   );
+  const itemNameMap = useMemo(
+    () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
+    [items]
+  );
+  const godownNameMap = useMemo(
+    () => new Map(godowns.map((godown) => [normalizeExcelNameKey(godown.name), godown])),
+    [godowns]
+  );
 
   const updateRow = (index, key, value) => {
     setForm((prev) => {
@@ -208,6 +229,144 @@ export default function InventoryVoucherPage({
     });
   }
 
+  function getTemplateSheetName() {
+    return `${voucherName} Voucher`;
+  }
+
+  function buildTemplateWorkbook() {
+    const workbook = XLSX.utils.book_new();
+    const rowHeader =
+      mode === "transfer"
+        ? ["Item Name", "Qty", "Rate", "Godown", "To Godown"]
+        : ["Item Name", "Qty", "Rate", "Godown"];
+    const rows = [
+      [`${voucherName} Import Template`],
+      [""],
+      ["Field", "Value"],
+      ["Voucher No.", suggestedNumber || ""],
+      ["Voucher Date", form.date],
+      ["Narration", `Imported from Excel - ${voucherName}`],
+      [""],
+      ["Rows"],
+      rowHeader,
+      ...padExcelRows([rowHeader.map(() => "")], 8, () => rowHeader.map(() => "")),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet["!cols"] = rowHeader.map(() => ({ wch: 24 }));
+    sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: rowHeader.length - 1 } }];
+    XLSX.utils.book_append_sheet(workbook, sheet, getTemplateSheetName());
+    const refs = [
+      ["Item Name", "Current Rate"],
+      ...items.map((item) => [item.name, resolveItemRateByDate(item, null, form.date)]),
+      [""],
+      ["Godown Name"],
+      ...godowns.map((godown) => [godown.name]),
+    ];
+    const refSheet = XLSX.utils.aoa_to_sheet(refs);
+    refSheet["!cols"] = [{ wch: 34 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, refSheet, "Reference Data");
+    return workbook;
+  }
+
+  function handleExportTemplate() {
+    const workbook = buildTemplateWorkbook();
+    const companySlug = normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
+    const voucherSlug = normalizeExcelNameKey(voucherName).replace(/[^a-z0-9]+/g, "-") || "voucher";
+    exportWorkbookToFile(workbook, `${companySlug}-${voucherSlug}-import-template.xlsx`);
+    setStatusMessage({
+      tone: "success",
+      title: "Demo Excel exported",
+      description: `Fill the same structure and import it back to create a ${voucherName}.`,
+    });
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setStatusMessage(null);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rows = parseWorksheetRows(workbook, getTemplateSheetName());
+      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Item Name"]);
+      const headerIndex = rows.findIndex(
+        (row) =>
+          normalizeExcelText(row[0]) === "Item Name" &&
+          normalizeExcelText(row[1]) === "Qty"
+      );
+      if (headerIndex === -1) throw new Error("Inventory row table is missing.");
+      const importedRows = rows
+        .slice(headerIndex + 1)
+        .map((row) => ({
+          itemName: normalizeExcelText(row[0]),
+          qty: normalizeExcelText(row[1]),
+          rate: normalizeExcelText(row[2]),
+          godownName: normalizeExcelText(row[3]),
+          toGodownName: normalizeExcelText(row[4]),
+        }))
+        .filter((row) => row.itemName || row.qty || row.rate || row.godownName || row.toGodownName);
+      if (!importedRows.length) throw new Error("At least one inventory row is required.");
+      const resolvedRows = importedRows.map((row, index) => {
+        const item = itemNameMap.get(normalizeExcelNameKey(row.itemName));
+        if (!item) throw new Error(`Row ${index + 1}: Item "${row.itemName}" was not found.`);
+        const godown = row.godownName
+          ? godownNameMap.get(normalizeExcelNameKey(row.godownName))
+          : null;
+        if (row.godownName && !godown) {
+          throw new Error(`Row ${index + 1}: Godown "${row.godownName}" was not found.`);
+        }
+        const toGodown = row.toGodownName
+          ? godownNameMap.get(normalizeExcelNameKey(row.toGodownName))
+          : null;
+        if (row.toGodownName && !toGodown) {
+          throw new Error(`Row ${index + 1}: To Godown "${row.toGodownName}" was not found.`);
+        }
+        const qty = Number(row.qty || 0);
+        const rate = Number(row.rate || resolveItemRateByDate(item, null, form.date) || 0);
+        if (!(qty > 0)) throw new Error(`Row ${index + 1}: Qty must be greater than 0.`);
+        if (!(rate >= 0)) throw new Error(`Row ${index + 1}: Rate is invalid.`);
+        return {
+          itemId: item._id,
+          itemName: item.name,
+          qty,
+          rate,
+          amount: Number((qty * rate).toFixed(2)),
+          godownId: godown?._id || "",
+          godownName: godown?.name || "",
+          toGodownId: toGodown?._id || "",
+          toGodownName: toGodown?.name || "",
+        };
+      });
+      const payload = {
+        voucherTypeId,
+        voucherName,
+        number:
+          normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber()),
+        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
+        narration: normalizeExcelText(fieldMap.get("Narration")) || voucherName,
+        lines: [],
+        inventoryLines: resolvedRows,
+      };
+      await api.post(`/companies/${effectiveCompanyId}/vouchers`, payload);
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+      setStatusMessage({
+        tone: "success",
+        title: `${voucherName} imported successfully`,
+        description: `${payload.number} was created with ${resolvedRows.length} inventory row(s).`,
+      });
+    } catch (error) {
+      setStatusMessage({
+        tone: "error",
+        title: "Import failed",
+        description: error?.message || `Unable to import ${voucherName} from Excel.`,
+      });
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   async function save(options = {}) {
     if (!voucherTypeId) return alert("Voucher type is missing");
     if (validRows.length === 0) return alert("Please add at least one stock line");
@@ -278,8 +437,49 @@ export default function InventoryVoucherPage({
                 Maintain inventory movement with item, quantity, rate, and godown details.
               </p>
             </div>
+            {!isEditMode ? (
+              <div className="flex flex-wrap items-start justify-end gap-3">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                  onClick={handleExportTemplate}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Demo Excel
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importBusy}
+                >
+                  <Upload className="h-4 w-4" />
+                  {importBusy ? "Importing..." : "Import Excel"}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleImportFile}
+                />
+              </div>
+            ) : null}
           </div>
         </section>
+
+        {statusMessage ? (
+          <section
+            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${
+              statusMessage.tone === "error"
+                ? "border-rose-200 bg-rose-50 text-rose-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            <p className="font-semibold">{statusMessage.title}</p>
+            <p className="mt-1">{statusMessage.description}</p>
+          </section>
+        ) : null}
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-4 md:grid-cols-3">

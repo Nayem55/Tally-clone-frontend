@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRightLeft, Download, Plus, Trash2, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -11,6 +12,15 @@ import TallyDateInput from "../Component/TallyDateInput";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  exportWorkbookToFile,
+  normalizeExcelNameKey,
+  normalizeExcelText,
+  normalizeImportedExcelDate,
+  padExcelRows,
+  parseFieldValueMap,
+  parseWorksheetRows,
+} from "../utils/voucherExcel";
 
 const emptyRow = {
   creditLedgerId: "",
@@ -18,15 +28,19 @@ const emptyRow = {
   amount: "",
   narration: "",
 };
+const CONTRA_TEMPLATE_SHEET = "Contra Voucher";
 
 const inputClass =
   "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
 
 export default function ContraVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
+  const fileInputRef = useRef(null);
   const [contraTypeId, setContraTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
   const companyName =
     companies.find((entry) => String(entry._id) === String(companyId))?.name || "";
   const [form, setForm] = useState({
@@ -124,6 +138,10 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
       })),
     [ledgers]
   );
+  const ledgerNameMap = useMemo(
+    () => new Map(ledgers.map((ledger) => [normalizeExcelNameKey(ledger.name), ledger])),
+    [ledgers]
+  );
 
   const validRows = form.rows.filter(
     (row) => row.creditLedgerId && row.debitLedgerId && Number(row.amount) > 0
@@ -157,6 +175,127 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
       rows: [emptyRow],
       narration: "",
     });
+  }
+
+  function buildTemplateWorkbook() {
+    const workbook = XLSX.utils.book_new();
+    const rows = [
+      ["Contra Voucher Import Template"],
+      [""],
+      ["Field", "Value"],
+      ["Voucher No.", suggestedNumber || ""],
+      ["Voucher Date", form.date],
+      ["Narration", "Imported from Excel"],
+      [""],
+      ["Rows"],
+      ["Account (Credit)", "Contra Account (Debit)", "Amount", "Narration"],
+      ...padExcelRows([["", "", "", ""]], 8, () => ["", "", "", ""]),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet["!cols"] = [{ wch: 30 }, { wch: 30 }, { wch: 14 }, { wch: 28 }];
+    sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+    XLSX.utils.book_append_sheet(workbook, sheet, CONTRA_TEMPLATE_SHEET);
+    const refs = [
+      ["Ledger Name", "Group", "Current Balance"],
+      ...ledgers.map((ledger) => [
+        ledger.name,
+        ledger.groupName || ledger.parentGroupName || "",
+        renderBalance(ledger.currentBalanceAbs, ledger.currentBalanceSide, currency.symbol),
+      ]),
+    ];
+    const refSheet = XLSX.utils.aoa_to_sheet(refs);
+    refSheet["!cols"] = [{ wch: 34 }, { wch: 24 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, refSheet, "Reference Data");
+    return workbook;
+  }
+
+  function handleExportTemplate() {
+    const workbook = buildTemplateWorkbook();
+    const companySlug = normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
+    exportWorkbookToFile(workbook, `${companySlug}-contra-import-template.xlsx`);
+    setStatusMessage({
+      tone: "success",
+      title: "Demo Excel exported",
+      description: "Fill the same structure and import it back to create a contra voucher.",
+    });
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setStatusMessage(null);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rows = parseWorksheetRows(workbook, CONTRA_TEMPLATE_SHEET);
+      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Account (Credit)"]);
+      const headerIndex = rows.findIndex(
+        (row) =>
+          normalizeExcelText(row[0]) === "Account (Credit)" &&
+          normalizeExcelText(row[1]) === "Contra Account (Debit)"
+      );
+      if (headerIndex === -1) throw new Error("Contra row table is missing.");
+      const importedRows = rows
+        .slice(headerIndex + 1)
+        .map((row) => ({
+          creditLedgerName: normalizeExcelText(row[0]),
+          debitLedgerName: normalizeExcelText(row[1]),
+          amount: normalizeExcelText(row[2]),
+          narration: normalizeExcelText(row[3]),
+        }))
+        .filter(
+          (row) =>
+            row.creditLedgerName || row.debitLedgerName || row.amount || row.narration
+        );
+      if (!importedRows.length) throw new Error("At least one contra row is required.");
+      const resolvedRows = importedRows.map((row, index) => {
+        const creditLedger = ledgerNameMap.get(normalizeExcelNameKey(row.creditLedgerName));
+        const debitLedger = ledgerNameMap.get(normalizeExcelNameKey(row.debitLedgerName));
+        if (!creditLedger) {
+          throw new Error(`Row ${index + 1}: Credit ledger "${row.creditLedgerName}" was not found.`);
+        }
+        if (!debitLedger) {
+          throw new Error(`Row ${index + 1}: Debit ledger "${row.debitLedgerName}" was not found.`);
+        }
+        const amount = Number(row.amount || 0);
+        if (!(amount > 0)) throw new Error(`Row ${index + 1}: Amount must be greater than 0.`);
+        return {
+          creditLedgerId: creditLedger._id,
+          debitLedgerId: debitLedger._id,
+          amount,
+          narration: row.narration,
+        };
+      });
+      const payload = {
+        voucherTypeId: contraTypeId,
+        voucherName: "Contra",
+        number:
+          normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber()),
+        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
+        narration: normalizeExcelText(fieldMap.get("Narration")),
+        lines: resolvedRows.flatMap((row) => [
+          { ledgerId: row.creditLedgerId, debit: 0, credit: Number(row.amount) },
+          { ledgerId: row.debitLedgerId, debit: Number(row.amount), credit: 0 },
+        ]),
+      };
+      await api.post(`/companies/${companyId}/vouchers`, payload);
+      const nextNumber = await refreshSuggestedNumber();
+      resetForm(nextNumber);
+      setStatusMessage({
+        tone: "success",
+        title: "Contra voucher imported successfully",
+        description: `${payload.number} was created with ${resolvedRows.length} contra row(s).`,
+      });
+    } catch (error) {
+      setStatusMessage({
+        tone: "error",
+        title: "Import failed",
+        description: error?.message || "Unable to import contra voucher from Excel.",
+      });
+    } finally {
+      setImportBusy(false);
+    }
   }
 
   async function save(options = {}) {
@@ -219,7 +358,49 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      extraActions={
+        !isEditMode ? (
+          <>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+              onClick={handleExportTemplate}
+            >
+              <Download className="h-4 w-4" />
+              Export Demo Excel
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importBusy}
+            >
+              <Upload className="h-4 w-4" />
+              {importBusy ? "Importing..." : "Import Excel"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+          </>
+        ) : null
+      }
     >
+      {statusMessage ? (
+        <section
+          className={`border px-4 py-3 text-sm shadow-sm ${
+            statusMessage.tone === "error"
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          <p className="font-semibold">{statusMessage.title}</p>
+          <p className="mt-1">{statusMessage.description}</p>
+        </section>
+      ) : null}
       <VoucherPanel title="Voucher Header">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
