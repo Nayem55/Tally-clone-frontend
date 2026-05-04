@@ -135,6 +135,15 @@ export default function ShortcutReferencePage() {
             subtitle="Press Ctrl with a parent key first. Expand any parent card below to see the matching child shortcuts."
           >
             <div className="space-y-3">
+              <div className="grid items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 md:grid-cols-[1fr_auto]">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Global Search</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Open the centered jump-search modal from anywhere and move directly to any screen.
+                  </div>
+                </div>
+                <KeyPill tone="blue">Ctrl + Shift + L</KeyPill>
+              </div>
               {parentRows.map((shortcut) => {
                 const scopeKey = shortcut.scope || shortcut.label;
                 return (
