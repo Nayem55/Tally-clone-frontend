@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import {
+  buildNameMap,
+  exportMasterWorkbook,
+  normalizeExcelNumber,
+  readWorkbookFromFile,
+  resolveNamedOption,
+  worksheetToObjects,
+} from "../utils/masterExcel";
 
 function getInitialForm(fields) {
   return fields.reduce((accumulator, field) => {
@@ -24,6 +32,9 @@ export default function MasterDataPage({
   const [parentOptions, setParentOptions] = useState([]);
   const initialForm = useMemo(() => getInitialForm(fields), [fields]);
   const [form, setForm] = useState(initialForm);
+  const [status, setStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     async function loadCompanies() {
@@ -67,6 +78,7 @@ export default function MasterDataPage({
       }
       setForm(initialForm);
       await loadRows();
+      setStatus(`${title} saved successfully.`);
     } catch (error) {
       alert(error.response?.data?.message || `Unable to save ${title.toLowerCase()}`);
     }
@@ -86,6 +98,99 @@ export default function MasterDataPage({
   const filteredRows = rows.filter((row) =>
     JSON.stringify(row).toLowerCase().includes(search.trim().toLowerCase())
   );
+
+  function exportDemoExcel() {
+    const headers = fields.map((field) => field.label);
+    const demoRow = Object.fromEntries(
+      fields.map((field) => {
+        if (field.type === "select") {
+          const options = field.options || parentOptions;
+          return [field.label, options[0]?.name || ""];
+        }
+        if (field.type === "number") {
+          return [field.label, 0];
+        }
+        return [field.label, ""];
+      })
+    );
+    const referenceSheets = [];
+    const selectFields = fields.filter((field) => field.type === "select");
+    selectFields.forEach((field) => {
+      const options = field.options || parentOptions;
+      if (!options?.length) return;
+      referenceSheets.push({
+        name: `${field.label} Ref`.slice(0, 31),
+        rows: options.map((option) => ({ Name: option.name })),
+      });
+    });
+    exportMasterWorkbook({
+      sheetName: title.slice(0, 31),
+      filename: `${title.replace(/\s+/g, "_")}_demo.xlsx`,
+      headers,
+      sampleRows: [demoRow],
+      instructions: [
+        `Fill the ${title} sheet and import it back from this screen.`,
+        "Each row creates one master record.",
+        "For select columns, use the exact names from the reference sheets.",
+      ],
+      referenceSheets,
+    });
+  }
+
+  async function importExcelFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !companyId) return;
+
+    setImporting(true);
+    setStatus("");
+    try {
+      const workbook = await readWorkbookFromFile(file);
+      const importedRows = worksheetToObjects(workbook, title.slice(0, 31)).filter((row) =>
+        Object.values(row).some((value) => String(value ?? "").trim() !== "")
+      );
+
+      const optionMaps = new Map();
+      fields
+        .filter((field) => field.type === "select")
+        .forEach((field) => {
+          const options = field.options || parentOptions;
+          optionMaps.set(
+            field.name,
+            buildNameMap(options, [(row) => row.name, (row) => row.code])
+          );
+        });
+
+      for (const row of importedRows) {
+        const payload = {};
+        fields.forEach((field) => {
+          const rawValue = row[field.label] ?? row[field.name] ?? "";
+          if (field.type === "select") {
+            const option = resolveNamedOption(
+              optionMaps.get(field.name) || new Map(),
+              rawValue,
+              field.label
+            );
+            payload[field.name] = option?._id || "";
+            return;
+          }
+          if (field.type === "number") {
+            payload[field.name] = normalizeExcelNumber(rawValue, 0);
+            return;
+          }
+          payload[field.name] = String(rawValue ?? "").trim();
+        });
+        await api.post(`/companies/${companyId}/${endpoint}`, payload);
+      }
+
+      await loadRows();
+      setStatus(`${importedRows.length} ${title.toLowerCase()} row(s) imported successfully.`);
+    } catch (error) {
+      setStatus(error.response?.data?.message || error.message || `Unable to import ${title.toLowerCase()}.`);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -110,9 +215,40 @@ export default function MasterDataPage({
 
         <section className="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
           <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            {status ? (
+              <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                {status}
+              </div>
+            ) : null}
             <h2 className="text-lg font-semibold text-slate-900">
               {form.id ? `Alter ${title}` : `Create ${title}`}
             </h2>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={exportDemoExcel}
+              >
+                <Download className="h-4 w-4" />
+                Export Demo Excel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? "Importing..." : "Import Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={importExcelFile}
+              />
+            </div>
             <div className="mt-5 space-y-4">
               {fields.map((field) => {
                 if (field.type === "select") {

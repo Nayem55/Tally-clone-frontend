@@ -117,14 +117,88 @@ function AppShell() {
                 />
               }
             />
-            <Route path="/masters/create/cost-category" element={Placeholder("Create Cost Category", "Cost category routing is in place so we can add parallel cost allocation next.")} />
-            <Route path="/masters/alter/cost-category" element={Placeholder("Alter Cost Category", "Use this slot for cost category maintenance once cost allocations are enabled.")} />
-            <Route path="/masters/create/cost-centre" element={Placeholder("Create Cost Centre", "Cost centre master routing is prepared for the next implementation step.")} />
-            <Route path="/masters/alter/cost-centre" element={Placeholder("Alter Cost Centre", "Cost centre alteration is scaffolded and ready for business-specific allocation logic.")} />
+            <Route
+              path="/masters/create/cost-category"
+              element={
+                <MasterDataPage
+                  title="Cost Categories"
+                  subtitle="Create cost categories for parallel cost tracking and allocation."
+                  endpoint="cost-categories"
+                  fields={[
+                    { name: "name", label: "Name", placeholder: "Cost category name" },
+                    { name: "alias", label: "Alias", placeholder: "Alias" },
+                    { name: "description", label: "Description", placeholder: "Description" },
+                  ]}
+                />
+              }
+            />
+            <Route
+              path="/masters/alter/cost-category"
+              element={
+                <MasterDataPage
+                  title="Cost Categories"
+                  subtitle="Alter cost categories used for management allocations."
+                  endpoint="cost-categories"
+                  fields={[
+                    { name: "name", label: "Name", placeholder: "Cost category name" },
+                    { name: "alias", label: "Alias", placeholder: "Alias" },
+                    { name: "description", label: "Description", placeholder: "Description" },
+                  ]}
+                />
+              }
+            />
+            <Route
+              path="/masters/create/cost-centre"
+              element={
+                <MasterDataPage
+                  title="Cost Centres"
+                  subtitle="Create cost centres for branch, department, or channel-level tracking."
+                  endpoint="cost-centres"
+                  fields={[
+                    { name: "name", label: "Name", placeholder: "Cost centre name" },
+                    { name: "alias", label: "Alias", placeholder: "Alias" },
+                    { name: "description", label: "Description", placeholder: "Description" },
+                  ]}
+                />
+              }
+            />
+            <Route
+              path="/masters/alter/cost-centre"
+              element={
+                <MasterDataPage
+                  title="Cost Centres"
+                  subtitle="Alter cost centres used for reporting and allocation."
+                  endpoint="cost-centres"
+                  fields={[
+                    { name: "name", label: "Name", placeholder: "Cost centre name" },
+                    { name: "alias", label: "Alias", placeholder: "Alias" },
+                    { name: "description", label: "Description", placeholder: "Description" },
+                  ]}
+                />
+              }
+            />
             <Route path="/masters/create/employee" element={<EmployeeCreationPage mode="create" />} />
             <Route path="/masters/alter/employee" element={<EmployeeCreationPage mode="alter" />} />
-            <Route path="/masters/create/stock-group" element={<CoaStockGroups />} />
-            <Route path="/masters/alter/stock-group" element={<CoaStockGroups />} />
+            <Route
+              path="/masters/create/stock-group"
+              element={
+                <Groups
+                  stockOnly
+                  title="Stock Groups"
+                  subtitle="Create stock groups under Stock-in-Trade for professional inventory classification."
+                />
+              }
+            />
+            <Route
+              path="/masters/alter/stock-group"
+              element={
+                <Groups
+                  stockOnly
+                  title="Stock Groups"
+                  subtitle="Alter stock groups maintained under the stock hierarchy."
+                />
+              }
+            />
             <Route
               path="/masters/create/stock-category"
               element={

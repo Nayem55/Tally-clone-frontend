@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import {
+  exportMasterWorkbook,
+  readWorkbookFromFile,
+  worksheetToObjects,
+} from "../utils/masterExcel";
 
 const defaultForm = {
   id: "",
@@ -18,6 +23,9 @@ export default function VoucherTypesPage({
   const [voucherTypes, setVoucherTypes] = useState([]);
   const [form, setForm] = useState(defaultForm);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     async function loadCompanies() {
@@ -59,6 +67,7 @@ export default function VoucherTypesPage({
       }
       setForm(defaultForm);
       await loadVoucherTypes();
+      setStatus("Voucher type saved successfully.");
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save voucher type");
     }
@@ -81,6 +90,55 @@ export default function VoucherTypesPage({
       `${voucherType.name} ${voucherType.category}`.toLowerCase().includes(query)
     );
   }, [voucherTypes, search]);
+
+  function exportDemoExcel() {
+    exportMasterWorkbook({
+      sheetName: "Voucher Types",
+      filename: "Voucher_Types_demo.xlsx",
+      headers: ["Voucher Type Name", "Category"],
+      sampleRows: [
+        voucherTypes[0]
+          ? {
+              "Voucher Type Name": voucherTypes[0].name,
+              Category: voucherTypes[0].category || "ACCOUNTING",
+            }
+          : { "Voucher Type Name": "", Category: "ACCOUNTING" },
+      ],
+      instructions: [
+        "Fill the Voucher Types sheet and import it back from this screen.",
+        "Category should be ACCOUNTING or INVENTORY.",
+      ],
+    });
+  }
+
+  async function importExcelFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !companyId) return;
+
+    setImporting(true);
+    setStatus("");
+    try {
+      const workbook = await readWorkbookFromFile(file);
+      const rows = worksheetToObjects(workbook, "Voucher Types").filter((row) =>
+        Object.values(row).some((value) => String(value ?? "").trim() !== "")
+      );
+
+      for (const row of rows) {
+        await api.post(`/companies/${companyId}/voucher-types`, {
+          name: String(row["Voucher Type Name"] || "").trim(),
+          category: String(row.Category || "ACCOUNTING").trim().toUpperCase() || "ACCOUNTING",
+        });
+      }
+
+      await loadVoucherTypes();
+      setStatus(`${rows.length} voucher type row(s) imported successfully.`);
+    } catch (error) {
+      setStatus(error.response?.data?.message || error.message || "Unable to import voucher types.");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -105,9 +163,41 @@ export default function VoucherTypesPage({
 
         <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            {status ? (
+              <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                {status}
+              </div>
+            ) : null}
             <h2 className="text-lg font-semibold text-slate-900">
               {form.id ? "Alter Voucher Type" : "Create Voucher Type"}
             </h2>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={exportDemoExcel}
+              >
+                <Download className="h-4 w-4" />
+                Export Demo Excel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? "Importing..." : "Import Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={importExcelFile}
+              />
+            </div>
 
             <div className="mt-5 space-y-4">
               <input

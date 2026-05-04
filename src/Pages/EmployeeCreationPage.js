@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   Check,
+  Download,
   Edit3,
   FilePlus2,
   Landmark,
@@ -16,6 +17,13 @@ import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
+import {
+  exportMasterWorkbook,
+  normalizeExcelNumber,
+  readWorkbookFromFile,
+  toInputDate,
+  worksheetToObjects,
+} from "../utils/masterExcel";
 
 const COMMON_PAY_HEADS = [
   { name: "Basic Salary", section: "Earning" },
@@ -347,6 +355,25 @@ function calculateSalarySummary(employee) {
   };
 }
 
+function getPayHeadRate(payHeads = [], name) {
+  return Number(payHeads.find((head) => head.name === name)?.rate || 0);
+}
+
+function setPayHeadRate(payHeads = [], name, rate) {
+  const normalizedRate = Number(rate || 0);
+  const existingIndex = payHeads.findIndex((head) => head.name === name);
+  if (existingIndex >= 0) {
+    return payHeads.map((head, index) =>
+      index === existingIndex ? { ...head, rate: normalizedRate } : head
+    );
+  }
+  const common = COMMON_PAY_HEADS.find((head) => head.name === name) || {
+    name,
+    section: "Earning",
+  };
+  return [...payHeads, createPayHead(common, normalizedRate)];
+}
+
 function TabButton({ active, onClick, children }) {
   return (
     <button
@@ -551,6 +578,8 @@ function EmployeeCreationPage({ mode = "create" }) {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const fileRefs = useRef({});
+  const masterFileInputRef = useRef(null);
+  const [importingMaster, setImportingMaster] = useState(false);
 
   const currency = getCompanyCurrency(selectedCompany);
   const summary = useMemo(() => calculateSalarySummary(employee), [employee]);
@@ -723,6 +752,202 @@ function EmployeeCreationPage({ mode = "create" }) {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  function exportEmployeeDemoExcel() {
+    const payHeads = employee.salaryDetails?.payHeads || [];
+    exportMasterWorkbook({
+      sheetName: "Employees",
+      filename: "Employees_demo.xlsx",
+      headers: [
+        "Employee Name",
+        "Alias",
+        "Under",
+        "Employee Number",
+        "Date of Joining",
+        "Department",
+        "Designation",
+        "Phone No",
+        "Email",
+        "Employee Type",
+        "Status",
+        "Work Location",
+        "Reporting To",
+        "Job Title",
+        "Bank Account No",
+        "Bank Name",
+        "Branch Name",
+        "NID",
+        "TIN",
+        "Basic Salary",
+        "House Rent Allowance",
+        "Medical Allowance",
+        "Conveyance Allowance",
+        "Provident Fund",
+        "Income Tax",
+        "Professional Tax",
+        "Other Deduction",
+        "Leave Policy",
+      ],
+      sampleRows: [
+        {
+          "Employee Name": employee.name || "",
+          Alias: employee.alias || "",
+          Under: employee.under || UNDER_OPTIONS[0].label,
+          "Employee Number": employee.employeeNumber || "",
+          "Date of Joining": employee.dateOfJoining || formatDateForInput(new Date()),
+          Department:
+            employee.otherDetails.department ||
+            employee.additionalInformation.workDetails.department ||
+            "",
+          Designation:
+            employee.personalDetails.designation ||
+            employee.additionalInformation.workDetails.jobTitle ||
+            "",
+          "Phone No": employee.contactDetails.phoneNumber || "",
+          Email: employee.contactDetails.email || "",
+          "Employee Type": employee.otherDetails.employeeType || FULL_TIME_TYPES[0],
+          Status: employee.otherDetails.status || STATUS_OPTIONS[0],
+          "Work Location": employee.additionalInformation.workDetails.workLocation || "",
+          "Reporting To":
+            employee.otherDetails.reportingTo ||
+            employee.additionalInformation.workDetails.reportingTo ||
+            "",
+          "Job Title": employee.additionalInformation.workDetails.jobTitle || "",
+          "Bank Account No": employee.bankDetails.bankAccountNo || "",
+          "Bank Name": employee.bankDetails.bankName || "",
+          "Branch Name": employee.bankDetails.branchName || "",
+          NID: employee.statutoryDetails.identity.nid || "",
+          TIN: employee.statutoryDetails.identity.tin || "",
+          "Basic Salary": getPayHeadRate(payHeads, "Basic Salary"),
+          "House Rent Allowance": getPayHeadRate(payHeads, "House Rent Allowance"),
+          "Medical Allowance": getPayHeadRate(payHeads, "Medical Allowance"),
+          "Conveyance Allowance": getPayHeadRate(payHeads, "Conveyance Allowance"),
+          "Provident Fund": getPayHeadRate(payHeads, "Provident Fund"),
+          "Income Tax": getPayHeadRate(payHeads, "Income Tax"),
+          "Professional Tax": getPayHeadRate(payHeads, "Professional Tax"),
+          "Other Deduction": getPayHeadRate(payHeads, "Other Deduction"),
+          "Leave Policy": employee.additionalInformation.leaveAttendance.leavePolicy || "",
+        },
+      ],
+      instructions: [
+        "Fill the Employees sheet and import it back from this create screen.",
+        "Each row creates one employee master.",
+        "Any blank field will use the employee defaults already configured in the system.",
+        "Date accepts dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy, or Excel date cells.",
+      ],
+      referenceSheets: [
+        { name: "Under Options", rows: UNDER_OPTIONS.map((row) => ({ Under: row.label, Category: row.category })) },
+        { name: "Departments", rows: DEPARTMENT_OPTIONS.map((row) => ({ Department: row })) },
+        { name: "Employee Types", rows: FULL_TIME_TYPES.map((row) => ({ Type: row })) },
+        { name: "Statuses", rows: STATUS_OPTIONS.map((row) => ({ Status: row })) },
+        { name: "Banks", rows: BANK_OPTIONS.map((row) => ({ Bank: row })) },
+      ],
+    });
+  }
+
+  async function importEmployeeExcel(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !companyId) return;
+
+    setImportingMaster(true);
+    setNotice("");
+    try {
+      const workbook = await readWorkbookFromFile(file);
+      const rows = worksheetToObjects(workbook, "Employees").filter((row) =>
+        Object.values(row).some((value) => String(value ?? "").trim() !== "")
+      );
+
+      for (const row of rows) {
+        let nextEmployee = createEmptyEmployee();
+        const underValue = String(row.Under || "").trim() || nextEmployee.under;
+        const underMatch = UNDER_OPTIONS.find((option) => option.label === underValue);
+        nextEmployee = {
+          ...nextEmployee,
+          name: String(row["Employee Name"] || "").trim(),
+          alias: String(row.Alias || "").trim(),
+          under: underValue,
+          underCategory: underMatch?.category || nextEmployee.underCategory,
+          employeeNumber: String(row["Employee Number"] || "").trim(),
+          dateOfJoining: row["Date of Joining"]
+            ? toInputDate(row["Date of Joining"])
+            : nextEmployee.dateOfJoining,
+          personalDetails: {
+            ...nextEmployee.personalDetails,
+            designation: String(row.Designation || "").trim(),
+          },
+          contactDetails: {
+            ...nextEmployee.contactDetails,
+            phoneNumber: String(row["Phone No"] || row["Phone No."] || "").trim(),
+            email: String(row.Email || "").trim(),
+          },
+          otherDetails: {
+            ...nextEmployee.otherDetails,
+            department: String(row.Department || nextEmployee.otherDetails.department).trim(),
+            employeeType: String(row["Employee Type"] || nextEmployee.otherDetails.employeeType).trim(),
+            status: String(row.Status || nextEmployee.otherDetails.status).trim(),
+            reportingTo: String(row["Reporting To"] || nextEmployee.otherDetails.reportingTo).trim(),
+          },
+          bankDetails: {
+            ...nextEmployee.bankDetails,
+            bankAccountNo: String(row["Bank Account No"] || "").trim(),
+            bankName: String(row["Bank Name"] || nextEmployee.bankDetails.bankName).trim(),
+            branchName: String(row["Branch Name"] || "").trim(),
+          },
+          statutoryDetails: {
+            ...nextEmployee.statutoryDetails,
+            identity: {
+              ...nextEmployee.statutoryDetails.identity,
+              nid: String(row.NID || "").trim(),
+              tin: String(row.TIN || "").trim(),
+            },
+          },
+          additionalInformation: {
+            ...nextEmployee.additionalInformation,
+            workDetails: {
+              ...nextEmployee.additionalInformation.workDetails,
+              workLocation: String(row["Work Location"] || "").trim(),
+              department: String(row.Department || nextEmployee.additionalInformation.workDetails.department).trim(),
+              reportingTo: String(row["Reporting To"] || nextEmployee.additionalInformation.workDetails.reportingTo).trim(),
+              jobTitle: String(row["Job Title"] || row.Designation || "").trim(),
+            },
+            leaveAttendance: {
+              ...nextEmployee.additionalInformation.leaveAttendance,
+              leavePolicy: String(row["Leave Policy"] || nextEmployee.additionalInformation.leaveAttendance.leavePolicy).trim(),
+            },
+          },
+        };
+
+        let payHeads = nextEmployee.salaryDetails.payHeads || [];
+        [
+          "Basic Salary",
+          "House Rent Allowance",
+          "Medical Allowance",
+          "Conveyance Allowance",
+          "Provident Fund",
+          "Income Tax",
+          "Professional Tax",
+          "Other Deduction",
+        ].forEach((headName) => {
+          payHeads = setPayHeadRate(payHeads, headName, normalizeExcelNumber(row[headName], 0));
+        });
+
+        nextEmployee.salaryDetails = {
+          ...nextEmployee.salaryDetails,
+          payHeads,
+        };
+
+        await api.post(`/companies/${companyId}/employees`, nextEmployee);
+      }
+
+      await loadEmployees();
+      setNotice(`${rows.length} employee row(s) imported successfully.`);
+    } catch (error) {
+      setNotice(error.response?.data?.message || error.message || "Unable to import employees.");
+    } finally {
+      setImportingMaster(false);
     }
   }
 
@@ -2227,6 +2452,34 @@ function EmployeeCreationPage({ mode = "create" }) {
           }
           actions={
             <div className="flex flex-wrap gap-3">
+              {!inModal ? (
+                <>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+                    onClick={exportEmployeeDemoExcel}
+                  >
+                    <Download className="h-4 w-4" />
+                    Export Demo Excel
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+                    onClick={() => masterFileInputRef.current?.click()}
+                    disabled={importingMaster}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {importingMaster ? "Importing..." : "Import Excel"}
+                  </button>
+                  <input
+                    ref={masterFileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={importEmployeeExcel}
+                  />
+                </>
+              ) : null}
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"

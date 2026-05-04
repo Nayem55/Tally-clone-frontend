@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ImagePlus, PencilLine, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Download, ImagePlus, PencilLine, Plus, Trash2, Upload } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import {
+  buildNameMap,
+  exportMasterWorkbook,
+  normalizeExcelNumber,
+  readWorkbookFromFile,
+  resolveNamedOption,
+  worksheetToObjects,
+} from "../utils/masterExcel";
 
 const defaultForm = {
   id: "",
@@ -39,6 +47,9 @@ export default function Items() {
   const [godowns, setGodowns] = useState([]);
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(defaultForm);
+  const [status, setStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     async function loadCompanies() {
@@ -102,6 +113,7 @@ export default function Items() {
       }
       setForm(defaultForm);
       await loadData();
+      setStatus("Stock item saved successfully.");
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save stock item");
     }
@@ -129,10 +141,135 @@ export default function Items() {
     }
   }
 
+  function exportDemoExcel() {
+    const sampleItem = items[0];
+    exportMasterWorkbook({
+      sheetName: "Stock Items",
+      filename: "Stock_Items_demo.xlsx",
+      headers: [
+        "Item Name",
+        "Alias / Barcode",
+        "Stock Group",
+        "Stock Category",
+        "Unit",
+        "Godown",
+        "Description",
+        "Notes",
+        "Opening Qty",
+        "Opening Rate",
+        "Narration",
+      ],
+      sampleRows: [
+        sampleItem
+          ? {
+              "Item Name": sampleItem.name,
+              "Alias / Barcode": sampleItem.alias || "",
+              "Stock Group": sampleItem.group?.name || "",
+              "Stock Category":
+                sampleItem.stockCategoryMaster?.name || sampleItem.stockCategory || "",
+              Unit: sampleItem.unitMaster?.name || sampleItem.unitOfMeasure || "",
+              Godown: sampleItem.godownMaster?.name || "",
+              Description: sampleItem.description || "",
+              Notes: sampleItem.notes || "",
+              "Opening Qty": Number(sampleItem.openingQty || 0),
+              "Opening Rate": Number(sampleItem.openingRate || 0),
+              Narration: sampleItem.narration || "",
+            }
+          : {
+              "Item Name": "",
+              "Alias / Barcode": "",
+              "Stock Group": stockGroups[0]?.name || "",
+              "Stock Category": stockCategories[0]?.name || "",
+              Unit: units[0]?.name || "",
+              Godown: godowns[0]?.name || "",
+              Description: "",
+              Notes: "",
+              "Opening Qty": 0,
+              "Opening Rate": 0,
+              Narration: "",
+            },
+      ],
+      instructions: [
+        "Fill the Stock Items sheet and import it back from this screen.",
+        "Each row creates one stock item.",
+        "Use exact Stock Group, Stock Category, Unit, and Godown names from the reference sheets.",
+        "Picture upload is not part of Excel import in this first version.",
+      ],
+      referenceSheets: [
+        { name: "Stock Groups", rows: stockGroups.map((row) => ({ Name: row.name })) },
+        { name: "Stock Categories", rows: stockCategories.map((row) => ({ Name: row.name })) },
+        { name: "Units", rows: units.map((row) => ({ Name: row.name, Symbol: row.symbol || "" })) },
+        { name: "Godowns", rows: godowns.map((row) => ({ Name: row.name })) },
+      ],
+    });
+  }
+
+  async function importExcelFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !companyId) return;
+
+    setImporting(true);
+    setStatus("");
+    try {
+      const workbook = await readWorkbookFromFile(file);
+      const rows = worksheetToObjects(workbook, "Stock Items").filter((row) =>
+        Object.values(row).some((value) => String(value ?? "").trim() !== "")
+      );
+
+      const stockGroupMap = buildNameMap(stockGroups, [(row) => row.name]);
+      const categoryMap = buildNameMap(stockCategories, [(row) => row.name]);
+      const unitMap = buildNameMap(units, [(row) => row.name, (row) => row.symbol]);
+      const godownMap = buildNameMap(godowns, [(row) => row.name, (row) => row.alias]);
+
+      for (const row of rows) {
+        const stockGroup = resolveNamedOption(stockGroupMap, row["Stock Group"], "Stock Group");
+        const stockCategory = row["Stock Category"]
+          ? resolveNamedOption(categoryMap, row["Stock Category"], "Stock Category")
+          : null;
+        const unit = row.Unit ? resolveNamedOption(unitMap, row.Unit, "Unit") : null;
+        const godown = row.Godown ? resolveNamedOption(godownMap, row.Godown, "Godown") : null;
+
+        const openingQty = normalizeExcelNumber(row["Opening Qty"], 0);
+        const openingRate = normalizeExcelNumber(row["Opening Rate"], 0);
+
+        await api.post(`/companies/${companyId}/items`, {
+          name: String(row["Item Name"] || "").trim(),
+          alias: String(row["Alias / Barcode"] || "").trim(),
+          groupId: stockGroup?._id || stockGroup?.id || "",
+          stockCategoryId: stockCategory?._id || "",
+          stockCategory: stockCategory?.name || "",
+          unitId: unit?._id || "",
+          unitOfMeasure: unit?.name || "",
+          godownId: godown?._id || "",
+          description: String(row.Description || "").trim(),
+          notes: String(row.Notes || "").trim(),
+          picture: "",
+          openingQty,
+          openingRate,
+          openingValue: openingQty * openingRate,
+          narration: String(row.Narration || "").trim(),
+        });
+      }
+
+      await loadData();
+      setStatus(`${rows.length} stock item row(s) imported successfully.`);
+    } catch (error) {
+      setStatus(error.response?.data?.message || error.message || "Unable to import stock items.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+          {status ? (
+            <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              {status}
+            </div>
+          ) : null}
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <button className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
@@ -145,6 +282,32 @@ export default function Items() {
               <p className="mt-2 text-sm text-slate-500">
                 Create and alter stock items with barcode aliases, opening quantities, and opening rates.
               </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                  onClick={exportDemoExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Demo Excel
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                >
+                  <Upload className="h-4 w-4" />
+                  {importing ? "Importing..." : "Import Excel"}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={importExcelFile}
+                />
+              </div>
             </div>
             <CompanyPicker
               companies={companies}

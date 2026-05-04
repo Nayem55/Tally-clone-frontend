@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { FolderTree, PencilLine, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, FolderTree, PencilLine, Plus, Trash2, Upload } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import {
+  buildNameMap,
+  exportMasterWorkbook,
+  normalizeExcelBoolean,
+  readWorkbookFromFile,
+  resolveNamedOption,
+  worksheetToObjects,
+} from "../utils/masterExcel";
 
 const defaultForm = {
   id: "",
@@ -11,12 +19,23 @@ const defaultForm = {
   affectsGrossProfit: false,
 };
 
-export default function Groups() {
+function nameKey(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+export default function Groups({
+  stockOnly = false,
+  title = "Groups",
+  subtitle = "Build your chart structure for assets, liabilities, income, expenses, and stock classification.",
+}) {
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     async function loadCompanies() {
@@ -46,15 +65,45 @@ export default function Groups() {
     [groups]
   );
 
+  const visibleGroups = useMemo(() => {
+    if (!stockOnly) return sortedGroups;
+    const allById = new Map(sortedGroups.map((group) => [String(group._id), group]));
+    const primary = sortedGroups.find((group) =>
+      ["stock-in-trade", "stock in trade", "primary"].includes(nameKey(group.name))
+    );
+    if (!primary) return [];
+    const rootId = String(primary._id);
+    const allowed = new Set([rootId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      sortedGroups.forEach((group) => {
+        const parentId = group.parentId ? String(group.parentId) : "";
+        if (parentId && allowed.has(parentId) && !allowed.has(String(group._id))) {
+          allowed.add(String(group._id));
+          changed = true;
+        }
+      });
+    }
+    return sortedGroups.filter((group) => allowed.has(String(group._id)));
+  }, [sortedGroups, stockOnly]);
+
+  const rootParentOption = useMemo(() => {
+    if (!stockOnly) return null;
+    return visibleGroups.find((group) =>
+      ["stock-in-trade", "stock in trade", "primary"].includes(nameKey(group.name))
+    );
+  }, [visibleGroups, stockOnly]);
+
   async function saveGroup() {
     if (!companyId) return;
     setSaving(true);
     try {
       const payload = {
         name: form.name,
-        parentId: form.parentId || null,
-        nature: form.nature,
-        affectsGrossProfit: form.affectsGrossProfit,
+        parentId: form.parentId || (stockOnly ? rootParentOption?._id || null : null),
+        nature: stockOnly ? "ASSET" : form.nature,
+        affectsGrossProfit: stockOnly ? false : form.affectsGrossProfit,
       };
 
       if (form.id) {
@@ -65,6 +114,7 @@ export default function Groups() {
 
       setForm(defaultForm);
       await loadGroups();
+      setStatus(`${stockOnly ? "Stock group" : "Group"} saved successfully.`);
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save group");
     } finally {
@@ -83,6 +133,100 @@ export default function Groups() {
     }
   }
 
+  function exportDemoExcel() {
+    const rows = visibleGroups.slice(0, 1).map((group) => ({
+      Name: group.name,
+      "Parent Group":
+        visibleGroups.find((candidate) => String(candidate._id) === String(group.parentId))?.name ||
+        (stockOnly ? rootParentOption?.name || "" : "Primary"),
+      Nature: group.nature || "ASSET",
+      "Affects Gross Profit": group.affectsGrossProfit ? "Yes" : "No",
+    }));
+
+    exportMasterWorkbook({
+      sheetName: stockOnly ? "Stock Groups" : "Groups",
+      filename: `${stockOnly ? "Stock_Groups" : "Groups"}_demo.xlsx`,
+      headers: ["Name", "Parent Group", "Nature", "Affects Gross Profit"],
+      sampleRows:
+        rows.length > 0
+          ? rows
+          : [
+              {
+                Name: "",
+                "Parent Group": stockOnly ? rootParentOption?.name || "" : "Primary",
+                Nature: stockOnly ? "ASSET" : "ASSET",
+                "Affects Gross Profit": stockOnly ? "No" : "No",
+              },
+            ],
+      instructions: [
+        `Fill the ${stockOnly ? "Stock Groups" : "Groups"} sheet and import it back from this screen.`,
+        "Each row creates one group master.",
+        stockOnly
+          ? "Parent Group must be a stock group under Stock-in-Trade."
+          : "Parent Group can be Primary or an existing group name.",
+      ],
+      referenceSheets: [
+        {
+          name: "Parent Groups",
+          rows: visibleGroups.map((group) => ({ Name: group.name })),
+        },
+      ],
+    });
+  }
+
+  async function importExcelFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !companyId) return;
+
+    setImporting(true);
+    setStatus("");
+    try {
+      const workbook = await readWorkbookFromFile(file);
+      const rows = worksheetToObjects(workbook, stockOnly ? "Stock Groups" : "Groups").filter((row) =>
+        Object.values(row).some((value) => String(value ?? "").trim() !== "")
+      );
+
+      const localGroups = [...visibleGroups];
+      const groupMap = buildNameMap(localGroups, [(row) => row.name]);
+
+      for (const row of rows) {
+        const parentName = String(row["Parent Group"] || "").trim();
+        let parentId = null;
+        if (parentName) {
+          if (!stockOnly && nameKey(parentName) === "primary") {
+            parentId = null;
+          } else {
+            const parent = resolveNamedOption(groupMap, parentName, "Parent Group");
+            parentId = parent?._id || null;
+          }
+        } else if (stockOnly) {
+          parentId = rootParentOption?._id || null;
+        }
+
+        const payload = {
+          name: String(row.Name || "").trim(),
+          parentId,
+          nature: stockOnly ? "ASSET" : String(row.Nature || "ASSET").trim().toUpperCase() || "ASSET",
+          affectsGrossProfit: stockOnly
+            ? false
+            : normalizeExcelBoolean(row["Affects Gross Profit"], false),
+        };
+
+        const response = await api.post(`/companies/${companyId}/groups`, payload);
+        localGroups.push(response.data);
+        groupMap.set(nameKey(response.data.name), response.data);
+      }
+
+      await loadGroups();
+      setStatus(`${rows.length} ${stockOnly ? "stock group" : "group"} row(s) imported successfully.`);
+    } catch (error) {
+      setStatus(error.response?.data?.message || error.message || "Unable to import groups.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -93,10 +237,8 @@ export default function Groups() {
                 <FolderTree className="h-3.5 w-3.5" />
                 Master maintenance
               </div>
-              <h1 className="mt-3 text-3xl font-bold text-slate-900">Groups</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-500">
-                Build your chart structure for assets, liabilities, income, expenses, and stock classification.
-              </p>
+              <h1 className="mt-3 text-3xl font-bold text-slate-900">{title}</h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-500">{subtitle}</p>
             </div>
 
             <CompanyPicker
@@ -110,9 +252,14 @@ export default function Groups() {
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            {status ? (
+              <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                {status}
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">
-                {form.id ? "Alter Group" : "Create Group"}
+                {form.id ? `Alter ${stockOnly ? "Stock Group" : "Group"}` : `Create ${stockOnly ? "Stock Group" : "Group"}`}
               </h2>
               {form.id && (
                 <button
@@ -123,6 +270,33 @@ export default function Groups() {
                   Cancel edit
                 </button>
               )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={exportDemoExcel}
+              >
+                <Download className="h-4 w-4" />
+                Export Demo Excel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? "Importing..." : "Import Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={importExcelFile}
+              />
             </div>
 
             <div className="mt-5 space-y-4">
@@ -140,9 +314,10 @@ export default function Groups() {
                   setForm((current) => ({ ...current, parentId: event.target.value }))
                 }
               >
-                <option value="">Primary group</option>
-                {sortedGroups
+                <option value="">{stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group"}</option>
+                {visibleGroups
                   .filter((group) => group._id !== form.id)
+                  .filter((group) => !stockOnly || String(group._id) !== String(rootParentOption?._id))
                   .map((group) => (
                     <option key={group._id} value={group._id}>
                       {group.name}
@@ -150,32 +325,36 @@ export default function Groups() {
                   ))}
               </select>
 
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                value={form.nature}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, nature: event.target.value }))
-                }
-              >
-                <option value="ASSET">Asset</option>
-                <option value="LIABILITY">Liability</option>
-                <option value="INCOME">Income</option>
-                <option value="EXPENSE">Expense</option>
-              </select>
+              {!stockOnly ? (
+                <>
+                  <select
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    value={form.nature}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, nature: event.target.value }))
+                    }
+                  >
+                    <option value="ASSET">Asset</option>
+                    <option value="LIABILITY">Liability</option>
+                    <option value="INCOME">Income</option>
+                    <option value="EXPENSE">Expense</option>
+                  </select>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={form.affectsGrossProfit}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      affectsGrossProfit: event.target.checked,
-                    }))
-                  }
-                />
-                Affects gross profit
-              </label>
+                  <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.affectsGrossProfit}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          affectsGrossProfit: event.target.checked,
+                        }))
+                      }
+                    />
+                    Affects gross profit
+                  </label>
+                </>
+              ) : null}
 
               <button
                 type="button"
@@ -184,14 +363,16 @@ export default function Groups() {
                 disabled={saving}
               >
                 <Plus className="h-4 w-4" />
-                {form.id ? "Update Group" : "Create Group"}
+                {form.id ? `Update ${stockOnly ? "Stock Group" : "Group"}` : `Create ${stockOnly ? "Stock Group" : "Group"}`}
               </button>
             </div>
           </article>
 
           <article className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
             <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Existing Groups</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Existing {stockOnly ? "Stock Groups" : "Groups"}
+              </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -205,13 +386,15 @@ export default function Groups() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedGroups.map((group) => {
-                    const parent = groups.find((candidate) => candidate._id === group.parentId);
+                  {visibleGroups.map((group) => {
+                    const parent = visibleGroups.find((candidate) => candidate._id === group.parentId);
                     return (
                       <tr key={group._id} className="border-t border-slate-100">
                         <td className="px-4 py-3 font-medium text-slate-800">{group.name}</td>
                         <td className="px-4 py-3 text-slate-600">{group.nature}</td>
-                        <td className="px-4 py-3 text-slate-500">{parent?.name || "Primary"}</td>
+                        <td className="px-4 py-3 text-slate-500">
+                          {parent?.name || (stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary")}
+                        </td>
                         <td className="px-4 py-3 text-slate-500">
                           {group.affectsGrossProfit ? "Yes" : "No"}
                         </td>
@@ -247,9 +430,9 @@ export default function Groups() {
                 </tbody>
               </table>
 
-              {sortedGroups.length === 0 && (
+              {visibleGroups.length === 0 && (
                 <div className="p-10 text-center text-sm text-slate-500">
-                  No groups found for this company yet.
+                  No {stockOnly ? "stock groups" : "groups"} found for this company yet.
                 </div>
               )}
             </div>

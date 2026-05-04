@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { BookOpen, PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, Download, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import {
+  buildNameMap,
+  exportMasterWorkbook,
+  normalizeExcelNumber,
+  readWorkbookFromFile,
+  resolveNamedOption,
+  worksheetToObjects,
+} from "../utils/masterExcel";
 
 const defaultForm = {
   id: "",
@@ -20,6 +28,9 @@ export default function Ledgers() {
   const [priceLevels, setPriceLevels] = useState([]);
   const [form, setForm] = useState(defaultForm);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     async function loadCompanies() {
@@ -78,6 +89,7 @@ export default function Ledgers() {
 
       setForm(defaultForm);
       await loadMasters();
+      setStatus("Ledger saved successfully.");
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save ledger");
     }
@@ -101,6 +113,87 @@ export default function Ledgers() {
       await loadMasters();
     } catch (error) {
       alert(error.response?.data?.message || "Unable to delete ledger");
+    }
+  }
+
+  function exportDemoExcel() {
+    const sampleLedger = filteredLedgers[0];
+    exportMasterWorkbook({
+      sheetName: "Ledgers",
+      filename: "Ledgers_demo.xlsx",
+      headers: ["Ledger Name", "Group", "Opening Balance", "Opening Type", "Price Level"],
+      sampleRows: [
+        sampleLedger
+          ? {
+              "Ledger Name": sampleLedger.name,
+              Group: sampleLedger.group?.name || "",
+              "Opening Balance": Number(sampleLedger.openingBalance || 0),
+              "Opening Type": sampleLedger.openingDrCr || "DR",
+              "Price Level":
+                priceLevelById.get(String(sampleLedger.priceLevelId))?.code ||
+                priceLevelById.get(String(sampleLedger.priceLevelId))?.name ||
+                "",
+            }
+          : {
+              "Ledger Name": "",
+              Group: sortedGroups[0]?.name || "",
+              "Opening Balance": 0,
+              "Opening Type": "DR",
+              "Price Level": priceLevels[0]?.code || "",
+            },
+      ],
+      instructions: [
+        "Fill the Ledgers sheet and import it back from this screen.",
+        "Each row creates one ledger.",
+        "Use exact group and price level names from the reference sheets.",
+      ],
+      referenceSheets: [
+        { name: "Groups", rows: sortedGroups.map((group) => ({ Name: group.name })) },
+        {
+          name: "Price Levels",
+          rows: priceLevels.map((level) => ({ Code: level.code, Name: level.name })),
+        },
+      ],
+    });
+  }
+
+  async function importExcelFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !companyId) return;
+
+    setImporting(true);
+    setStatus("");
+    try {
+      const workbook = await readWorkbookFromFile(file);
+      const rows = worksheetToObjects(workbook, "Ledgers").filter((row) =>
+        Object.values(row).some((value) => String(value ?? "").trim() !== "")
+      );
+
+      const groupMap = buildNameMap(sortedGroups, [(row) => row.name]);
+      const priceLevelMap = buildNameMap(priceLevels, [(row) => row.name, (row) => row.code]);
+
+      for (const row of rows) {
+        const group = resolveNamedOption(groupMap, row.Group, "Group");
+        const priceLevel = row["Price Level"]
+          ? resolveNamedOption(priceLevelMap, row["Price Level"], "Price Level")
+          : null;
+
+        await api.post(`/companies/${companyId}/ledgers`, {
+          name: String(row["Ledger Name"] || "").trim(),
+          groupId: group?._id || "",
+          openingBalance: normalizeExcelNumber(row["Opening Balance"], 0),
+          openingDrCr: String(row["Opening Type"] || "DR").trim().toUpperCase() || "DR",
+          priceLevelId: priceLevel?._id || null,
+        });
+      }
+
+      await loadMasters();
+      setStatus(`${rows.length} ledger row(s) imported successfully.`);
+    } catch (error) {
+      setStatus(error.response?.data?.message || error.message || "Unable to import ledgers.");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -131,6 +224,11 @@ export default function Ledgers() {
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            {status ? (
+              <div className="mb-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {status}
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">
                 {form.id ? "Alter Ledger" : "Create Ledger"}
@@ -144,6 +242,33 @@ export default function Ledgers() {
                   Cancel edit
                 </button>
               )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={exportDemoExcel}
+              >
+                <Download className="h-4 w-4" />
+                Export Demo Excel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? "Importing..." : "Import Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={importExcelFile}
+              />
             </div>
 
             <div className="mt-5 grid gap-4">
