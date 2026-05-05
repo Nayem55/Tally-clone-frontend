@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api from "../api/api";
 
-const STORAGE_KEY = "accubooks-active-company";
+export const STORAGE_KEY = "accubooks-active-company";
 const ActiveCompanyContext = createContext(null);
 
 export function ActiveCompanyProvider({ children }) {
@@ -16,28 +16,40 @@ export function ActiveCompanyProvider({ children }) {
         const response = await api.get("/companies");
         const rows = response.data || [];
         setCompanies(rows);
-        if (rows.length === 0) {
-          return;
-        }
-        if (!companyId) {
-          setCompanyId(rows[0]._id);
-          return;
-        }
-        if (!rows.some((company) => company._id === companyId)) {
-          setCompanyId(rows[0]._id);
-        }
       } finally {
         setLoading(false);
       }
     }
     loadCompanies();
-  }, [companyId]);
+  }, []);
+
+  useEffect(() => {
+    if (companies.length === 0) return;
+    if (!companyId) {
+      setCompanyId(companies[0]._id);
+      return;
+    }
+    if (!companies.some((company) => company._id === companyId)) {
+      setCompanyId(companies[0]._id);
+    }
+  }, [companies, companyId]);
 
   useEffect(() => {
     if (companyId) {
       localStorage.setItem(STORAGE_KEY, companyId);
     }
   }, [companyId]);
+
+  useEffect(() => {
+    function handleStorage(event) {
+      if (event.key !== STORAGE_KEY) return;
+      const nextValue = event.newValue || "";
+      setCompanyId((current) => (current === nextValue ? current : nextValue));
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const selectedCompany = useMemo(
     () => companies.find((company) => company._id === companyId) || null,

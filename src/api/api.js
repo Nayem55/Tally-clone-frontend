@@ -1,4 +1,5 @@
 import axios from "axios";
+const STORAGE_KEY = "accubooks-active-company";
 
 const defaultBaseUrl =
   process.env.REACT_APP_API_BASE_URL ||
@@ -6,6 +7,21 @@ const defaultBaseUrl =
 
 const api = axios.create({
   baseURL: defaultBaseUrl,
+});
+
+api.interceptors.request.use((config) => {
+  const activeCompanyId = window.localStorage.getItem(STORAGE_KEY);
+  const url = config.url || "";
+
+  if (!activeCompanyId || !url.startsWith("/companies/")) {
+    return config;
+  }
+
+  const nextUrl = url.replace(/^\/companies\/[^/]+/, `/companies/${activeCompanyId}`);
+  return {
+    ...config,
+    url: nextUrl,
+  };
 });
 
 export default api;

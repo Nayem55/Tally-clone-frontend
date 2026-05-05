@@ -13,6 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import api from "../api/api";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { formatCurrencyAmount } from "../utils/currency";
 
 function formatLocalDateInput(date) {
@@ -121,8 +122,7 @@ export default function ProfitLoss() {
     new Date(today.getFullYear(), today.getMonth() + 1, 0)
   );
 
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
+  const { companyId, selectedCompany } = useActiveCompany();
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [ledgerFilter, setLedgerFilter] = useState("");
@@ -130,18 +130,6 @@ export default function ProfitLoss() {
   const [costCenter, setCostCenter] = useState("All");
   const [report, setReport] = useState({ incomes: [], expenses: [], totals: {}, trading: {} });
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    async function loadCompanies() {
-      const response = await api.get("/companies");
-      setCompanies(response.data);
-      if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
-      }
-    }
-
-    loadCompanies();
-  }, []);
 
   useEffect(() => {
     async function loadReport() {
@@ -160,7 +148,6 @@ export default function ProfitLoss() {
     loadReport();
   }, [companyId, fromDate, toDate]);
 
-  const selectedCompany = companies.find((company) => company._id === companyId);
   const incomeGroups = useMemo(() => groupRowsByGroupName(report.incomes || []), [report.incomes]);
   const expenseGroups = useMemo(() => groupRowsByGroupName(report.expenses || []), [report.expenses]);
 
@@ -229,17 +216,9 @@ export default function ProfitLoss() {
                     onChange={(event) => setToDate(event.target.value)}
                   />
                 </div>
-                <select
-                  className="h-11 min-w-[130px] rounded-xl border border-slate-200 bg-white px-4 text-[14px] shadow-sm outline-none"
-                  value={companyId}
-                  onChange={(event) => setCompanyId(event.target.value)}
-                >
-                  {companies.map((company) => (
-                    <option key={company._id} value={company._id}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex h-11 min-w-[180px] items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm">
+                  {selectedCompany?.name || "No company selected"}
+                </div>
                 <button
                   type="button"
                   className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
@@ -415,18 +394,9 @@ export default function ProfitLoss() {
                 <label className="mb-2 block text-[13px] font-medium text-slate-600">Company</label>
                 <div className="relative">
                   <Building2 className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                  <select
-                    className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-[14px] outline-none"
-                    value={companyId}
-                    onChange={(event) => setCompanyId(event.target.value)}
-                  >
-                    {companies.map((company) => (
-                      <option key={company._id} value={company._id}>
-                        {company.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <div className="flex h-11 w-full items-center rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-[14px] font-medium text-slate-700">
+                    {selectedCompany?.name || "No company selected"}
+                  </div>
                 </div>
               </div>
 

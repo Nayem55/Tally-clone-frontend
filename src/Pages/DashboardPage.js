@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import api from "../api/api";
 import { formatCurrencyAmount } from "../utils/currency";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 
 function formatLocalDate(value = new Date()) {
   return value.toLocaleDateString("en-GB", {
@@ -32,58 +33,6 @@ function formatNumber(value) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 0,
   });
-}
-
-function DashboardCompanySwitcher({ companies, value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef(null);
-  const selected = companies.find((company) => company._id === value);
-
-  useEffect(() => {
-    function handleClick(event) {
-      if (!wrapperRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    }
-    window.addEventListener("mousedown", handleClick);
-    return () => window.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <button
-        type="button"
-        className="flex items-center gap-2 rounded-xl px-2 py-1 text-[22px] font-medium text-slate-500 hover:bg-slate-100"
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span>{selected?.name || "Select Company"}</span>
-        <ChevronDown className="h-4 w-4" />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-          {companies.map((company) => (
-            <button
-              key={company._id}
-              type="button"
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${
-                company._id === value
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-700 hover:bg-slate-50"
-              }`}
-              onClick={() => {
-                onChange(company._id);
-                setOpen(false);
-              }}
-            >
-              <span className="font-medium">{company.name}</span>
-              <Building2 className="h-4 w-4 opacity-60" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function DashboardMetricCard({ title, icon: Icon, value, subtitle, tone }) {
@@ -260,20 +209,8 @@ function ActionButton({ children, className = "" }) {
 }
 
 export default function DashboardPage() {
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
+  const { companies, companyId, selectedCompany } = useActiveCompany();
   const [dashboard, setDashboard] = useState(null);
-
-  useEffect(() => {
-    async function loadCompanies() {
-      const response = await api.get("/companies");
-      setCompanies(response.data);
-      if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
-      }
-    }
-    loadCompanies();
-  }, []);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -283,11 +220,6 @@ export default function DashboardPage() {
     }
     loadDashboard();
   }, [companyId]);
-
-  const selectedCompany = useMemo(
-    () => companies.find((company) => company._id === companyId),
-    [companies, companyId]
-  );
 
   return (
     <div className="min-h-screen bg-[#f8fafc] px-6 py-7">
@@ -299,11 +231,9 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3">
               <h1 className="text-[24px] font-semibold text-slate-900">Dashboard</h1>
-              <DashboardCompanySwitcher
-                companies={companies}
-                value={companyId}
-                onChange={setCompanyId}
-              />
+              <span className="rounded-xl bg-slate-100 px-3 py-1 text-[18px] font-medium text-slate-500">
+                {selectedCompany?.name || "No company selected"}
+              </span>
             </div>
           </div>
 
