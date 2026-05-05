@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, Search } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 
 function formatAmount(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -22,6 +24,7 @@ function voucherValue(voucher) {
 
 export default function DayBookPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -99,8 +102,9 @@ export default function DayBookPage() {
       }
     );
   }, [ledgerQuery, partyQuery, search, vouchers]);
+  useReportFocusRestore(containerRef, [filteredVouchers, companyId, fromDate, toDate]);
   useReportKeyboardNav(containerRef, [filteredVouchers], {
-    onExit: () => navigate(-1),
+    onExit: () => navigateBackFromReport(navigate, location),
   });
 
   return (
@@ -200,8 +204,13 @@ export default function DayBookPage() {
                       <button
                         type="button"
                         data-report-nav="true"
+                        data-focus-key={`daybook-${voucher._id}`}
                         className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                        onClick={() => navigate(buildAlterVoucherPath(companyId, voucher._id))}
+                        onClick={() =>
+                          navigate(buildAlterVoucherPath(companyId, voucher._id), {
+                            state: buildReportReturnState(location, `daybook-${voucher._id}`),
+                          })
+                        }
                       >
                         Alter
                       </button>

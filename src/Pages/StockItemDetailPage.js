@@ -1,11 +1,16 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarRange, ChevronDown, ChevronRight, PackageSearch } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, CalendarRange, PackageSearch } from "lucide-react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import {
+  buildReportReturnState,
+  navigateBackFromReport,
+} from "../utils/reportNavigation";
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -16,6 +21,7 @@ function formatNumber(value) {
 
 export default function StockItemDetailPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -29,7 +35,6 @@ export default function StockItemDetailPage() {
   const [toDate, setToDate] = useState(searchParams.get("to") || today);
   const [search, setSearch] = useState(searchParams.get("q") || "");
   const [report, setReport] = useState({ rows: [], totals: {} });
-  const [expandedItems, setExpandedItems] = useState({});
   const requestedItemId = searchParams.get("itemId") || "";
   const requestedGroupId = searchParams.get("groupId") || "";
   const requestedCategory = searchParams.get("category") || "";
@@ -60,11 +65,6 @@ export default function StockItemDetailPage() {
     loadReport();
   }, [companyId, fromDate, toDate]);
 
-  useEffect(() => {
-    if (!requestedItemId) return;
-    setExpandedItems((current) => ({ ...current, [requestedItemId]: true }));
-  }, [requestedItemId]);
-
   const selectedCompany = companies.find((company) => company._id === companyId);
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -91,8 +91,13 @@ export default function StockItemDetailPage() {
         row.stockCategoryName?.toLowerCase().includes(query)
     );
   }, [report.rows, requestedCategory, requestedGroupId, requestedItemId, search]);
-  useReportKeyboardNav(containerRef, [filteredRows, expandedItems], {
-    onExit: () => navigate(-1),
+  const selectedItemRow = useMemo(
+    () => (requestedItemId ? filteredRows.find((row) => String(row.itemId) === String(requestedItemId)) : null),
+    [filteredRows, requestedItemId],
+  );
+  useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, requestedItemId]);
+  useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, requestedItemId], {
+    onExit: () => navigateBackFromReport(navigate, location),
   });
 
   return (
@@ -103,8 +108,20 @@ export default function StockItemDetailPage() {
             <div>
               <h1 className="text-3xl font-bold text-slate-900">Stock Item Details</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Review item-wise opening, inward, outward, and closing stock with voucher movement history inside the same report.
+                {requestedItemId
+                  ? "Voucher-wise movement register for the selected stock item. Press Esc to step back."
+                  : "Review item-wise opening, inward, outward, and closing stock without expanding rows inline."}
               </p>
+              {requestedItemId ? (
+                <button
+                  type="button"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100"
+                  onClick={() => navigateBackFromReport(navigate, location)}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+              ) : null}
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
               <CompanyPicker
@@ -182,157 +199,144 @@ export default function StockItemDetailPage() {
 
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
           <div className="border-b border-slate-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">Detailed Stock Item Register</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              {requestedItemId ? "Detailed Stock Item Register" : "Stock Item Register"}
+            </h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-[1180px] text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Item</th>
-                  <th className="px-4 py-3 font-medium">Group</th>
-                  <th className="px-4 py-3 text-right font-medium">Opening Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Opening Rate</th>
-                  <th className="px-4 py-3 text-right font-medium">Inward Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Outward Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Closing Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Closing Rate</th>
-                  <th className="px-4 py-3 text-right font-medium">Closing Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row) => {
-                  const open = expandedItems[row.itemId];
-                  return (
-                    <Fragment key={row.itemId}>
-                      <tr className="border-t border-slate-100">
+            {!requestedItemId ? (
+              <>
+                <table className="min-w-[1180px] text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Item</th>
+                      <th className="px-4 py-3 font-medium">Group</th>
+                      <th className="px-4 py-3 text-right font-medium">Opening Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Opening Rate</th>
+                      <th className="px-4 py-3 text-right font-medium">Inward Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Outward Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Closing Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Closing Rate</th>
+                      <th className="px-4 py-3 text-right font-medium">Closing Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((row) => (
+                      <tr key={row.itemId} className="border-t border-slate-100">
                         <td className="px-4 py-3 font-medium text-slate-800">
                           <button
                             type="button"
                             data-report-nav="true"
-                            data-report-back={open ? "true" : "false"}
-                            className="flex items-center gap-2"
+                            data-focus-key={`sid-item-${row.itemId}`}
+                            className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                             onClick={() =>
-                              setExpandedItems((current) => ({
-                                ...current,
-                                [row.itemId]: !current[row.itemId],
-                              }))
+                              navigate(
+                                `/reports/inventory-books/stock-item?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&itemId=${encodeURIComponent(row.itemId)}`,
+                                {
+                                  state: buildReportReturnState(location, `sid-item-${row.itemId}`),
+                                },
+                              )
                             }
                           >
-                            {open ? (
-                              <ChevronDown className="h-4 w-4 text-blue-600" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-slate-400" />
-                            )}
-                            <span>{row.itemName}</span>
+                            {row.itemName}
                             {row.alias ? (
-                              <span className="text-xs font-normal text-slate-400">
-                                {row.alias}
-                              </span>
+                              <span className="ml-2 text-xs font-normal text-slate-400">{row.alias}</span>
                             ) : null}
                           </button>
                         </td>
                         <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
                         <td className="px-4 py-3 text-right">{formatNumber(row.openingQty)}</td>
-                        <td className="px-4 py-3 text-right">
-                          {formatCurrencyAmount(row.openingRate, selectedCompany)}
-                        </td>
-                        <td className="px-4 py-3 text-right text-emerald-700">
-                          {formatNumber(row.inwardQty)}
-                        </td>
-                        <td className="px-4 py-3 text-right text-rose-700">
-                          {formatNumber(row.outwardQty)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatNumber(row.closingQty)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {formatCurrencyAmount(row.closingRate, selectedCompany)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {formatCurrencyAmount(row.closingValue, selectedCompany)}
-                        </td>
+                        <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingRate, selectedCompany)}</td>
+                        <td className="px-4 py-3 text-right text-emerald-700">{formatNumber(row.inwardQty)}</td>
+                        <td className="px-4 py-3 text-right text-rose-700">{formatNumber(row.outwardQty)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatNumber(row.closingQty)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingRate, selectedCompany)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.closingValue, selectedCompany)}</td>
                       </tr>
-                      {open && (
-                        <tr className="bg-slate-50/70">
-                          <td colSpan={9} className="px-4 py-4">
-                            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-                              <table className="min-w-[980px] text-sm">
-                                <thead className="bg-slate-50 text-left text-slate-500">
-                                  <tr>
-                                    <th className="px-3 py-2 font-medium">Date</th>
-                                    <th className="px-3 py-2 font-medium">Voucher</th>
-                                    <th className="px-3 py-2 font-medium">Direction</th>
-                                    <th className="px-3 py-2 text-right font-medium">Qty</th>
-                                    <th className="px-3 py-2 text-right font-medium">Rate</th>
-                                    <th className="px-3 py-2 text-right font-medium">Value</th>
-                                    <th className="px-3 py-2 text-right font-medium">Closing Qty</th>
-                                    <th className="px-3 py-2 text-right font-medium">Closing Value</th>
-                                    <th className="px-3 py-2 text-right font-medium">Edit</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {(row.history || []).map((entry, index) => (
-                                    <tr
-                                      key={`${row.itemId}-${entry.voucherId}-${index}`}
-                                      className="border-t border-slate-100"
-                                    >
-                                      <td className="px-3 py-2 text-slate-700">{entry.dateLabel}</td>
-                                      <td className="px-3 py-2 font-medium text-slate-800">
-                                        {entry.voucherName}
-                                      </td>
-                                      <td className="px-3 py-2">
-                                        <span
-                                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                                            entry.direction === "IN"
-                                              ? "bg-emerald-50 text-emerald-700"
-                                              : "bg-rose-50 text-rose-700"
-                                          }`}
-                                        >
-                                          {entry.direction}
-                                        </span>
-                                      </td>
-                                      <td className="px-3 py-2 text-right">{formatNumber(entry.qty)}</td>
-                                      <td className="px-3 py-2 text-right">
-                                        {formatCurrencyAmount(entry.rate, selectedCompany)}
-                                      </td>
-                                      <td className="px-3 py-2 text-right">
-                                        {formatCurrencyAmount(entry.value, selectedCompany)}
-                                      </td>
-                                      <td className="px-3 py-2 text-right">{formatNumber(entry.closingQty)}</td>
-                                      <td className="px-3 py-2 text-right font-semibold text-slate-900">
-                                        {formatCurrencyAmount(entry.closingValue, selectedCompany)}
-                                      </td>
-                                      <td className="px-3 py-2 text-right">
-                                        <button
-                                          type="button"
-                                          data-report-nav="true"
-                                          className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                                          onClick={() => navigate(buildAlterVoucherPath(companyId, entry.voucherId))}
-                                        >
-                                          Alter
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              {(row.history || []).length === 0 && (
-                                <div className="p-4 text-sm text-slate-500">
-                                  No stock movement found for this item in the selected period.
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-            {filteredRows.length === 0 && (
-              <div className="p-10 text-center text-sm text-slate-500">
-                No stock items matched this view.
+                    ))}
+                  </tbody>
+                </table>
+                {filteredRows.length === 0 ? (
+                  <div className="p-10 text-center text-sm text-slate-500">
+                    No stock items matched this view.
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="p-4">
+                {selectedItemRow ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                      <div>
+                        <p className="text-base font-semibold text-slate-900">{selectedItemRow.itemName}</p>
+                        <p className="mt-1 text-sm text-slate-500">{selectedItemRow.groupName || "-"}</p>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[980px] text-sm">
+                        <thead className="bg-slate-50 text-left text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2 font-medium">Date</th>
+                            <th className="px-3 py-2 font-medium">Voucher</th>
+                            <th className="px-3 py-2 font-medium">Direction</th>
+                            <th className="px-3 py-2 text-right font-medium">Qty</th>
+                            <th className="px-3 py-2 text-right font-medium">Rate</th>
+                            <th className="px-3 py-2 text-right font-medium">Value</th>
+                            <th className="px-3 py-2 text-right font-medium">Closing Qty</th>
+                            <th className="px-3 py-2 text-right font-medium">Closing Value</th>
+                            <th className="px-3 py-2 text-right font-medium">Edit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(selectedItemRow.history || []).map((entry, index) => (
+                            <tr key={`${selectedItemRow.itemId}-${entry.voucherId}-${index}`} className="border-t border-slate-100">
+                              <td className="px-3 py-2 text-slate-700">{entry.dateLabel}</td>
+                              <td className="px-3 py-2 font-medium text-slate-800">{entry.voucherName}</td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                    entry.direction === "IN" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                                  }`}
+                                >
+                                  {entry.direction}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right">{formatNumber(entry.qty)}</td>
+                              <td className="px-3 py-2 text-right">{formatCurrencyAmount(entry.rate, selectedCompany)}</td>
+                              <td className="px-3 py-2 text-right">{formatCurrencyAmount(entry.value, selectedCompany)}</td>
+                              <td className="px-3 py-2 text-right">{formatNumber(entry.closingQty)}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrencyAmount(entry.closingValue, selectedCompany)}</td>
+                              <td className="px-3 py-2 text-right">
+                                <button
+                                  type="button"
+                                  data-report-nav="true"
+                                  data-focus-key={`sid-history-${selectedItemRow.itemId}-${index}`}
+                                  className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                                  onClick={() =>
+                                    navigate(buildAlterVoucherPath(companyId, entry.voucherId), {
+                                      state: buildReportReturnState(location, `sid-history-${selectedItemRow.itemId}-${index}`),
+                                    })
+                                  }
+                                >
+                                  Alter
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {(selectedItemRow.history || []).length === 0 ? (
+                        <div className="p-4 text-sm text-slate-500">
+                          No stock movement found for this item in the selected period.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-10 text-center text-sm text-slate-500">
+                    No stock item matched this selection.
+                  </div>
+                )}
               </div>
             )}
           </div>

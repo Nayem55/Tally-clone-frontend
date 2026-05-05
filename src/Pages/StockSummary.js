@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, PackageSearch } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -15,6 +17,7 @@ function formatNumber(value) {
 
 export default function StockSummary() {
   const navigate = useNavigate();
+  const location = useLocation();
   const containerRef = useRef(null);
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
@@ -53,8 +56,9 @@ export default function StockSummary() {
         row.alias.toLowerCase().includes(query)
     );
   }, [report.rows, search]);
+  useReportFocusRestore(containerRef, [filteredRows, companyId]);
   useReportKeyboardNav(containerRef, [filteredRows], {
-    onExit: () => navigate(-1),
+    onExit: () => navigateBackFromReport(navigate, location),
   });
 
   const totals = report.totals || {};
@@ -143,9 +147,12 @@ export default function StockSummary() {
                       <button
                         type="button"
                         data-report-nav="true"
+                        data-focus-key={`ss-item-${row.itemId}`}
                         className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                         onClick={() =>
-                          navigate(`/reports/inventory-books/stock-item?itemId=${encodeURIComponent(row.itemId)}`)
+                          navigate(`/reports/inventory-books/stock-item?itemId=${encodeURIComponent(row.itemId)}`, {
+                            state: buildReportReturnState(location, `ss-item-${row.itemId}`),
+                          })
                         }
                       >
                         {row.itemName}

@@ -1,18 +1,21 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Building2,
   CalendarDays,
-  ChevronDown,
-  ChevronRight,
   Download,
   Printer,
   SlidersHorizontal,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
-import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import {
+  buildReportReturnState,
+  navigateBackFromReport,
+} from "../utils/reportNavigation";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -53,20 +56,7 @@ function exportBalanceCsv(report, company) {
   URL.revokeObjectURL(url);
 }
 
-function BalanceColumn({
-  title,
-  rows,
-  openingTotal,
-  total,
-  company,
-  companyId,
-  fromDate,
-  toDate,
-  expandedGroups,
-  onToggleGroup,
-  expandedLedgers,
-  onToggleLedger,
-}) {
+function GroupListColumn({ title, rows, company, onOpenGroup }) {
   return (
     <div className="border-r border-slate-200 last:border-r-0">
       <div className="px-6 py-5">
@@ -74,130 +64,103 @@ function BalanceColumn({
           {title}
         </h2>
       </div>
-
       <div className="border-t border-slate-100">
-        {(rows || []).map((row) => {
-          const groupKey = `${title}-${row.groupName}`;
-          const groupOpen = expandedGroups[groupKey];
-          const hasLedgers = (row.ledgers || []).length > 0;
-
-          return (
-            <Fragment key={groupKey}>
-              <div className="border-b border-slate-100 px-6 py-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-2">
-                    {hasLedgers ? (
-                      <button
-                        type="button"
-                        data-report-nav="true"
-                        data-report-back={groupOpen ? "true" : "false"}
-                        className="flex items-center gap-2 rounded px-1 text-left focus:bg-blue-50 focus:outline-none"
-                        onClick={() => onToggleGroup(groupKey)}
-                      >
-                        {groupOpen ? (
-                          <ChevronDown className="h-4 w-4 text-slate-700" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-400" />
-                        )}
-                        <span className="font-semibold text-slate-900">{row.groupName}</span>
-                      </button>
-                    ) : (
-                      <span className="font-semibold text-slate-900">{row.groupName}</span>
-                    )}
-                  </div>
-                  <div className="text-right font-semibold text-slate-900">
-                    {formatCurrencyAmount(row.amount, company)}
-                  </div>
-                </div>
-
-                {groupOpen && hasLedgers ? (
-                  <div className="mt-4 space-y-4">
-                    {(row.ledgers || []).map((ledger) => {
-                      const ledgerKey = `${groupKey}-${ledger.ledgerId}`;
-                      const ledgerOpen = expandedLedgers[ledgerKey];
-                      return (
-                        <Fragment key={ledgerKey}>
-                          <div className="flex items-center justify-between gap-4 pl-6">
-                            <button
-                              type="button"
-                              data-report-nav="true"
-                              data-report-back={ledgerOpen ? "true" : "false"}
-                              className="flex min-w-0 items-center gap-2 rounded px-1 text-left text-slate-700 focus:bg-blue-50 focus:outline-none"
-                              onClick={() => onToggleLedger(ledgerKey)}
-                            >
-                              {ledgerOpen ? (
-                                <ChevronDown className="h-4 w-4 text-slate-700" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-slate-400" />
-                              )}
-                              <span className="truncate">{ledger.ledgerName}</span>
-                            </button>
-                            <div className="text-right text-slate-800">
-                              {formatCurrencyAmount(ledger.amount, company)}
-                            </div>
-                          </div>
-                          {ledgerOpen ? (
-                            <div className="mt-3 pl-4">
-                              <table className="w-full">
-                                <tbody>
-                                  <LedgerDrilldownRow
-                                    companyId={companyId}
-                                    ledgerId={ledger.ledgerId}
-                                    fromDate={fromDate}
-                                    toDate={toDate}
-                                    company={company}
-                                    colSpan={1}
-                                    mode="inventory"
-                                  />
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            </Fragment>
-          );
-        })}
-      </div>
-
-      <div className="px-6 py-5">
-        <div className="rounded-lg bg-[#eef5ff] px-5 py-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
-              Total
-            </span>
-            <span className="text-[15px] font-semibold text-slate-900">
-              {formatCurrencyAmount(total, company)}
-            </span>
+        {(rows || []).map((row) => (
+          <div key={`${title}-${row.groupName}`} className="border-b border-slate-100 px-6 py-4">
+            <button
+              type="button"
+              data-report-nav="true"
+              data-focus-key={`bs-group-${title}-${row.groupName}`}
+              className="flex w-full items-center justify-between gap-4 rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+              onClick={() => onOpenGroup(row)}
+            >
+              <span className="font-semibold text-slate-900">{row.groupName}</span>
+              <span className="font-semibold text-slate-900">
+                {formatCurrencyAmount(row.amount, company)}
+              </span>
+            </button>
           </div>
-          <div className="mt-2 text-[13px] text-slate-500">
-            Opening: {formatCurrencyAmount(openingTotal, company)}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
 
+function LedgerListPanel({ title, groupName, rows, company, onBack, onOpenLedger }) {
+  return (
+    <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+        <div>
+          <h2 className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
+            {title}
+          </h2>
+          <p className="mt-2 text-[18px] font-semibold text-slate-900">{groupName}</p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          onClick={onBack}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-slate-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">Ledger</th>
+              <th className="px-4 py-3 text-right font-medium">Opening</th>
+              <th className="px-4 py-3 text-right font-medium">Closing</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(rows || []).map((ledger) => (
+              <tr key={ledger.ledgerId} className="border-t border-slate-100">
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    data-report-nav="true"
+                    data-focus-key={`bs-ledger-${ledger.ledgerId}`}
+                    className="rounded px-1 text-left font-medium text-slate-800 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                    onClick={() => onOpenLedger(ledger)}
+                  >
+                    {ledger.ledgerName}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-right text-slate-700">
+                  {formatCurrencyAmount(ledger.openingAmount, company)}
+                </td>
+                <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                  {formatCurrencyAmount(ledger.amount, company)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export default function BalanceSheetPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const now = new Date();
   const monthStart = formatLocalDateInput(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = formatLocalDateInput(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
   const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
+  const [companyId, setCompanyId] = useState(searchParams.get("companyId") || "");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || monthStart);
+  const [toDate, setToDate] = useState(searchParams.get("to") || monthEnd);
   const [showFilters, setShowFilters] = useState(false);
   const [report, setReport] = useState({ assets: [], liabilities: [], totals: {} });
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [expandedLedgers, setExpandedLedgers] = useState({});
+
+  const detailSide = searchParams.get("side") || "";
+  const detailGroup = searchParams.get("group") || "";
 
   useEffect(() => {
     async function loadCompanies() {
@@ -224,18 +187,36 @@ export default function BalanceSheetPage() {
   const selectedCompany = companies.find((company) => company._id === companyId);
   const netTotal = useMemo(
     () => Math.max(Number(report.totals?.assets || 0), Number(report.totals?.liabilities || 0)),
-    [report.totals]
+    [report.totals],
   );
-  useReportKeyboardNav(containerRef, [report, expandedGroups, expandedLedgers], {
-    onExit: () => navigate(-1),
+  const detailRows = useMemo(() => {
+    if (!detailSide || !detailGroup) return [];
+    const source = detailSide === "assets" ? report.assets || [] : report.liabilities || [];
+    const group = source.find((row) => String(row.groupName) === String(detailGroup));
+    return group?.ledgers || [];
+  }, [detailGroup, detailSide, report.assets, report.liabilities]);
+
+  useReportFocusRestore(containerRef, [companyId, fromDate, toDate, detailSide, detailGroup, report]);
+  useReportKeyboardNav(containerRef, [report, detailRows, detailSide, detailGroup], {
+    onExit: () => navigateBackFromReport(navigate, location),
   });
 
-  function toggleGroup(key) {
-    setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
+  function openGroup(side, row) {
+    navigate(
+      `/reports/financial/balance-sheet?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&side=${encodeURIComponent(side)}&group=${encodeURIComponent(row.groupName)}`,
+      {
+        state: buildReportReturnState(location, `bs-group-${side === "assets" ? "Assets" : "Liabilities"}-${row.groupName}`),
+      },
+    );
   }
 
-  function toggleLedger(key) {
-    setExpandedLedgers((current) => ({ ...current, [key]: !current[key] }));
+  function openLedger(ledger) {
+    navigate(
+      `/reports/account-books/ledger-detail?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&ledgerId=${encodeURIComponent(ledger.ledgerId)}&ledgerName=${encodeURIComponent(ledger.ledgerName)}&mode=inventory`,
+      {
+        state: buildReportReturnState(location, `bs-ledger-${ledger.ledgerId}`),
+      },
+    );
   }
 
   return (
@@ -243,11 +224,23 @@ export default function BalanceSheetPage() {
       <div className="mx-auto max-w-[1380px]">
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
-              Balance Sheet
+            {detailGroup ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100"
+                onClick={() => navigateBackFromReport(navigate, location)}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </button>
+            ) : null}
+            <h1 className="mt-1 text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
+              {detailGroup ? `${detailGroup} Details` : "Balance Sheet"}
             </h1>
             <div className="mt-2 text-[14px] text-slate-500">
-              As at {formatDisplayDate(toDate)}
+              {detailGroup
+                ? `${detailSide === "assets" ? "Assets" : "Liabilities"} / ${detailGroup}`
+                : `As at ${formatDisplayDate(toDate)}`}
             </div>
           </div>
 
@@ -340,41 +333,38 @@ export default function BalanceSheetPage() {
           </section>
         ) : null}
 
-        <section className="mt-6 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-          <div className="grid xl:grid-cols-2">
-            <BalanceColumn
-              title="Liabilities"
-              rows={report.liabilities || []}
-              openingTotal={report.totals?.openingLiabilities}
-              total={report.totals?.liabilities}
+        {detailGroup ? (
+          <section className="mt-6">
+            <LedgerListPanel
+              title={detailSide === "assets" ? "Assets" : "Liabilities"}
+              groupName={detailGroup}
+              rows={detailRows}
               company={selectedCompany}
-              companyId={companyId}
-              fromDate={fromDate}
-              toDate={toDate}
-              expandedGroups={expandedGroups}
-              onToggleGroup={toggleGroup}
-              expandedLedgers={expandedLedgers}
-              onToggleLedger={toggleLedger}
+              onBack={() => navigateBackFromReport(navigate, location)}
+              onOpenLedger={openLedger}
             />
-            <BalanceColumn
-              title="Assets"
-              rows={report.assets || []}
-              openingTotal={report.totals?.openingAssets}
-              total={report.totals?.assets}
-              company={selectedCompany}
-              companyId={companyId}
-              fromDate={fromDate}
-              toDate={toDate}
-              expandedGroups={expandedGroups}
-              onToggleGroup={toggleGroup}
-              expandedLedgers={expandedLedgers}
-              onToggleLedger={toggleLedger}
-            />
-          </div>
-        </section>
+          </section>
+        ) : (
+          <section className="mt-6 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+            <div className="grid xl:grid-cols-2">
+              <GroupListColumn
+                title="Liabilities"
+                rows={report.liabilities || []}
+                company={selectedCompany}
+                onOpenGroup={(row) => openGroup("liabilities", row)}
+              />
+              <GroupListColumn
+                title="Assets"
+                rows={report.assets || []}
+                company={selectedCompany}
+                onOpenGroup={(row) => openGroup("assets", row)}
+              />
+            </div>
+          </section>
+        )}
 
         <section className="mt-6 rounded-[18px] border border-slate-200 bg-white px-6 py-4 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-3 text-[14px]">
+          <div className="grid gap-4 text-[14px] md:grid-cols-3">
             <div>
               Company : <span className="font-medium text-slate-700">{selectedCompany?.name || "-"}</span>
             </div>

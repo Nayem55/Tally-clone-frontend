@@ -1,25 +1,33 @@
-import { Fragment, useEffect, useState } from "react";
-import { CalendarRange, ChevronDown, ChevronRight, Landmark } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarRange, Landmark } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
-import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
+
+function formatLocalDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function CashFlowPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const monthStart = new Date(
-    new Date().getFullYear(),
-    new Date().getMonth(),
-    1,
-  )
-    .toISOString()
-    .slice(0, 10);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const containerRef = useRef(null);
+  const today = formatLocalDateInput(new Date());
+  const monthStart = formatLocalDateInput(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  );
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(today);
   const [report, setReport] = useState(null);
-  const [expandedLedgers, setExpandedLedgers] = useState({});
   const selectedCompany = companies.find((company) => company._id === companyId);
 
   useEffect(() => {
@@ -36,38 +44,40 @@ export default function CashFlowPage() {
   useEffect(() => {
     async function loadReport() {
       if (!companyId) return;
-      const response = await api.get(
-        `/companies/${companyId}/reports/cash-flow`,
-        {
-          params: { from: fromDate, to: toDate },
-        },
-      );
+      const response = await api.get(`/companies/${companyId}/reports/cash-flow`, {
+        params: { from: fromDate, to: toDate },
+      });
       setReport(response.data);
     }
     loadReport();
   }, [companyId, fromDate, toDate]);
 
-  function toggleLedger(key) {
-    setExpandedLedgers((current) => ({ ...current, [key]: !current[key] }));
+  useReportFocusRestore(containerRef, [companyId, fromDate, toDate, report?.ledgerBalances]);
+  useReportKeyboardNav(containerRef, [report?.ledgerBalances, companyId, fromDate, toDate], {
+    onExit: () => navigateBackFromReport(navigate, location),
+  });
+
+  function openLedger(row) {
+    navigate(
+      `/reports/account-books/ledger-detail?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&ledgerId=${encodeURIComponent(row.ledgerId)}&ledgerName=${encodeURIComponent(row.ledgerName)}`,
+      {
+        state: buildReportReturnState(location, `cf-ledger-${row.ledgerId}`),
+      },
+    );
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-4 xl:grid-cols-4">
             <div className="xl:col-span-2">
               <h1 className="text-3xl font-bold text-slate-900">Cash Flow</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Review opening balance, inflow, outflow, and period-wise
-                movement for cash and bank accounts.
+                Review opening balance, inflow, outflow, and period-wise movement for cash and bank accounts.
               </p>
             </div>
-            <CompanyPicker
-              companies={companies}
-              value={companyId}
-              onChange={setCompanyId}
-            />
+            <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -97,7 +107,7 @@ export default function CashFlowPage() {
           </div>
         </section>
 
-        {report && (
+        {report ? (
           <>
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               {[
@@ -107,10 +117,7 @@ export default function CashFlowPage() {
                 ["Net Flow", report.netFlow],
                 ["Closing Balance", report.closingBalance],
               ].map(([label, value]) => (
-                <article
-                  key={label}
-                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
-                >
+                <article key={label} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
                   <p className="text-sm font-medium text-slate-500">{label}</p>
                   <p className="mt-2 text-2xl font-bold text-slate-900">
                     {formatCurrencyAmount(value, selectedCompany)}
@@ -122,44 +129,25 @@ export default function CashFlowPage() {
             <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
               <article className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
                 <div className="border-b border-slate-200 px-6 py-4">
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Monthly Movement
-                  </h2>
+                  <h2 className="text-lg font-semibold text-slate-900">Monthly Movement</h2>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-slate-50 text-left text-slate-500">
                       <tr>
                         <th className="px-4 py-3 font-medium">Period</th>
-                        <th className="px-4 py-3 text-right font-medium">
-                          Inflow
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium">
-                          Outflow
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium">
-                          Net
-                        </th>
+                        <th className="px-4 py-3 text-right font-medium">Inflow</th>
+                        <th className="px-4 py-3 text-right font-medium">Outflow</th>
+                        <th className="px-4 py-3 text-right font-medium">Net</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(report.monthly || []).map((row) => (
-                        <tr
-                          key={row.label}
-                          className="border-t border-slate-100"
-                        >
-                          <td className="px-4 py-3 font-medium text-slate-800">
-                            {row.label}
-                          </td>
-                          <td className="px-4 py-3 text-right text-emerald-700">
-                            {formatCurrencyAmount(row.inflow, selectedCompany)}
-                          </td>
-                          <td className="px-4 py-3 text-right text-rose-700">
-                            {formatCurrencyAmount(row.outflow, selectedCompany)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                            {formatCurrencyAmount(row.net, selectedCompany)}
-                          </td>
+                        <tr key={row.label} className="border-t border-slate-100">
+                          <td className="px-4 py-3 font-medium text-slate-800">{row.label}</td>
+                          <td className="px-4 py-3 text-right text-emerald-700">{formatCurrencyAmount(row.inflow, selectedCompany)}</td>
+                          <td className="px-4 py-3 text-right text-rose-700">{formatCurrencyAmount(row.outflow, selectedCompany)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.net, selectedCompany)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -186,59 +174,32 @@ export default function CashFlowPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(report.ledgerBalances || []).map((row) => {
-                        const ledgerOpen = expandedLedgers[row.ledgerId];
-
-                        return (
-                          <Fragment key={row.ledgerId}>
-                            <tr className="border-t border-slate-100">
-                              <td className="px-4 py-3 font-medium text-slate-800">
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-2"
-                                  onClick={() => toggleLedger(row.ledgerId)}
-                                >
-                                  {ledgerOpen ? (
-                                    <ChevronDown className="h-4 w-4 text-blue-600" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                                  )}
-                                  {row.ledgerName}
-                                </button>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                {formatCurrencyAmount(row.opening, selectedCompany)}
-                              </td>
-                              <td className="px-4 py-3 text-right text-emerald-700">
-                                {formatCurrencyAmount(row.inflow, selectedCompany)}
-                              </td>
-                              <td className="px-4 py-3 text-right text-rose-700">
-                                {formatCurrencyAmount(row.outflow, selectedCompany)}
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                                {formatCurrencyAmount(row.closing, selectedCompany)}
-                              </td>
-                            </tr>
-                            {ledgerOpen && (
-                              <LedgerDrilldownRow
-                                companyId={companyId}
-                                ledgerId={row.ledgerId}
-                                fromDate={fromDate}
-                                toDate={toDate}
-                                company={selectedCompany}
-                                colSpan={5}
-                              />
-                            )}
-                          </Fragment>
-                        );
-                      })}
+                      {(report.ledgerBalances || []).map((row) => (
+                        <tr key={row.ledgerId} className="border-t border-slate-100">
+                          <td className="px-4 py-3 font-medium text-slate-800">
+                            <button
+                              type="button"
+                              data-report-nav="true"
+                              data-focus-key={`cf-ledger-${row.ledgerId}`}
+                              className="rounded px-1 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                              onClick={() => openLedger(row)}
+                            >
+                              {row.ledgerName}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.opening, selectedCompany)}</td>
+                          <td className="px-4 py-3 text-right text-emerald-700">{formatCurrencyAmount(row.inflow, selectedCompany)}</td>
+                          <td className="px-4 py-3 text-right text-rose-700">{formatCurrencyAmount(row.outflow, selectedCompany)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.closing, selectedCompany)}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </article>
             </section>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

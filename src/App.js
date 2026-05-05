@@ -37,6 +37,7 @@ import ShortcutReferencePage from "./Pages/ShortcutReferencePage";
 import CommandSearchModal from "./Component/CommandSearchModal";
 import AlterVoucherEntryPage from "./Pages/AlterVoucherEntryPage";
 import EmployeeCreationPage from "./Pages/EmployeeCreationPage";
+import LedgerDetailPage from "./Pages/LedgerDetailPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -409,6 +410,7 @@ function AppShell() {
             />
             <Route path="/reports/account-books/ledger" element={Placeholder("Ledger Book", "A dedicated ledger drilldown report can be added next with running balance and voucher drill-ins.")} />
             <Route path="/reports/account-books/group-summary" element={<TrialBalance />} />
+            <Route path="/reports/account-books/ledger-detail" element={<LedgerDetailPage />} />
             <Route
               path="/reports/account-books/sales-register"
               element={

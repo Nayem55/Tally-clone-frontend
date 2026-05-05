@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { normalizeVoucherName } from "../utils/voucherRoutes";
+import { navigateBackFromReport } from "../utils/reportNavigation";
 import VoucherList from "./VoucherList";
 import PosVoucherPage from "./PosVoucherPage";
 import InventoryVoucherPage from "./InventoryVoucherPage";
@@ -54,14 +55,23 @@ export default function AlterVoucherEntryPage() {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        navigate(-1);
+      if (event.key === "Escape" || event.key === "Backspace") {
+        const target = event.target;
+        const tagName = String(target?.tagName || "").toLowerCase();
+        const isTypingTarget =
+          tagName === "input" ||
+          tagName === "textarea" ||
+          tagName === "select" ||
+          target?.isContentEditable;
+        if (isTypingTarget && event.key === "Backspace") return;
+        event.preventDefault();
+        navigateBackFromReport(navigate, location);
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  }, [location, navigate]);
 
   if (loading) {
     return <div className="p-8 text-center text-sm text-slate-500">Loading voucher for alteration...</div>;

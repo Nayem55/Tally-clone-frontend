@@ -1,10 +1,9 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ArrowLeftRight,
   Building2,
   CalendarDays,
-  ChevronDown,
-  ChevronRight,
   Download,
   Filter,
   MoreVertical,
@@ -12,11 +11,15 @@ import {
   Scale,
   Wallet,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
-import LedgerDrilldownRow from "../Component/LedgerDrilldownRow";
 import { formatCurrencyAmount } from "../utils/currency";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import {
+  buildReportReturnState,
+  navigateBackFromReport,
+} from "../utils/reportNavigation";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -51,45 +54,9 @@ function collectLedgerOptions(nodes, trail = []) {
   ]);
 }
 
-function filterTree(nodes, selectedGroup, selectedLedger) {
-  return (nodes || [])
-    .map((node) => {
-      const childMatches = filterTree(node.children || [], selectedGroup, selectedLedger);
-      const ledgerMatches = (node.ledgers || []).filter((ledger) =>
-        selectedLedger ? String(ledger.id) === selectedLedger : true
-      );
-      const groupAllowed = selectedGroup ? String(node.id) === selectedGroup : true;
-      const keepNode =
-        groupAllowed ||
-        childMatches.length > 0 ||
-        ledgerMatches.length > 0 ||
-        (selectedGroup &&
-          childMatches.some((child) => child.parentTrail?.includes(String(node.id))));
-
-      if (!keepNode) return null;
-
-      return {
-        ...node,
-        parentTrail: [String(node.id), ...(node.parentTrail || [])],
-        ledgers: groupAllowed || !selectedGroup ? ledgerMatches : ledgerMatches,
-        children: childMatches,
-      };
-    })
-    .filter(Boolean);
-}
-
 function exportTrialCsv(tree, company) {
   const rows = [
-    [
-      "Particulars",
-      "Group",
-      "Opening Dr",
-      "Opening Cr",
-      "Debit",
-      "Credit",
-      "Closing Dr",
-      "Closing Cr",
-    ],
+    ["Particulars", "Group", "Opening Dr", "Opening Cr", "Debit", "Credit", "Closing Dr", "Closing Cr"],
   ];
 
   function walk(nodes, depth = 0) {
@@ -137,43 +104,51 @@ function SummaryCard({ icon: Icon, title, value, subtitle, iconClass = "" }) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="flex items-center gap-4">
-        <div
-          className={`flex h-14 w-14 items-center justify-center rounded-full bg-slate-50 ${iconClass}`}
-        >
+        <div className={`flex h-14 w-14 items-center justify-center rounded-full bg-slate-50 ${iconClass}`}>
           <Icon className="h-6 w-6" />
         </div>
         <div className="min-w-0">
           <p className="text-[13px] font-medium text-slate-600">{title}</p>
           <p className="mt-1 text-[16px] font-semibold text-emerald-600">{value}</p>
-          {subtitle ? (
-            <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
-          ) : null}
+          {subtitle ? <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p> : null}
         </div>
       </div>
     </article>
   );
 }
 
+function findGroupPath(nodes, targetId, trail = []) {
+  for (const node of nodes || []) {
+    if (String(node.id) === String(targetId)) return [...trail, node];
+    const childPath = findGroupPath(node.children || [], targetId, [...trail, node]);
+    if (childPath.length) return childPath;
+  }
+  return [];
+}
+
+function findGroupById(nodes, targetId) {
+  return findGroupPath(nodes, targetId).slice(-1)[0] || null;
+}
+
 export default function TrialBalance() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const today = new Date();
   const monthStart = formatLocalDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
-  const monthEnd = formatLocalDateInput(
-    new Date(today.getFullYear(), today.getMonth() + 1, 0)
-  );
+  const monthEnd = formatLocalDateInput(new Date(today.getFullYear(), today.getMonth() + 1, 0));
 
   const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState("");
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
-  const [selectedGroup, setSelectedGroup] = useState("");
+  const [companyId, setCompanyId] = useState(searchParams.get("companyId") || "");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || monthStart);
+  const [toDate, setToDate] = useState(searchParams.get("to") || monthEnd);
+  const [selectedGroup, setSelectedGroup] = useState(searchParams.get("groupFilter") || "");
   const [selectedLedger, setSelectedLedger] = useState("");
   const [reportView, setReportView] = useState("Detailed");
   const [report, setReport] = useState({ rows: [], totals: null, tree: [] });
   const [loading, setLoading] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [expandedLedgers, setExpandedLedgers] = useState({});
+  const detailGroupId = searchParams.get("groupId") || "";
 
   useEffect(() => {
     async function loadCompanies() {
@@ -183,7 +158,6 @@ export default function TrialBalance() {
         setCompanyId((current) => current || response.data[0]._id);
       }
     }
-
     loadCompanies();
   }, []);
 
@@ -200,137 +174,60 @@ export default function TrialBalance() {
         setLoading(false);
       }
     }
-
     loadReport();
   }, [companyId, fromDate, toDate]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
   const summary = useMemo(() => report.totals || {}, [report.totals]);
   const ledgerOptions = useMemo(() => collectLedgerOptions(report.tree || []), [report.tree]);
-  const visibleTree = useMemo(
-    () => filterTree(report.tree || [], selectedGroup, selectedLedger),
-    [report.tree, selectedGroup, selectedLedger]
+  const activeGroup = useMemo(
+    () => (detailGroupId ? findGroupById(report.tree || [], detailGroupId) : null),
+    [detailGroupId, report.tree],
   );
-  useReportKeyboardNav(containerRef, [visibleTree, expandedGroups, expandedLedgers], {
-    onExit: () => navigate(-1),
+  const detailGroupPath = useMemo(
+    () => (detailGroupId ? findGroupPath(report.tree || [], detailGroupId) : []),
+    [detailGroupId, report.tree],
+  );
+
+  const topRows = useMemo(() => {
+    const baseGroups = detailGroupId ? activeGroup?.children || [] : report.tree || [];
+    let rows = [
+      ...baseGroups.map((group) => ({ type: "group", ...group })),
+      ...((detailGroupId ? activeGroup?.ledgers : []) || []).map((ledger) => ({ type: "ledger", ...ledger })),
+    ];
+
+    if (selectedGroup) {
+      rows = rows.filter((row) =>
+        row.type === "group" ? String(row.id) === selectedGroup : String(row.groupId || row.id) === selectedGroup,
+      );
+    }
+    if (selectedLedger) {
+      rows = rows.filter((row) => row.type === "ledger" && String(row.id) === selectedLedger);
+    }
+    return rows;
+  }, [activeGroup, detailGroupId, report.tree, selectedGroup, selectedLedger]);
+
+  useReportFocusRestore(containerRef, [topRows, companyId, fromDate, toDate, detailGroupId]);
+  useReportKeyboardNav(containerRef, [topRows, detailGroupId, companyId], {
+    onExit: () => navigateBackFromReport(navigate, location),
   });
 
-  function toggleGroup(groupId) {
-    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
-  }
-
-  function toggleLedger(ledgerId) {
-    setExpandedLedgers((current) => ({ ...current, [ledgerId]: !current[ledgerId] }));
-  }
-
-  function renderLedgerRow(ledger, level) {
-    const ledgerOpen = expandedLedgers[String(ledger.id)];
-
-    return (
-      <Fragment key={`ledger-${ledger.id}`}>
-        <tr className="border-t border-slate-100 bg-white">
-          <td className="px-4 py-2.5 font-medium text-slate-800">
-            <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 20}px` }}>
-              <button
-                type="button"
-                data-report-nav="true"
-                data-report-back={ledgerOpen ? "true" : "false"}
-                className="flex items-center gap-2 rounded px-1 focus:bg-blue-50 focus:outline-none"
-                onClick={() => toggleLedger(String(ledger.id))}
-              >
-                {ledgerOpen ? (
-                  <ChevronDown className="h-4 w-4 text-blue-600" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-slate-400" />
-                )}
-                <span>{ledger.name}</span>
-              </button>
-            </div>
-          </td>
-          <td className="px-4 py-2.5 text-right text-slate-700">
-            {netBalanceLabel(ledger.totals?.openingDebit, ledger.totals?.openingCredit, selectedCompany)}
-          </td>
-          <td className="px-4 py-2.5 text-right text-blue-600">
-            {formatCurrencyAmount(ledger.totals?.debit, selectedCompany)}
-          </td>
-          <td className="px-4 py-2.5 text-right text-rose-600">
-            {formatCurrencyAmount(ledger.totals?.credit, selectedCompany)}
-          </td>
-          <td className="px-4 py-2.5 text-right font-medium text-slate-800">
-            {netBalanceLabel(
-              ledger.totals?.closingDebit,
-              ledger.totals?.closingCredit,
-              selectedCompany
-            )}
-          </td>
-        </tr>
-        {ledgerOpen ? (
-          <LedgerDrilldownRow
-            companyId={companyId}
-            ledgerId={ledger.id}
-            fromDate={fromDate}
-            toDate={toDate}
-            company={selectedCompany}
-            colSpan={5}
-            mode="inventory"
-          />
-        ) : null}
-      </Fragment>
+  function openGroup(group) {
+    navigate(
+      `/reports/financial/trial-balance?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&groupId=${encodeURIComponent(group.id)}`,
+      {
+        state: buildReportReturnState(location, `tb-group-${group.id}`),
+      },
     );
   }
 
-  function renderGroupRows(nodes, level = 0) {
-    return nodes.flatMap((node) => {
-      const groupOpen = expandedGroups[String(node.id)];
-      const rows = [
-        <tr
-          key={`group-${node.id}`}
-          className={`${level === 0 ? "bg-white" : "bg-slate-50/50"} border-t border-slate-100`}
-        >
-          <td className="px-4 py-2.5 font-semibold text-slate-900">
-            <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 18}px` }}>
-              <button
-                type="button"
-                data-report-nav="true"
-                data-report-back={groupOpen ? "true" : "false"}
-                className="flex items-center gap-2 rounded px-1 focus:bg-blue-50 focus:outline-none"
-                onClick={() => toggleGroup(String(node.id))}
-              >
-                {groupOpen ? (
-                  <ChevronDown className="h-4 w-4 text-blue-600" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-slate-400" />
-                )}
-                <span>{node.name}</span>
-              </button>
-            </div>
-          </td>
-          <td className="px-4 py-2.5 text-right text-slate-700">
-            {netBalanceLabel(node.totals?.openingDebit, node.totals?.openingCredit, selectedCompany)}
-          </td>
-          <td className="px-4 py-2.5 text-right text-blue-600">
-            {formatCurrencyAmount(node.totals?.debit, selectedCompany)}
-          </td>
-          <td className="px-4 py-2.5 text-right text-rose-600">
-            {formatCurrencyAmount(node.totals?.credit, selectedCompany)}
-          </td>
-          <td className="px-4 py-2.5 text-right font-semibold text-slate-800">
-            {netBalanceLabel(
-              node.totals?.closingDebit,
-              node.totals?.closingCredit,
-              selectedCompany
-            )}
-          </td>
-        </tr>,
-      ];
-
-      if (groupOpen) {
-        rows.push(...(node.ledgers || []).map((ledger) => renderLedgerRow(ledger, level + 1)));
-        rows.push(...renderGroupRows(node.children || [], level + 1));
-      }
-
-      return rows;
-    });
+  function openLedger(ledger) {
+    navigate(
+      `/reports/account-books/ledger-detail?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&ledgerId=${encodeURIComponent(ledger.id)}&ledgerName=${encodeURIComponent(ledger.name)}&mode=inventory`,
+      {
+        state: buildReportReturnState(location, `tb-ledger-${ledger.id}`),
+      },
+    );
   }
 
   return (
@@ -340,12 +237,30 @@ export default function TrialBalance() {
           <div className="space-y-5">
             <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
+                {detailGroupId ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100"
+                    onClick={() => navigateBackFromReport(navigate, location)}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </button>
+                ) : null}
+                <h1 className="mt-1 text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
                   Trial Balance
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] text-slate-500">
                   <span>Company : <span className="font-medium text-slate-700">{selectedCompany?.name || "-"}</span></span>
                   <span>Period : {formatDisplayDate(fromDate)} to {formatDisplayDate(toDate)}</span>
+                  {detailGroupPath.length ? (
+                    <span>
+                      Group :{" "}
+                      <span className="font-medium text-slate-700">
+                        {detailGroupPath.map((group) => group.name).join(" / ")}
+                      </span>
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -379,7 +294,7 @@ export default function TrialBalance() {
                 </select>
                 <button
                   type="button"
-                  onClick={() => exportTrialCsv(visibleTree, selectedCompany)}
+                  onClick={() => exportTrialCsv(report.tree || [], selectedCompany)}
                   className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
                 >
                   <Download className="h-4 w-4" />
@@ -407,7 +322,6 @@ export default function TrialBalance() {
                 icon={Wallet}
                 title="Opening Balance"
                 value={netBalanceLabel(summary.openingDebit, summary.openingCredit, selectedCompany)}
-                subtitle=""
                 iconClass="text-emerald-600"
               />
               <SummaryCard
@@ -432,10 +346,7 @@ export default function TrialBalance() {
                 icon={Scale}
                 title="Balance Check"
                 value={Math.abs(Number(summary.debit || 0) - Number(summary.credit || 0)) < 0.01 ? "Balanced" : "Out of Balance"}
-                subtitle={`Difference: ${formatCurrencyAmount(
-                  Math.abs(Number(summary.debit || 0) - Number(summary.credit || 0)),
-                  selectedCompany
-                )}`}
+                subtitle={`Difference: ${formatCurrencyAmount(Math.abs(Number(summary.debit || 0) - Number(summary.credit || 0)), selectedCompany)}`}
                 iconClass="text-violet-600"
               />
             </section>
@@ -450,9 +361,7 @@ export default function TrialBalance() {
                       <tr>
                         <th className="border-b border-slate-200 px-4 py-3 text-left font-semibold">Particulars</th>
                         <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold">Opening Balance</th>
-                        <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold" colSpan={2}>
-                          Transactions
-                        </th>
+                        <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold" colSpan={2}>Transactions</th>
                         <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold">Closing Balance</th>
                       </tr>
                       <tr className="text-[13px]">
@@ -463,8 +372,48 @@ export default function TrialBalance() {
                         <th className="px-4 py-2 text-right font-medium text-slate-400" />
                       </tr>
                     </thead>
-                    <tbody>{renderGroupRows(visibleTree)}</tbody>
-                    {(visibleTree || []).length > 0 ? (
+                    <tbody>
+                      {topRows.map((row) => (
+                        <tr key={`${row.type}-${row.id}`} className="border-t border-slate-100 bg-white">
+                          <td className="px-4 py-2.5 font-medium text-slate-800">
+                            {row.type === "group" ? (
+                              <button
+                                type="button"
+                                data-report-nav="true"
+                                data-focus-key={`tb-group-${row.id}`}
+                                className="rounded px-1 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                                onClick={() => openGroup(row)}
+                              >
+                                {row.name}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                data-report-nav="true"
+                                data-focus-key={`tb-ledger-${row.id}`}
+                                className="rounded px-1 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                                onClick={() => openLedger(row)}
+                              >
+                                {row.name}
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-slate-700">
+                            {netBalanceLabel(row.totals?.openingDebit, row.totals?.openingCredit, selectedCompany)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-blue-600">
+                            {formatCurrencyAmount(row.totals?.debit, selectedCompany)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-rose-600">
+                            {formatCurrencyAmount(row.totals?.credit, selectedCompany)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-slate-800">
+                            {netBalanceLabel(row.totals?.closingDebit, row.totals?.closingCredit, selectedCompany)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {topRows.length > 0 ? (
                       <tfoot>
                         <tr className="border-t border-amber-200 bg-[#fff8e7] font-semibold text-slate-900">
                           <td className="px-4 py-3">Grand Total</td>
@@ -484,8 +433,7 @@ export default function TrialBalance() {
                       </tfoot>
                     ) : null}
                   </table>
-
-                  {(visibleTree || []).length === 0 ? (
+                  {topRows.length === 0 ? (
                     <div className="p-10 text-center text-sm text-slate-500">
                       No trial balance rows found for the selected period.
                     </div>
@@ -526,7 +474,6 @@ export default function TrialBalance() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-400" />
                 </div>
               </div>
 
@@ -577,10 +524,7 @@ export default function TrialBalance() {
                 </select>
               </div>
 
-              <button
-                type="button"
-                className="w-full rounded-xl bg-[#1463ff] px-4 py-3 text-[14px] font-medium text-white shadow-sm"
-              >
+              <button type="button" className="w-full rounded-xl bg-[#1463ff] px-4 py-3 text-[14px] font-medium text-white shadow-sm">
                 Apply Filter
               </button>
               <button

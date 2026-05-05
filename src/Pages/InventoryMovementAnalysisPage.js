@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, CalendarRange, Search, TrendingDown, TrendingUp } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import useReportFocusRestore from "../hooks/useReportFocusRestore";
+import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 
 const VARIANTS = {
   "stock-group": {
@@ -80,6 +82,7 @@ function SummaryCard({ title, value, tone = "text-slate-900", icon }) {
 
 export default function InventoryMovementAnalysisPage({ variant = "stock-group" }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const view = VARIANTS[variant] || VARIANTS["stock-group"];
@@ -141,8 +144,9 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [report.rows, search]);
+  useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, variant]);
   useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, variant], {
-    onExit: () => navigate(-1),
+    onExit: () => navigateBackFromReport(navigate, location),
   });
 
   function buildDrillPath(row) {
@@ -363,10 +367,15 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                         <button
                           type="button"
                           data-report-nav="true"
+                          data-focus-key={`ima-${variant}-${row.id || row.name}`}
                           className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                           onClick={() => {
                             const nextPath = buildDrillPath(row);
-                            if (nextPath) navigate(nextPath);
+                            if (nextPath) {
+                              navigate(nextPath, {
+                                state: buildReportReturnState(location, `ima-${variant}-${row.id || row.name}`),
+                              });
+                            }
                           }}
                         >
                           <p className="font-medium text-slate-900">{row.name}</p>
