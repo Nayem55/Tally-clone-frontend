@@ -205,78 +205,248 @@ export default function CompanyList() {
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-6">
+            {/* Basic Information */}
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Basic Information</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Company Name *" {...field("name", form.name)} />
-                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" {...field("financialYearFrom", form.financialYearFrom)} />
-                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" {...field("booksBeginningFrom", form.booksBeginningFrom)} />
-                <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" {...field("financialYearTo", form.financialYearTo)} />
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name *</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="Company Name *" 
+                    {...field("name", form.name)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Financial Year From</label>
+                  <input 
+                    type="date" 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    {...field("financialYearFrom", form.financialYearFrom)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Books Beginning From</label>
+                  <input 
+                    type="date" 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    {...field("booksBeginningFrom", form.booksBeginningFrom)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Financial Year To</label>
+                  <input 
+                    type="date" 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    {...field("financialYearTo", form.financialYearTo)} 
+                  />
+                </div>
               </div>
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+              {/* Mailing & Address Details */}
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Mailing & Address Details</h2>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Mailing Name" {...field("mailingName", form.mailingName)} />
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Country" {...field("country", form.country)} />
-                  <textarea className="min-h-36 rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 md:col-span-2" placeholder="Address" {...field("address", form.address)} />
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="State / Province" {...field("state", form.state)} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Mailing Name</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Mailing Name" 
+                      {...field("mailingName", form.mailingName)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Country</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Country" 
+                      {...field("country", form.country)} 
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Address</label>
+                    <textarea 
+                      className="min-h-36 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Address" 
+                      {...field("address", form.address)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">State / Province</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="State / Province" 
+                      {...field("state", form.state)} 
+                    />
+                  </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="City" {...field("city", form.city)} />
-                    <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Postal Code" {...field("postalCode", form.postalCode)} />
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">City</label>
+                      <input 
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                        placeholder="City" 
+                        {...field("city", form.city)} 
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">Postal Code</label>
+                      <input 
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                        placeholder="Postal Code" 
+                        {...field("postalCode", form.postalCode)} 
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Contact Details */}
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Contact Details</h2>
                 <div className="mt-4 grid gap-4">
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Telephone" {...field("telephone", form.telephone)} />
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Mobile" {...field("mobile", form.mobile)} />
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Fax" {...field("fax", form.fax)} />
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="E-mail" {...field("email", form.email)} />
-                  <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Website" {...field("website", form.website)} />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Telephone</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Telephone" 
+                      {...field("telephone", form.telephone)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Mobile</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Mobile" 
+                      {...field("mobile", form.mobile)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Fax</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Fax" 
+                      {...field("fax", form.fax)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">E-mail</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="E-mail" 
+                      {...field("email", form.email)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Website</label>
+                    <input 
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                      placeholder="Website" 
+                      {...field("website", form.website)} 
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
+            {/* Company Details */}
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Company Details</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Division" {...field("division", form.division)} />
-                <select
-                  className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={form.baseCurrencyCode}
-                  onChange={(event) => applyCurrency(event.target.value)}
-                >
-                  {currencies.map((currency) => (
-                    <option key={currency.code} value={currency.code}>
-                      {currency.code} - {currency.name}
-                    </option>
-                  ))}
-                </select>
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Base Currency Symbol" {...field("baseCurrencySymbol", form.baseCurrencySymbol)} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Formal Name" {...field("formalName", form.formalName)} />
-                <select className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.decimalPlaces} onChange={(event) => setForm((current) => ({ ...current, decimalPlaces: Number(event.target.value) }))}>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
-                  <option value={4}>4</option>
-                </select>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Division</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="Division" 
+                    {...field("division", form.division)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Base Currency</label>
+                  <select
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    value={form.baseCurrencyCode}
+                    onChange={(event) => applyCurrency(event.target.value)}
+                  >
+                    {currencies.map((currency) => (
+                      <option key={currency.code} value={currency.code}>
+                        {currency.code} - {currency.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Base Currency Symbol</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="Base Currency Symbol" 
+                    {...field("baseCurrencySymbol", form.baseCurrencySymbol)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Formal Name</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="Formal Name" 
+                    {...field("formalName", form.formalName)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Decimal Places</label>
+                  <select 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    value={form.decimalPlaces} 
+                    onChange={(event) => setForm((current) => ({ ...current, decimalPlaces: Number(event.target.value) }))}
+                  >
+                    <option value={2}>2</option>
+                    <option value={3}>3</option>
+                    <option value={4}>4</option>
+                  </select>
+                </div>
               </div>
             </div>
 
+            {/* Additional Information */}
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Additional Information</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Income Tax Number" {...field("incomeTaxNumber", form.incomeTaxNumber)} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="VAT / TIN Number" {...field("vatTinNumber", form.vatTinNumber)} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Service Tax Number" {...field("serviceTaxNumber", form.serviceTaxNumber)} />
-                <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="PAN Number" {...field("panNumber", form.panNumber)} />
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Income Tax Number</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="Income Tax Number" 
+                    {...field("incomeTaxNumber", form.incomeTaxNumber)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">VAT / TIN Number</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="VAT / TIN Number" 
+                    {...field("vatTinNumber", form.vatTinNumber)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Service Tax Number</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="Service Tax Number" 
+                    {...field("serviceTaxNumber", form.serviceTaxNumber)} 
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">PAN Number</label>
+                  <input 
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" 
+                    placeholder="PAN Number" 
+                    {...field("panNumber", form.panNumber)} 
+                  />
+                </div>
               </div>
             </div>
 
+            {/* More Options */}
             <div>
               <h2 className="text-lg font-semibold text-slate-900">More Options</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -286,7 +456,7 @@ export default function CompanyList() {
                   ["enableCostCentres", "Enable Cost Centres"],
                   ["enableMultiCurrency", "Enable Multi-Currency"],
                 ].map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <label key={key} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 cursor-pointer hover:bg-slate-100">
                     <input
                       type="checkbox"
                       checked={form[key]}
