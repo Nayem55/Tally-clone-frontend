@@ -29,7 +29,7 @@ export function navigateBackFromReport(navigate, location) {
         reportTrail: trail.slice(0, -1),
       },
     });
-    return;
+    return true;
   }
-  navigate(-1);
+  return false;
 }

@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Keyboard, Monitor, PanelLeftOpen } from "lucide-react";
-import { sidebarChildShortcuts, sidebarParentShortcuts, voucherShortcuts } from "../utils/shortcuts";
+import {
+  ChevronDown,
+  ChevronRight,
+  Keyboard,
+  Monitor,
+  PanelLeftOpen,
+} from "lucide-react";
+import {
+  sidebarChildShortcuts,
+  sidebarParentShortcuts,
+  voucherShortcuts,
+} from "../utils/shortcuts";
 
 function ShortcutCard({ title, icon: Icon, subtitle, children }) {
   return (
@@ -55,9 +65,13 @@ function ParentShortcutRow({ shortcut, childrenRows, isOpen, onToggle }) {
             <span className="block w-4 flex-none" />
           )}
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-900">{shortcut.label}</div>
+            <div className="text-sm font-semibold text-slate-900">
+              {shortcut.label}
+            </div>
             <div className="mt-1 text-xs text-slate-500">
-              {shortcut.scope ? `Opens scope: ${shortcut.scope}` : `Route: ${shortcut.route}`}
+              {shortcut.scope
+                ? `Opens scope: ${shortcut.scope}`
+                : `Route: ${shortcut.route}`}
             </div>
           </div>
         </div>
@@ -80,8 +94,12 @@ function ParentShortcutRow({ shortcut, childrenRows, isOpen, onToggle }) {
                 className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-slate-800">{row.label}</div>
-                  <div className="mt-0.5 truncate text-xs text-slate-500">{row.route}</div>
+                  <div className="truncate text-sm font-medium text-slate-800">
+                    {row.label}
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-slate-500">
+                    {row.route}
+                  </div>
                 </div>
                 <KeyPill>{`Alt + ${row.key.toUpperCase()}`}</KeyPill>
               </div>
@@ -96,7 +114,10 @@ function ParentShortcutRow({ shortcut, childrenRows, isOpen, onToggle }) {
 export default function ShortcutReferencePage() {
   const [openScopes, setOpenScopes] = useState(() =>
     Object.fromEntries(
-      sidebarParentShortcuts.map((shortcut) => [shortcut.scope || shortcut.label, false]),
+      sidebarParentShortcuts.map((shortcut) => [
+        shortcut.scope || shortcut.label,
+        false,
+      ]),
     ),
   );
 
@@ -104,7 +125,9 @@ export default function ShortcutReferencePage() {
     () =>
       sidebarParentShortcuts.map((shortcut) => ({
         ...shortcut,
-        childrenRows: shortcut.scope ? sidebarChildShortcuts[shortcut.scope] || [] : [],
+        childrenRows: shortcut.scope
+          ? sidebarChildShortcuts[shortcut.scope] || []
+          : [],
       })),
     [],
   );
@@ -118,11 +141,15 @@ export default function ShortcutReferencePage() {
               <Keyboard className="h-7 w-7" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">All Short Keys</h1>
+              <h1 className="text-3xl font-bold text-slate-900">
+                All Short Keys
+              </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                Use this page as the keyboard map for the whole accounting workspace. Sidebar navigation uses
-                `Ctrl + key` to choose a parent area, `Alt + key` to jump into a child page, and `Ctrl + Shift + L`
-                to open the jump-search from anywhere. Voucher screens keep the fast function-key flow for data entry.
+                Use this page as the keyboard map for the whole accounting
+                workspace. Sidebar navigation uses `Ctrl + key` to choose a
+                parent area, `Alt + key` to jump into a child page, and `Ctrl +
+                Shift + L` to open the jump-search from anywhere. Voucher
+                screens keep the fast function-key flow for data entry.
               </p>
             </div>
           </div>
@@ -137,9 +164,12 @@ export default function ShortcutReferencePage() {
             <div className="space-y-3">
               <div className="grid items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 md:grid-cols-[1fr_auto]">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">Global Search</div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    Global Search
+                  </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    Open the centered jump-search modal from anywhere and move directly to any screen.
+                    Open the centered jump-search modal from anywhere and move
+                    directly to any screen.
                   </div>
                 </div>
                 <KeyPill tone="blue">Ctrl + Shift + L</KeyPill>
@@ -176,7 +206,9 @@ export default function ShortcutReferencePage() {
                   className="grid gap-3 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 md:grid-cols-[1fr_auto_auto]"
                 >
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">{shortcut.label}</div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {shortcut.label}
+                    </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {shortcut.route
                         ? `Jump to ${shortcut.label}`

@@ -7,7 +7,7 @@ import { formatCurrencyAmount } from "../utils/currency";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
-import { navigateBackFromReport } from "../utils/reportNavigation";
+import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -231,7 +231,14 @@ export default function LedgerDetailPage() {
                             data-report-nav="true"
                             data-focus-key={`entry-${entry.voucherId}-${entry.lineIndex}-${index}`}
                             className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                            onClick={() => navigate(buildAlterVoucherPath(companyId, entry.voucherId))}
+                            onClick={() =>
+                              navigate(buildAlterVoucherPath(companyId, entry.voucherId), {
+                                state: buildReportReturnState(
+                                  location,
+                                  `entry-${entry.voucherId}-${entry.lineIndex}-${index}`,
+                                ),
+                              })
+                            }
                           >
                             Alter
                           </button>
