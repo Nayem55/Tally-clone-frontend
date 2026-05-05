@@ -296,14 +296,6 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     const rows = [
       ["Debit Note Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Supplier", ""],
-      ["Return Ledger", ""],
-      ["Narration", "Imported from Excel"],
-      [""],
-      ["Rows"],
       ["Item Name", "Qty", "Rate"],
       ...padExcelRows([["", "", ""]], 8, () => ["", "", ""]),
     ];
@@ -356,7 +348,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       tone: "success",
       title: "Demo Excel exported",
       description:
-        "Fill the same structure and import it back to create a debit note.",
+        "Fill the same structure and import it back to load item rows into the form.",
     });
   }
 
@@ -369,7 +361,6 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, DEBIT_TEMPLATE_SHEET);
-      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Item Name"]);
       const headerIndex = rows.findIndex(
         (row) =>
           normalizeExcelText(row[0]) === "Item Name" &&
@@ -377,14 +368,6 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       );
       if (headerIndex === -1)
         throw new Error("Debit note item table is missing.");
-      const supplier = supplierNameMap.get(
-        normalizeExcelNameKey(fieldMap.get("Supplier")),
-      );
-      if (!supplier) throw new Error("Supplier was not found.");
-      const returnLedgerImport = ledgerNameMap.get(
-        normalizeExcelNameKey(fieldMap.get("Return Ledger")),
-      );
-      if (!returnLedgerImport) throw new Error("Return ledger was not found.");
       const importedRows = rows
         .slice(headerIndex + 1)
         .map((row) => ({
@@ -409,41 +392,18 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
           throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
         return {
           itemId: item._id,
-          qty,
+          qty: String(qty),
           rate,
-          amount: Number((qty * rate).toFixed(2)),
         };
       });
-      const totalAmountImport = resolvedRows.reduce(
-        (sum, row) => sum + Number(row.amount || 0),
-        0,
-      );
-      const payload = {
-        voucherTypeId: debitTypeId,
-        voucherName: "Debit Note",
-        number:
-          normalizeExcelText(fieldMap.get("Voucher No.")) ||
-          (await refreshSuggestedNumber()),
-        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
-        narration:
-          normalizeExcelText(fieldMap.get("Narration")) || "Debit Note",
-        lines: [
-          {
-            ledgerId: returnLedgerImport._id,
-            debit: totalAmountImport,
-            credit: 0,
-          },
-          { ledgerId: supplier._id, debit: 0, credit: totalAmountImport },
-        ],
-        inventoryLines: resolvedRows,
-      };
-      await api.post(`/companies/${companyId}/vouchers`, payload);
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      setForm((prev) => ({
+        ...prev,
+        rows: resolvedRows,
+      }));
       setStatusMessage({
         tone: "success",
-        title: "Debit note imported successfully",
-        description: `${payload.number} was created with ${resolvedRows.length} item row(s).`,
+        title: "Debit note items loaded from Excel",
+        description: `${resolvedRows.length} item row(s) were loaded into the form. Review the header details and save manually.`,
       });
     } catch (error) {
       setStatusMessage({

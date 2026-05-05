@@ -176,14 +176,6 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     const rows = [
       ["Payment Voucher Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Pay From", ""],
-      ["Reference No.", ""],
-      ["Narration", "Imported from Excel"],
-      [""],
-      ["Rows"],
       ["Paid To (Account)", "Amount", "Narration"],
       ...padExcelRows([["", "", ""]], 8, () => ["", "", ""]),
     ];
@@ -212,7 +204,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     setStatusMessage({
       tone: "success",
       title: "Demo Excel exported",
-      description: "Fill the same structure and import it back to create a payment voucher.",
+      description: "Fill the same structure and import it back to load payment rows into the form.",
     });
   }
 
@@ -225,17 +217,12 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, PAYMENT_TEMPLATE_SHEET);
-      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Paid To (Account)"]);
       const headerIndex = rows.findIndex(
         (row) =>
           normalizeExcelText(row[0]) === "Paid To (Account)" &&
           normalizeExcelText(row[1]) === "Amount"
       );
       if (headerIndex === -1) throw new Error("Payment row table is missing.");
-      const payFromName = normalizeExcelText(fieldMap.get("Pay From"));
-      if (!payFromName) throw new Error("Pay From is required in the Excel file.");
-      const paymentLedgerImport = ledgerNameMap.get(normalizeExcelNameKey(payFromName));
-      if (!paymentLedgerImport) throw new Error(`Ledger "${payFromName}" was not found.`);
       const importedRows = rows
         .slice(headerIndex + 1)
         .map((row) => ({
@@ -252,31 +239,14 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
         if (!(amount > 0)) throw new Error(`Row ${index + 1}: Amount must be greater than 0.`);
         return { ledgerId: ledger._id, amount, narration: row.narration };
       });
-      const totalAmountImport = resolvedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const numberImport = normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber());
-      const payload = {
-        voucherTypeId: paymentTypeId,
-        voucherName: "Payment",
-        number: numberImport,
-        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
-        narration: normalizeExcelText(fieldMap.get("Narration")),
-        referenceNo: normalizeExcelText(fieldMap.get("Reference No.")),
-        lines: [
-          ...resolvedRows.map((row) => ({
-            ledgerId: row.ledgerId,
-            debit: Number(row.amount),
-            credit: 0,
-          })),
-          { ledgerId: paymentLedgerImport._id, debit: 0, credit: totalAmountImport },
-        ],
-      };
-      await api.post(`/companies/${companyId}/vouchers`, payload);
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      setForm((prev) => ({
+        ...prev,
+        rows: resolvedRows,
+      }));
       setStatusMessage({
         tone: "success",
-        title: "Payment voucher imported successfully",
-        description: `${payload.number} was created with ${resolvedRows.length} payment row(s) totaling ${formatVoucherMoney(totalAmountImport, currency.symbol)}.`,
+        title: "Payment rows loaded from Excel",
+        description: `${resolvedRows.length} payment row(s) were loaded into the form. Review the header details and save manually.`,
       });
     } catch (error) {
       setStatusMessage({

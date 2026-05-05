@@ -388,13 +388,11 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       ["Purchase Voucher Excel Import"],
       [""],
       ["How to use"],
-      ["1. Fill only the yellow input cells in the Purchase Voucher sheet."],
-      ["2. Supplier name must exactly match an existing Sundry Creditor ledger."],
-      ["3. Item names must exactly match existing stock item names."],
-      ["4. Billed Qty can be blank; it will follow Actual Qty automatically."],
-      ["5. Rate is required for every item row."],
-      ["6. You can keep Voucher No. blank to use the next automatic number."],
-      ["7. Delete unused item rows before import if you want a cleaner file."],
+      ["1. Fill only the item rows in the Purchase Voucher sheet."],
+      ["2. Item names must exactly match existing stock item names."],
+      ["3. Billed Qty can be blank; it will follow Actual Qty automatically."],
+      ["4. Rate is required for every item row."],
+      ["5. Import loads item rows into the voucher form only. It does not auto-save the voucher."],
     ];
     const instructionSheet = XLSX.utils.aoa_to_sheet(instructionRows);
     instructionSheet["!cols"] = [{ wch: 90 }];
@@ -415,16 +413,8 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     );
 
     const templateRows = [
-      ["Purchase Voucher Import Template"],
+      ["Purchase Product Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Supplier Invoice No.", ""],
-      ["Party A/c Name", ""],
-      ["Narration", "Imported from Excel"],
-      [""],
-      ["Items"],
       ["Item Name", "Actual Qty", "Billed Qty", "Rate", "Notes"],
       ...itemRows,
     ];
@@ -504,16 +494,11 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       raw: true,
     });
 
-    const valueMap = new Map();
-    rows.forEach((row) => {
-      const key = normalizeText(row[0]);
-      if (key && key !== "Field" && key !== "Items" && key !== "Item Name") {
-        valueMap.set(key, row[1]);
-      }
-    });
-
     const itemHeaderIndex = rows.findIndex(
-      (row) => normalizeText(row[0]) === "Item Name" && normalizeText(row[1]) === "Actual Qty",
+      (row) =>
+        normalizeText(row[0]) === "Item Name" &&
+        normalizeText(row[1]) === "Actual Qty" &&
+        normalizeText(row[2]) === "Billed Qty",
     );
     if (itemHeaderIndex === -1) {
       throw new Error("Item table header is missing from the template.");
@@ -532,11 +517,6 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       );
 
     return {
-      number: valueMap.get("Voucher No.") || "",
-      date: normalizeImportedDate(valueMap.get("Voucher Date")),
-      supplierInvoiceNo: valueMap.get("Supplier Invoice No.") || "",
-      supplierName: valueMap.get("Party A/c Name") || "",
-      narration: valueMap.get("Narration") || "",
       rows: importedRows,
     };
   }
@@ -553,15 +533,6 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       const parsed = parseTemplateSheet(workbook);
 
-      if (!parsed.supplierName) {
-        throw new Error("Party A/c Name is required in the Excel file.");
-      }
-      const supplier = supplierNameMap.get(normalizeNameKey(parsed.supplierName));
-      if (!supplier) {
-        throw new Error(
-          `Supplier "${parsed.supplierName}" was not found. Use an existing Sundry Creditor ledger name exactly as listed in Reference Data.`,
-        );
-      }
       if (!parsed.rows.length) {
         throw new Error("At least one item row is required in the Excel file.");
       }
@@ -594,48 +565,20 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
         };
       });
 
-      const nextAutoNumber =
-        normalizeText(parsed.number) || (await refreshSuggestedNumber());
-
-      const importedForm = {
-        number: nextAutoNumber,
-        date: parsed.date,
-        supplierInvoiceNo: parsed.supplierInvoiceNo,
-        supplierLedger: supplier._id,
-        purchaseLedger: defaultPurchaseLedgerId,
-        narration: parsed.narration || "Imported from Excel",
+      setForm((prev) => ({
+        number: prev.number || suggestedNumber || "",
+        date: prev.date,
+        supplierInvoiceNo: prev.supplierInvoiceNo,
+        supplierLedger: prev.supplierLedger || "",
+        purchaseLedger: prev.purchaseLedger || defaultPurchaseLedgerId,
+        narration: prev.narration || "Imported from Excel",
         rows: resolvedRows,
-      };
-
-      const importedValidRows = resolvedRows.filter(
-        (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,
-      );
-      const importedTotalAmount = importedValidRows.reduce(
-        (sum, row) =>
-          sum +
-          Number(
-            (
-              Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0)
-            ).toFixed(2),
-          ),
-        0,
-      );
-
-      const payload = buildPurchasePayload({
-        form: importedForm,
-        purchaseTypeId,
-        defaultPurchaseLedgerId,
-        itemMap,
-        validRows: importedValidRows,
-        totalAmount: importedTotalAmount,
-      });
-
-      await submitPayload(payload, { silentSuccess: true });
+      }));
 
       setStatusMessage({
         tone: "success",
-        title: "Purchase voucher imported successfully",
-        description: `${payload.number} was created for ${supplier.name} with ${importedValidRows.length} item row(s) totaling ${formatVoucherMoney(importedTotalAmount, currency.symbol)}.`,
+        title: "Purchase items loaded from Excel",
+        description: `${resolvedRows.length} item row(s) loaded into the voucher form. Review the remaining fields and save manually when ready.`,
       });
     } catch (error) {
       setStatusMessage({

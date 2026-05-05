@@ -165,13 +165,6 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     const rows = [
       ["Journal Voucher Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Reference No.", ""],
-      ["Narration", "Imported from Excel"],
-      [""],
-      ["Rows"],
       ["From (Debit)", "To (Credit)", "Amount", "Narration"],
       ...padExcelRows([["", "", "", ""]], 8, () => ["", "", "", ""]),
     ];
@@ -200,7 +193,7 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     setStatusMessage({
       tone: "success",
       title: "Demo Excel exported",
-      description: "Fill the same structure and import it back to create a journal voucher.",
+      description: "Fill the same structure and import it back to load journal rows into the form.",
     });
   }
 
@@ -213,7 +206,6 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, JOURNAL_TEMPLATE_SHEET);
-      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "From (Debit)"]);
       const headerIndex = rows.findIndex(
         (row) =>
           normalizeExcelText(row[0]) === "From (Debit)" &&
@@ -237,28 +229,16 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
         if (!toLedger) throw new Error(`Row ${index + 1}: Credit ledger "${row.toLedgerName}" was not found.`);
         const amount = Number(row.amount || 0);
         if (!(amount > 0)) throw new Error(`Row ${index + 1}: Amount must be greater than 0.`);
-        return { fromLedgerId: fromLedger._id, toLedgerId: toLedger._id, amount };
+        return { fromLedgerId: fromLedger._id, toLedgerId: toLedger._id, amount, narration: row.narration };
       });
-      const payload = {
-        voucherTypeId: journalTypeId,
-        voucherName: "Journal",
-        number:
-          normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber()),
-        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
-        narration: normalizeExcelText(fieldMap.get("Narration")),
-        referenceNo: normalizeExcelText(fieldMap.get("Reference No.")),
-        lines: resolvedRows.flatMap((row) => [
-          { ledgerId: row.fromLedgerId, debit: Number(row.amount), credit: 0 },
-          { ledgerId: row.toLedgerId, debit: 0, credit: Number(row.amount) },
-        ]),
-      };
-      await api.post(`/companies/${companyId}/vouchers`, payload);
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      setForm((prev) => ({
+        ...prev,
+        rows: resolvedRows,
+      }));
       setStatusMessage({
         tone: "success",
-        title: "Journal voucher imported successfully",
-        description: `${payload.number} was created with ${resolvedRows.length} journal row(s).`,
+        title: "Journal rows loaded from Excel",
+        description: `${resolvedRows.length} journal row(s) were loaded into the form. Review the header details and save manually.`,
       });
     } catch (error) {
       setStatusMessage({

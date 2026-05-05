@@ -182,12 +182,6 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     const rows = [
       ["Contra Voucher Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Narration", "Imported from Excel"],
-      [""],
-      ["Rows"],
       ["Account (Credit)", "Contra Account (Debit)", "Amount", "Narration"],
       ...padExcelRows([["", "", "", ""]], 8, () => ["", "", "", ""]),
     ];
@@ -216,7 +210,7 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     setStatusMessage({
       tone: "success",
       title: "Demo Excel exported",
-      description: "Fill the same structure and import it back to create a contra voucher.",
+      description: "Fill the same structure and import it back to load contra rows into the form.",
     });
   }
 
@@ -229,7 +223,6 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, CONTRA_TEMPLATE_SHEET);
-      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Account (Credit)"]);
       const headerIndex = rows.findIndex(
         (row) =>
           normalizeExcelText(row[0]) === "Account (Credit)" &&
@@ -267,25 +260,14 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
           narration: row.narration,
         };
       });
-      const payload = {
-        voucherTypeId: contraTypeId,
-        voucherName: "Contra",
-        number:
-          normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber()),
-        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
-        narration: normalizeExcelText(fieldMap.get("Narration")),
-        lines: resolvedRows.flatMap((row) => [
-          { ledgerId: row.creditLedgerId, debit: 0, credit: Number(row.amount) },
-          { ledgerId: row.debitLedgerId, debit: Number(row.amount), credit: 0 },
-        ]),
-      };
-      await api.post(`/companies/${companyId}/vouchers`, payload);
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      setForm((prev) => ({
+        ...prev,
+        rows: resolvedRows,
+      }));
       setStatusMessage({
         tone: "success",
-        title: "Contra voucher imported successfully",
-        description: `${payload.number} was created with ${resolvedRows.length} contra row(s).`,
+        title: "Contra rows loaded from Excel",
+        description: `${resolvedRows.length} contra row(s) were loaded into the form. Review the header details and save manually.`,
       });
     } catch (error) {
       setStatusMessage({

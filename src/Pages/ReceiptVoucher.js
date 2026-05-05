@@ -161,13 +161,6 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
     const rows = [
       ["Receipt Voucher Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Receive Into", ""],
-      ["Narration", "Imported from Excel"],
-      [""],
-      ["Rows"],
       ["Received From (Account)", "Amount", "Narration"],
       ...padExcelRows([["", "", ""]], 8, () => ["", "", ""]),
     ];
@@ -196,7 +189,7 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
     setStatusMessage({
       tone: "success",
       title: "Demo Excel exported",
-      description: "Fill the same structure and import it back to create a receipt voucher.",
+      description: "Fill the same structure and import it back to load receipt rows into the form.",
     });
   }
 
@@ -209,17 +202,12 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, RECEIPT_TEMPLATE_SHEET);
-      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Received From (Account)"]);
       const headerIndex = rows.findIndex(
         (row) =>
           normalizeExcelText(row[0]) === "Received From (Account)" &&
           normalizeExcelText(row[1]) === "Amount"
       );
       if (headerIndex === -1) throw new Error("Receipt row table is missing.");
-      const receiveIntoName = normalizeExcelText(fieldMap.get("Receive Into"));
-      if (!receiveIntoName) throw new Error("Receive Into is required in the Excel file.");
-      const receiptLedgerImport = ledgerNameMap.get(normalizeExcelNameKey(receiveIntoName));
-      if (!receiptLedgerImport) throw new Error(`Ledger "${receiveIntoName}" was not found.`);
       const importedRows = rows
         .slice(headerIndex + 1)
         .map((row) => ({
@@ -236,30 +224,14 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
         if (!(amount > 0)) throw new Error(`Row ${index + 1}: Amount must be greater than 0.`);
         return { ledgerId: ledger._id, amount, narration: row.narration };
       });
-      const totalAmountImport = resolvedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const numberImport = normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber());
-      const payload = {
-        voucherTypeId: receiptTypeId,
-        voucherName: "Receipt",
-        number: numberImport,
-        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
-        narration: normalizeExcelText(fieldMap.get("Narration")),
-        lines: [
-          { ledgerId: receiptLedgerImport._id, debit: totalAmountImport, credit: 0 },
-          ...resolvedRows.map((row) => ({
-            ledgerId: row.ledgerId,
-            debit: 0,
-            credit: Number(row.amount),
-          })),
-        ],
-      };
-      await api.post(`/companies/${companyId}/vouchers`, payload);
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      setForm((prev) => ({
+        ...prev,
+        rows: resolvedRows,
+      }));
       setStatusMessage({
         tone: "success",
-        title: "Receipt voucher imported successfully",
-        description: `${payload.number} was created with ${resolvedRows.length} receipt row(s) totaling ${formatVoucherMoney(totalAmountImport, currency.symbol)}.`,
+        title: "Receipt rows loaded from Excel",
+        description: `${resolvedRows.length} receipt row(s) were loaded into the form. Review the header details and save manually.`,
       });
     } catch (error) {
       setStatusMessage({

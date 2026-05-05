@@ -630,21 +630,6 @@ export default function PosVoucherPage({
     const rows = [
       ["POS Voucher Import Template"],
       [""],
-      ["Field", "Value"],
-      ["Voucher No.", suggestedNumber || ""],
-      ["Voucher Date", form.date],
-      ["Customer Name", ""],
-      ["Customer Phone", ""],
-      ["Customer Address", ""],
-      ["Discount Type", "fixed"],
-      ["Discount Value", "0"],
-      ["Redeem Points", "0"],
-      ["Card Payment", "0"],
-      ["Cash Payment", "0"],
-      ["Cash Tendered", "0"],
-      ["Note", "Imported from Excel"],
-      [""],
-      ["Rows"],
       ["Item Name", "Qty", "Rate", "Disc %"],
       ...padExcelRows([["", "", "", ""]], 8, () => ["", "", "", ""]),
     ];
@@ -674,7 +659,7 @@ export default function PosVoucherPage({
     setStatusMessage({
       tone: "success",
       title: "Demo Excel exported",
-      description: "Fill the same structure and import it back to create a POS voucher.",
+      description: "Fill the same structure and import it back to load item rows into the form.",
     });
   };
 
@@ -687,20 +672,12 @@ export default function PosVoucherPage({
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, POS_TEMPLATE_SHEET);
-      const fieldMap = parseFieldValueMap(rows, ["Field", "Rows", "Item Name"]);
       const headerIndex = rows.findIndex(
         (row) =>
           normalizeExcelText(row[0]) === "Item Name" &&
           normalizeExcelText(row[1]) === "Qty",
       );
       if (headerIndex === -1) throw new Error("POS item table is missing.");
-
-      const customerName = normalizeExcelText(fieldMap.get("Customer Name"));
-      const customerPhone = normalizeExcelText(fieldMap.get("Customer Phone"));
-      if (!customerName) throw new Error("Customer Name is required.");
-      if (customerPhone.replace(/\D/g, "").length < 6) {
-        throw new Error("Customer Phone must be a valid number.");
-      }
 
       const importedRows = rows
         .slice(headerIndex + 1)
@@ -725,89 +702,20 @@ export default function PosVoucherPage({
         if (!(rate > 0)) throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
         return {
           itemId: item._id,
-          qty,
+          qty: String(qty),
           rate,
           mrpRate: Number(resolveItemRateByDate(item, mrpPriceLevelId, form.date) || rate),
-          discountPercent,
-          groupName: item.groupName || "",
-          stockCategoryName: item.stockCategory || "",
+          discountPercent: String(discountPercent || ""),
         };
       });
-
-      const lineAmountImport = (row) => {
-        const gross = Number(row.qty || 0) * Number(row.rate || 0);
-        const discount = gross * (Number(row.discountPercent || 0) / 100);
-        return Number((gross - discount).toFixed(2));
-      };
-      const subtotalImport = resolvedRows.reduce((sum, row) => sum + lineAmountImport(row), 0);
-      const discountType =
-        normalizeExcelText(fieldMap.get("Discount Type")).toLowerCase() === "percentage"
-          ? "percentage"
-          : "fixed";
-      const discountValue = Number(fieldMap.get("Discount Value") || 0);
-      const invoiceDiscountImport =
-        discountType === "percentage"
-          ? subtotalImport * (discountValue / 100)
-          : discountValue;
-      const redeemPointsImport = Number(fieldMap.get("Redeem Points") || 0);
-      const totalAmountImport = Math.max(
-        0,
-        Number((subtotalImport - invoiceDiscountImport - redeemPointsImport).toFixed(2)),
-      );
-      const cardImport = Number(fieldMap.get("Card Payment") || 0);
-      const cashImport =
-        normalizeExcelText(fieldMap.get("Cash Payment")) !== ""
-          ? Number(fieldMap.get("Cash Payment") || 0)
-          : Number((totalAmountImport - cardImport).toFixed(2));
-      const tenderedImport =
-        normalizeExcelText(fieldMap.get("Cash Tendered")) !== ""
-          ? Number(fieldMap.get("Cash Tendered") || 0)
-          : cashImport;
-      if (
-        Number((cardImport + cashImport).toFixed(2)) !== Number(totalAmountImport.toFixed(2))
-      ) {
-        throw new Error("Card Payment + Cash Payment must match the total payable.");
-      }
-
-      const payload = {
-        voucherTypeId,
-        number:
-          normalizeExcelText(fieldMap.get("Voucher No.")) || (await refreshSuggestedNumber()),
-        date: normalizeImportedExcelDate(fieldMap.get("Voucher Date")),
-        narration: normalizeExcelText(fieldMap.get("Note")),
-        customer: {
-          name: customerName,
-          phone: customerPhone,
-          address: normalizeExcelText(fieldMap.get("Customer Address")),
-        },
-        salesLedgerId: defaults.salesLedger?._id || "",
-        discountType,
-        discountValue,
-        redeemedPoints: redeemPointsImport,
-        payments: {
-          card: cardImport,
-          cash: cashImport,
-          cashTendered: tenderedImport,
-        },
-        items: resolvedRows.map((row) => ({
-          itemId: row.itemId,
-          qty: Number(row.qty || 0),
-          rate: Number(row.rate || 0),
-          mrpRate: Number(row.mrpRate || row.rate || 0),
-          discountType: "percent",
-          discountValue: Number(row.discountPercent || 0),
-          groupName: row.groupName,
-          stockCategoryName: row.stockCategoryName,
-        })),
-      };
-
-      await api.post(`/companies/${effectiveCompanyId}/pos-vouchers`, payload);
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      setForm((current) => ({
+        ...current,
+        rows: resolvedRows,
+      }));
       setStatusMessage({
         tone: "success",
-        title: "POS voucher imported successfully",
-        description: `${payload.number} was created with ${resolvedRows.length} item row(s).`,
+        title: "POS items loaded from Excel",
+        description: `${resolvedRows.length} item row(s) were loaded into the form. Review customer and payment details, then save manually.`,
       });
     } catch (error) {
       setStatusMessage({
