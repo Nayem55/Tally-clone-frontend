@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download, ImagePlus, PencilLine, Plus, Trash2, Upload } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import {
@@ -40,6 +41,8 @@ function toBase64(file) {
 }
 
 export default function Items() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [stockGroups, setStockGroups] = useState([]);
@@ -85,6 +88,30 @@ export default function Items() {
     loadData();
   }, [companyId]);
 
+  useEffect(() => {
+    function handleReturnShortcut(event) {
+      if (!location.state?.returnTo) return;
+      if (event.key !== "Escape" && event.key !== "Backspace") return;
+      const target = event.target;
+      const tag = String(target?.tagName || "").toLowerCase();
+      const isTyping =
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target?.isContentEditable;
+      if (event.key === "Backspace" && isTyping) return;
+      event.preventDefault();
+      navigate(location.state.returnTo, {
+        state: {
+          restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft),
+        },
+      });
+    }
+
+    window.addEventListener("keydown", handleReturnShortcut);
+    return () => window.removeEventListener("keydown", handleReturnShortcut);
+  }, [location.state, navigate]);
+
   const openingValue = useMemo(
     () => (Number(form.openingQty) || 0) * (Number(form.openingRate) || 0),
     [form.openingQty, form.openingRate]
@@ -116,6 +143,11 @@ export default function Items() {
       setForm(defaultForm);
       await loadData();
       setStatus("Stock item saved successfully.");
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          state: { restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft) },
+        });
+      }
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save stock item");
     }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Download, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import {
@@ -21,6 +22,8 @@ const defaultForm = {
 };
 
 export default function Ledgers() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [groups, setGroups] = useState([]);
@@ -60,6 +63,30 @@ export default function Ledgers() {
     loadMasters();
   }, [companyId]);
 
+  useEffect(() => {
+    function handleReturnShortcut(event) {
+      if (!location.state?.returnTo) return;
+      if (event.key !== "Escape" && event.key !== "Backspace") return;
+      const target = event.target;
+      const tag = String(target?.tagName || "").toLowerCase();
+      const isTyping =
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target?.isContentEditable;
+      if (event.key === "Backspace" && isTyping) return;
+      event.preventDefault();
+      navigate(location.state.returnTo, {
+        state: {
+          restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft),
+        },
+      });
+    }
+
+    window.addEventListener("keydown", handleReturnShortcut);
+    return () => window.removeEventListener("keydown", handleReturnShortcut);
+  }, [location.state, navigate]);
+
   const sortedGroups = useMemo(
     () => [...groups].sort((left, right) => left.name.localeCompare(right.name)),
     [groups]
@@ -90,6 +117,11 @@ export default function Ledgers() {
       setForm(defaultForm);
       await loadMasters();
       setStatus("Ledger saved successfully.");
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          state: { restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft) },
+        });
+      }
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save ledger");
     }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, PencilLine, Plus, Search, Tag, Trash2, Upload } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import {
@@ -15,6 +16,8 @@ const defaultForm = {
 };
 
 export default function PriceLevels() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [companyId, setCompanyId] = useState("");
   const [companies, setCompanies] = useState([]);
   const [levels, setLevels] = useState([]);
@@ -37,6 +40,30 @@ export default function PriceLevels() {
     if (companyId) loadLevels();
   }, [companyId]);
 
+  useEffect(() => {
+    function handleReturnShortcut(event) {
+      if (!location.state?.returnTo) return;
+      if (event.key !== "Escape" && event.key !== "Backspace") return;
+      const target = event.target;
+      const tag = String(target?.tagName || "").toLowerCase();
+      const isTyping =
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target?.isContentEditable;
+      if (event.key === "Backspace" && isTyping) return;
+      event.preventDefault();
+      navigate(location.state.returnTo, {
+        state: {
+          restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft),
+        },
+      });
+    }
+
+    window.addEventListener("keydown", handleReturnShortcut);
+    return () => window.removeEventListener("keydown", handleReturnShortcut);
+  }, [location.state, navigate]);
+
   const loadLevels = async () => {
     const res = await api.get(`/companies/${companyId}/price-levels`);
     setLevels(res.data);
@@ -58,7 +85,12 @@ export default function PriceLevels() {
       }
       setForm(defaultForm);
       setStatus("Price list saved successfully.");
-      loadLevels();
+      await loadLevels();
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          state: { restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft) },
+        });
+      }
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save price list");
     }

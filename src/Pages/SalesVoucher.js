@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Plus, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import api from "../api/api";
+import { useLocation, useNavigate } from "react-router-dom";
 import VoucherWorkspace, {
   VoucherPanel,
   formatVoucherMoney,
@@ -40,10 +41,13 @@ const emptyRow = {
 const SALES_TEMPLATE_SHEET = "Sales Voucher";
 const SALES_INSTRUCTION_SHEET = "Instructions";
 const SALES_REFERENCE_SHEET = "Reference Data";
+const SALES_VOUCHER_RETURN_STORAGE_KEY = "sales-voucher-return-draft";
 
 export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [salesTypeId, setSalesTypeId] = useState("");
   const [salesLedgerId, setSalesLedgerId] = useState("");
   const [partyLedgers, setPartyLedgers] = useState([]);
@@ -175,6 +179,22 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     if (!suggestedNumber || isEditMode) return;
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
+
+  useEffect(() => {
+    if (isEditMode || !companyId || !location.state?.restoreSalesVoucherDraft) return;
+    try {
+      const raw = window.sessionStorage.getItem(SALES_VOUCHER_RETURN_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (String(draft?.companyId || "") !== String(companyId)) return;
+      if (!draft?.form) return;
+      setForm(draft.form);
+      setStatusMessage(draft.statusMessage || null);
+      window.sessionStorage.removeItem(SALES_VOUCHER_RETURN_STORAGE_KEY);
+    } catch (error) {
+      console.error("Unable to restore sales voucher draft:", error);
+    }
+  }, [companyId, isEditMode, location.state]);
 
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
@@ -379,6 +399,29 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       additionalCharges: "",
       rows: [emptyRow],
     });
+
+  function navigateToCreateMaster(path) {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        SALES_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store sales voucher draft:", error);
+    }
+
+    navigate(path, {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreSalesVoucherDraft: true,
+      },
+    });
+  }
 
   function buildTemplateWorkbook() {
     const workbook = XLSX.utils.book_new();
@@ -698,7 +741,16 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Party A/c Name</label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">Party A/c Name</label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+              >
+                Add+
+              </button>
+            </div>
             <SearchableSelect
               options={partyOptions}
               value={form.partyLedger}
@@ -717,7 +769,16 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             </p>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Price Level</label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">Price Level</label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => navigateToCreateMaster("/masters/create/price-list")}
+              >
+                Add+
+              </button>
+            </div>
             <SearchableSelect
               options={[{ value: "", label: "Party Default / Not Applicable" }, ...priceLevelOptions]}
               value={form.priceLevelId}
@@ -740,7 +801,18 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Item Name</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Item Name</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/stock-item")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="px-4 py-3 font-medium">Actual</th>
                 <th className="px-4 py-3 font-medium">Billed</th>
                 <th className="px-4 py-3 font-medium">Rate</th>
