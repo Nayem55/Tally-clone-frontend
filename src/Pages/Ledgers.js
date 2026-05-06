@@ -77,9 +77,7 @@ export default function Ledgers() {
       if (event.key === "Backspace" && isTyping) return;
       event.preventDefault();
       navigate(location.state.returnTo, {
-        state: {
-          restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft),
-        },
+        state: { ...location.state },
       });
     }
 
@@ -119,7 +117,7 @@ export default function Ledgers() {
       setStatus("Ledger saved successfully.");
       if (location.state?.returnTo) {
         navigate(location.state.returnTo, {
-          state: { restoreSalesVoucherDraft: Boolean(location.state.restoreSalesVoucherDraft) },
+          state: { ...location.state },
         });
       }
     } catch (error) {

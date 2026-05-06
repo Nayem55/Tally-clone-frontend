@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, HandCoins, Plus, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -24,6 +25,7 @@ import {
 
 const emptyRow = { ledgerId: "", amount: "", narration: "" };
 const PAYMENT_TEMPLATE_SHEET = "Payment Voucher";
+const PAYMENT_VOUCHER_RETURN_STORAGE_KEY = "payment-voucher-return-draft";
 
 const inputClass =
   "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
@@ -31,6 +33,8 @@ const inputClass =
 export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -115,6 +119,23 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
+  useEffect(() => {
+    if (!isEditMode && companyId && location.state?.restorePaymentVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(PAYMENT_VOUCHER_RETURN_STORAGE_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(PAYMENT_VOUCHER_RETURN_STORAGE_KEY);
+      } catch (error) {
+        console.error("Unable to restore payment voucher draft:", error);
+      }
+    }
+  }, [companyId, isEditMode, location.state]);
+
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
 
@@ -168,6 +189,29 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
       rows: [emptyRow],
       narration: "",
       referenceNo: "",
+    });
+  }
+
+  function navigateToCreateLedger() {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        PAYMENT_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store payment voucher draft:", error);
+    }
+
+    navigate("/masters/create/ledger", {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restorePaymentVoucherDraft: true,
+      },
     });
   }
 
@@ -374,9 +418,16 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
           </div>
 
           <div className="relative z-[9999]">
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Pay From
-            </label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">Pay From</label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={navigateToCreateLedger}
+              >
+                Add+
+              </button>
+            </div>
             <div className="relative h-[31px] z-[9999]">
               <SearchableSelect
                 options={ledgerOptions}
@@ -407,7 +458,18 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="w-[5%] px-4 py-3 font-medium">#</th>
-                <th className="w-[35%] px-4 py-3 font-medium">Paid To (Account)</th>
+                <th className="w-[35%] px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Paid To (Account)</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateLedger}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="w-[20%] px-4 py-3 text-right font-medium">Amount</th>
                 <th className="w-[30%] px-4 py-3 font-medium">Narration</th>
                 <th className="w-[10%] px-4 py-3"></th>

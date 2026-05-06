@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookText, Download, Plus, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -24,10 +25,13 @@ import {
 
 const emptyRow = { fromLedgerId: "", toLedgerId: "", amount: "", narration: "" };
 const JOURNAL_TEMPLATE_SHEET = "Journal Voucher";
+const JOURNAL_VOUCHER_RETURN_STORAGE_KEY = "journal-voucher-return-draft";
 
 export default function JournalVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [journalTypeId, setJournalTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -110,6 +114,23 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
+  useEffect(() => {
+    if (!isEditMode && companyId && location.state?.restoreJournalVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(JOURNAL_VOUCHER_RETURN_STORAGE_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(JOURNAL_VOUCHER_RETURN_STORAGE_KEY);
+      } catch (error) {
+        console.error("Unable to restore journal voucher draft:", error);
+      }
+    }
+  }, [companyId, isEditMode, location.state]);
+
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
@@ -157,6 +178,29 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
       narration: "",
       referenceNo: "",
       rows: [emptyRow],
+    });
+  }
+
+  function navigateToCreateLedger() {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        JOURNAL_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store journal voucher draft:", error);
+    }
+
+    navigate("/masters/create/ledger", {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreJournalVoucherDraft: true,
+      },
     });
   }
 
@@ -401,8 +445,30 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">From (Debit)</th>
-                <th className="px-4 py-3 font-medium">To (Credit)</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>From (Debit)</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateLedger}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>To (Credit)</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateLedger}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Narration</th>
                 <th className="px-4 py-3"></th>

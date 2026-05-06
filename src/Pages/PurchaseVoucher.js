@@ -7,6 +7,7 @@ import {
   Upload,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -31,6 +32,7 @@ const emptyRow = {
 const PURCHASE_TEMPLATE_SHEET = "Purchase Voucher";
 const PURCHASE_INSTRUCTION_SHEET = "Instructions";
 const PURCHASE_REFERENCE_SHEET = "Reference Data";
+const PURCHASE_VOUCHER_RETURN_STORAGE_KEY = "purchase-voucher-return-draft";
 
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -137,6 +139,8 @@ function buildPurchasePayload({
 export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [purchaseTypeId, setPurchaseTypeId] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [allLedgers, setAllLedgers] = useState([]);
@@ -255,6 +259,23 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
+  useEffect(() => {
+    if (!isEditMode && companyId && location.state?.restorePurchaseVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(PURCHASE_VOUCHER_RETURN_STORAGE_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(PURCHASE_VOUCHER_RETURN_STORAGE_KEY);
+      } catch (error) {
+        console.error("Unable to restore purchase voucher draft:", error);
+      }
+    }
+  }, [companyId, isEditMode, location.state]);
+
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const itemMap = useMemo(() => new Map(items.map((item) => [item._id, item])), [items]);
@@ -344,6 +365,29 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       narration: "",
       rows: [createEmptyRow()],
     });
+
+  function navigateToCreateMaster(path) {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        PURCHASE_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store purchase voucher draft:", error);
+    }
+
+    navigate(path, {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restorePurchaseVoucherDraft: true,
+      },
+    });
+  }
 
   async function submitPayload(payload, options = {}) {
     if (isEditMode) {
@@ -698,7 +742,16 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Party A/c Name</label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">Party A/c Name</label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+              >
+                Add+
+              </button>
+            </div>
             <SearchableSelect
               options={supplierOptions}
               value={form.supplierLedger}
@@ -727,7 +780,18 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Item Name</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Item Name</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/stock-item")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="px-4 py-3 font-medium">Actual</th>
                 <th className="px-4 py-3 font-medium">Billed</th>
                 <th className="px-4 py-3 font-medium">Rate</th>

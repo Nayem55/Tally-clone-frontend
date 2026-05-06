@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownCircle, Download, Plus, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -24,10 +25,13 @@ import {
 
 const emptyRow = { ledgerId: "", amount: "", narration: "" };
 const RECEIPT_TEMPLATE_SHEET = "Receipt Voucher";
+const RECEIPT_VOUCHER_RETURN_STORAGE_KEY = "receipt-voucher-return-draft";
 
 export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [receiptTypeId, setReceiptTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -107,6 +111,23 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
+  useEffect(() => {
+    if (!isEditMode && companyId && location.state?.restoreReceiptVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(RECEIPT_VOUCHER_RETURN_STORAGE_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(RECEIPT_VOUCHER_RETURN_STORAGE_KEY);
+      } catch (error) {
+        console.error("Unable to restore receipt voucher draft:", error);
+      }
+    }
+  }, [companyId, isEditMode, location.state]);
+
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
   const ledgerMap = useMemo(() => new Map(ledgers.map((ledger) => [ledger._id, ledger])), [ledgers]);
@@ -153,6 +174,29 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
       receiptLedger: "",
       rows: [emptyRow],
       narration: "",
+    });
+  }
+
+  function navigateToCreateLedger() {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        RECEIPT_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store receipt voucher draft:", error);
+    }
+
+    navigate("/masters/create/ledger", {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreReceiptVoucherDraft: true,
+      },
     });
   }
 
@@ -350,7 +394,16 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Receive Into</label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">Receive Into</label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={navigateToCreateLedger}
+              >
+                Add+
+              </button>
+            </div>
             <SearchableSelect
               options={ledgerOptions}
               value={form.receiptLedger}
@@ -377,7 +430,18 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Received From (Account)</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Received From (Account)</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateLedger}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Narration</th>
                 <th className="px-4 py-3"></th>

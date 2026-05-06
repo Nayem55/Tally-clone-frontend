@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRightLeft, Download, Plus, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -29,6 +30,7 @@ const emptyRow = {
   narration: "",
 };
 const CONTRA_TEMPLATE_SHEET = "Contra Voucher";
+const CONTRA_VOUCHER_RETURN_STORAGE_KEY = "contra-voucher-return-draft";
 
 const inputClass =
   "h-[31px] w-full border border-[#c8d2de] px-2 text-[14px] leading-[31px] outline-none focus:border-[#3f83f8]";
@@ -36,6 +38,8 @@ const inputClass =
 export default function ContraVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [contraTypeId, setContraTypeId] = useState("");
   const [ledgers, setLedgers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -121,6 +125,23 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
 
+  useEffect(() => {
+    if (!isEditMode && companyId && location.state?.restoreContraVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(CONTRA_VOUCHER_RETURN_STORAGE_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(CONTRA_VOUCHER_RETURN_STORAGE_KEY);
+      } catch (error) {
+        console.error("Unable to restore contra voucher draft:", error);
+      }
+    }
+  }, [companyId, isEditMode, location.state]);
+
   const company = companies.find((entry) => String(entry._id) === String(companyId));
   const currency = getCompanyCurrency(company);
 
@@ -174,6 +195,29 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
       date: formatDateForInput(new Date()),
       rows: [emptyRow],
       narration: "",
+    });
+  }
+
+  function navigateToCreateLedger() {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        CONTRA_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store contra voucher draft:", error);
+    }
+
+    navigate("/masters/create/ledger", {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreContraVoucherDraft: true,
+      },
     });
   }
 
@@ -419,8 +463,30 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="w-[4%] px-4 py-3 font-medium">#</th>
-                <th className="w-[26%] px-4 py-3 font-medium">Account (Credit)</th>
-                <th className="w-[26%] px-4 py-3 font-medium">Contra Account (Debit)</th>
+                <th className="w-[26%] px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Account (Credit)</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateLedger}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
+                <th className="w-[26%] px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Contra Account (Debit)</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateLedger}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="w-[18%] px-4 py-3 text-right font-medium">Amount</th>
                 <th className="w-[20%] px-4 py-3 font-medium">Narration</th>
                 <th className="w-[6%] px-4 py-3"></th>
