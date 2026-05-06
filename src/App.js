@@ -38,6 +38,12 @@ import CommandSearchModal from "./Component/CommandSearchModal";
 import AlterVoucherEntryPage from "./Pages/AlterVoucherEntryPage";
 import EmployeeCreationPage from "./Pages/EmployeeCreationPage";
 import LedgerDetailPage from "./Pages/LedgerDetailPage";
+import ManufacturingBomPage from "./Pages/ManufacturingBomPage";
+import ManufacturingVoucherPage from "./Pages/ManufacturingVoucherPage";
+import RawMaterialSummaryPage from "./Pages/RawMaterialSummaryPage";
+import ManufacturingBomRegisterPage from "./Pages/ManufacturingBomRegisterPage";
+import ProductionRegisterPage from "./Pages/ProductionRegisterPage";
+import ComponentConsumptionPage from "./Pages/ComponentConsumptionPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -294,6 +300,8 @@ function AppShell() {
             />
             <Route path="/masters/create/price-list" element={<PriceLevels />} />
             <Route path="/masters/alter/price-list" element={<AlterItemPrices />} />
+            <Route path="/masters/create/bom" element={<ManufacturingBomPage mode="create" />} />
+            <Route path="/masters/alter/bom" element={<ManufacturingBomPage mode="alter" />} />
 
             <Route path="/chart-of-accounts/groups" element={<CoaGroups />} />
             <Route path="/chart-of-accounts/ledgers" element={<CoaLedgers />} />
@@ -362,6 +370,7 @@ function AppShell() {
             <Route path="/transactions/inventory/rejections-in" element={Placeholder("Rejections In", "This screen is reserved for inward rejection vouchers and inventory returns.")} />
             <Route path="/transactions/inventory/rejections-out" element={Placeholder("Rejections Out", "This screen is reserved for outward rejection vouchers and inventory returns.")} />
             <Route path="/transactions/inventory/stock-journal" element={<InventoryVoucherPage voucherName="Stock Journal" />} />
+            <Route path="/transactions/inventory/manufacturing" element={<ManufacturingVoucherPage />} />
             <Route path="/transactions/inventory/physical-stock" element={Placeholder("Physical Stock", "Physical stock entry is scaffolded for stock adjustment and verification workflows.")} />
             <Route path="/transactions/alter-vouchers" element={<VoucherRegister />} />
             <Route path="/transactions/alter-vouchers/:voucherId" element={<AlterVoucherEntryPage />} />
@@ -464,6 +473,10 @@ function AppShell() {
 
             <Route path="/reports/inventory-books/stock-item" element={<StockItemDetailPage />} />
             <Route path="/reports/inventory-books/stock-group-summary" element={<StockGroupSummaryPage />} />
+            <Route path="/reports/inventory-books/raw-material-summary" element={<RawMaterialSummaryPage />} />
+            <Route path="/reports/inventory-books/bom-register" element={<ManufacturingBomRegisterPage />} />
+            <Route path="/reports/inventory-books/production-register" element={<ProductionRegisterPage />} />
+            <Route path="/reports/inventory-books/component-consumption" element={<ComponentConsumptionPage />} />
             <Route
               path="/reports/inventory-books/movement-analysis"
               element={<Navigate to="/reports/inventory-books/movement-analysis/stock-group" replace />}

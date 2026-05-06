@@ -38,6 +38,7 @@ export const menuTree = [
           { label: "Cost Category", to: "/masters/create/cost-category" },
           { label: "Cost Centre", to: "/masters/create/cost-centre" },
           { label: "Employee", to: "/masters/create/employee" },
+          { label: "BoM", to: "/masters/create/bom" },
           { label: "Stock Group", to: "/masters/create/stock-group" },
           { label: "Stock Category", to: "/masters/create/stock-category" },
           { label: "Stock Item", to: "/masters/create/stock-item" },
@@ -56,6 +57,7 @@ export const menuTree = [
           { label: "Cost Category", to: "/masters/alter/cost-category" },
           { label: "Cost Centre", to: "/masters/alter/cost-centre" },
           { label: "Employee", to: "/masters/alter/employee" },
+          { label: "BoM", to: "/masters/alter/bom" },
           { label: "Stock Group", to: "/masters/alter/stock-group" },
           { label: "Stock Category", to: "/masters/alter/stock-category" },
           { label: "Stock Item", to: "/masters/alter/stock-item" },
@@ -103,6 +105,7 @@ export const menuTree = [
           { label: "Rejections In", to: "/transactions/inventory/rejections-in" },
           { label: "Rejections Out", to: "/transactions/inventory/rejections-out" },
           { label: "Stock Journal", to: "/transactions/inventory/stock-journal" },
+          { label: "Manufacturing", to: "/transactions/inventory/manufacturing" },
           { label: "Physical Stock", to: "/transactions/inventory/physical-stock" },
         ],
       },
@@ -128,6 +131,10 @@ export const menuTree = [
         children: [
           { label: "Stock Item", to: "/reports/inventory-books/stock-item" },
           { label: "Stock Group Summary", to: "/reports/inventory-books/stock-group-summary" },
+          { label: "Raw Material Summary", to: "/reports/inventory-books/raw-material-summary" },
+          { label: "BoM Register", to: "/reports/inventory-books/bom-register" },
+          { label: "Production Register", to: "/reports/inventory-books/production-register" },
+          { label: "Component Consumption", to: "/reports/inventory-books/component-consumption" },
           {
             label: "Movement Analysis",
             children: [

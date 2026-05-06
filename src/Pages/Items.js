@@ -21,6 +21,7 @@ const defaultForm = {
   unitId: "",
   unitOfMeasure: "",
   godownId: "",
+  inventoryRole: "standard",
   description: "",
   notes: "",
   picture: "",
@@ -100,6 +101,7 @@ export default function Items() {
       stockCategoryId: form.stockCategoryId,
       unitId: form.unitId,
       godownId: form.godownId,
+      inventoryRole: form.inventoryRole || "standard",
       openingQty: Number(form.openingQty || 0),
       openingRate: Number(form.openingRate || 0),
       openingValue,
@@ -153,6 +155,7 @@ export default function Items() {
         "Stock Category",
         "Unit",
         "Godown",
+        "Inventory Role",
         "Description",
         "Notes",
         "Opening Qty",
@@ -169,6 +172,7 @@ export default function Items() {
                 sampleItem.stockCategoryMaster?.name || sampleItem.stockCategory || "",
               Unit: sampleItem.unitMaster?.name || sampleItem.unitOfMeasure || "",
               Godown: sampleItem.godownMaster?.name || "",
+              "Inventory Role": sampleItem.inventoryRole || "standard",
               Description: sampleItem.description || "",
               Notes: sampleItem.notes || "",
               "Opening Qty": Number(sampleItem.openingQty || 0),
@@ -182,6 +186,7 @@ export default function Items() {
               "Stock Category": stockCategories[0]?.name || "",
               Unit: units[0]?.name || "",
               Godown: godowns[0]?.name || "",
+              "Inventory Role": "standard",
               Description: "",
               Notes: "",
               "Opening Qty": 0,
@@ -193,6 +198,7 @@ export default function Items() {
         "Fill the Stock Items sheet and import it back from this screen.",
         "Each row creates one stock item.",
         "Use exact Stock Group, Stock Category, Unit, and Godown names from the reference sheets.",
+        "Inventory Role accepts standard, raw_material, or finished_good.",
         "Picture upload is not part of Excel import in this first version.",
       ],
       referenceSheets: [
@@ -242,6 +248,7 @@ export default function Items() {
           unitId: unit?._id || "",
           unitOfMeasure: unit?.name || "",
           godownId: godown?._id || "",
+          inventoryRole: String(row["Inventory Role"] || "standard").trim() || "standard",
           description: String(row.Description || "").trim(),
           notes: String(row.Notes || "").trim(),
           picture: "",
@@ -374,6 +381,15 @@ export default function Items() {
                 </option>
               ))}
             </select>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={form.inventoryRole}
+              onChange={(event) => setForm((current) => ({ ...current, inventoryRole: event.target.value }))}
+            >
+              <option value="standard">Trading / Standard Item</option>
+              <option value="raw_material">Raw Material</option>
+              <option value="finished_good">Finished Good</option>
+            </select>
           </div>
         </section>
 
@@ -471,6 +487,7 @@ export default function Items() {
                   <th className="px-4 py-3 font-medium">Stock Group</th>
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Unit</th>
+                  <th className="px-4 py-3 font-medium">Role</th>
                   <th className="px-4 py-3 text-right font-medium">Opening Value</th>
                   <th className="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
@@ -479,10 +496,11 @@ export default function Items() {
                 {items.map((item) => (
                   <tr key={item._id} className="border-t border-slate-100">
                     <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
-                    <td className="px-4 py-3 text-slate-500">{item.group?.name || "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{item.stockCategoryMaster?.name || item.stockCategory || "-"}</td>
-                    <td className="px-4 py-3 text-slate-500">{item.unitMaster?.name || item.unitOfMeasure || "-"}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      <td className="px-4 py-3 text-slate-500">{item.group?.name || "-"}</td>
+                      <td className="px-4 py-3 text-slate-500">{item.stockCategoryMaster?.name || item.stockCategory || "-"}</td>
+                      <td className="px-4 py-3 text-slate-500">{item.unitMaster?.name || item.unitOfMeasure || "-"}</td>
+                      <td className="px-4 py-3 text-slate-500">{item.inventoryRole || "standard"}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {Number(item.openingValue || 0).toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
@@ -500,11 +518,12 @@ export default function Items() {
                               alias: item.alias || "",
                               groupId: item.groupId,
                               stockCategoryId: item.stockCategoryId || item.stockCategoryMaster?._id || "",
-                              stockCategory: item.stockCategory || "",
-                              unitId: item.unitId || item.unitMaster?._id || "",
-                              unitOfMeasure: item.unitOfMeasure || "",
-                              godownId: item.godownId || item.godownMaster?._id || "",
-                              description: item.description || "",
+                                stockCategory: item.stockCategory || "",
+                                unitId: item.unitId || item.unitMaster?._id || "",
+                                unitOfMeasure: item.unitOfMeasure || "",
+                                godownId: item.godownId || item.godownMaster?._id || "",
+                                inventoryRole: item.inventoryRole || "standard",
+                                description: item.description || "",
                               notes: item.notes || "",
                               picture: item.picture || "",
                               openingQty: item.openingQty || "",

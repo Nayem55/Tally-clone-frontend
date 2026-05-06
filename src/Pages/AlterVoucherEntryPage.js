@@ -7,6 +7,7 @@ import { navigateBackFromReport } from "../utils/reportNavigation";
 import VoucherList from "./VoucherList";
 import PosVoucherPage from "./PosVoucherPage";
 import InventoryVoucherPage from "./InventoryVoucherPage";
+import ManufacturingVoucherPage from "./ManufacturingVoucherPage";
 
 export default function AlterVoucherEntryPage() {
   const { voucherId } = useParams();
@@ -94,6 +95,10 @@ export default function AlterVoucherEntryPage() {
         companyIdOverride={routeCompanyId}
       />
     );
+  }
+
+  if (voucherName === "manufacturing") {
+    return <ManufacturingVoucherPage editVoucherId={voucherId} companyIdOverride={routeCompanyId} />;
   }
 
   return (
