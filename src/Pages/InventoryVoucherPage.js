@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Download, FileText, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
 import TallyDateInput from "../Component/TallyDateInput";
@@ -33,6 +34,8 @@ export default function InventoryVoucherPage({
 }) {
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const mode = getVoucherMode(voucherName);
   const { companyId, selectedCompany } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
@@ -67,6 +70,11 @@ export default function InventoryVoucherPage({
     voucherLabel: voucherName,
     disabled: isEditMode,
   });
+  const inventoryReturnStorageKey = useMemo(
+    () =>
+      `inventory-voucher-return-draft-${normalizeExcelNameKey(voucherName).replace(/[^a-z0-9]+/g, "-")}`,
+    [voucherName],
+  );
 
   useEffect(() => {
     async function loadData() {
@@ -95,6 +103,23 @@ export default function InventoryVoucherPage({
     if (!suggestedNumber || isEditMode) return;
     setForm((prev) => (prev.number ? prev : { ...prev, number: suggestedNumber }));
   }, [suggestedNumber, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode && effectiveCompanyId && location.state?.restoreInventoryVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(inventoryReturnStorageKey);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(effectiveCompanyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(inventoryReturnStorageKey);
+      } catch (error) {
+        console.error("Unable to restore inventory voucher draft:", error);
+      }
+    }
+  }, [effectiveCompanyId, inventoryReturnStorageKey, isEditMode, location.state]);
 
   useEffect(() => {
     let alive = true;
@@ -226,6 +251,29 @@ export default function InventoryVoucherPage({
           toGodownId: "",
         },
       ],
+    });
+  }
+
+  function navigateToCreateMaster(path) {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        inventoryReturnStorageKey,
+        JSON.stringify({
+          companyId: effectiveCompanyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store inventory voucher draft:", error);
+    }
+
+    navigate(path, {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreInventoryVoucherDraft: true,
+      },
     });
   }
 
@@ -513,12 +561,45 @@ export default function InventoryVoucherPage({
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Item</th>
+                  <th className="px-4 py-3 font-medium">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Item</span>
+                      <button
+                        type="button"
+                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        onClick={() => navigateToCreateMaster("/masters/create/stock-item")}
+                      >
+                        Add+
+                      </button>
+                    </div>
+                  </th>
                   <th className="px-4 py-3 font-medium">Qty</th>
                   <th className="px-4 py-3 font-medium">Rate</th>
-                  <th className="px-4 py-3 font-medium">Godown</th>
+                  <th className="px-4 py-3 font-medium">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Godown</span>
+                      <button
+                        type="button"
+                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        onClick={() => navigateToCreateMaster("/masters/create/godown")}
+                      >
+                        Add+
+                      </button>
+                    </div>
+                  </th>
                   {mode === "transfer" ? (
-                    <th className="px-4 py-3 font-medium">To Godown</th>
+                    <th className="px-4 py-3 font-medium">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>To Godown</span>
+                        <button
+                          type="button"
+                          className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                          onClick={() => navigateToCreateMaster("/masters/create/godown")}
+                        >
+                          Add+
+                        </button>
+                      </div>
+                    </th>
                   ) : null}
                   <th className="px-4 py-3 text-right font-medium">Amount</th>
                   <th className="px-4 py-3"></th>

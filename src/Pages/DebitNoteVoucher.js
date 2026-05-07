@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeMinus, Download, Plus, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import VoucherWorkspace, {
   VoucherPanel,
@@ -30,10 +31,13 @@ import {
 
 const emptyRow = { itemId: "", qty: "1", rate: "" };
 const DEBIT_TEMPLATE_SHEET = "Debit Note Voucher";
+const DEBIT_NOTE_RETURN_STORAGE_KEY = "debit-note-voucher-return-draft";
 
 export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [debitTypeId, setDebitTypeId] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -138,6 +142,23 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       prev.number ? prev : { ...prev, number: suggestedNumber },
     );
   }, [suggestedNumber, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode && companyId && location.state?.restoreDebitNoteVoucherDraft) {
+      try {
+        const raw = window.sessionStorage.getItem(DEBIT_NOTE_RETURN_STORAGE_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatusMessage(draft.statusMessage || null);
+        window.sessionStorage.removeItem(DEBIT_NOTE_RETURN_STORAGE_KEY);
+      } catch (error) {
+        console.error("Unable to restore debit note voucher draft:", error);
+      }
+    }
+  }, [companyId, isEditMode, location.state]);
 
   const company = companies.find(
     (entry) => String(entry._id) === String(companyId),
@@ -288,6 +309,29 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       returnLedger: "",
       narration: "",
       rows: [emptyRow],
+    });
+  }
+
+  function navigateToCreateMaster(path) {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        DEBIT_NOTE_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store debit note voucher draft:", error);
+    }
+
+    navigate(path, {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreDebitNoteVoucherDraft: true,
+      },
     });
   }
 
@@ -556,9 +600,18 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Supplier
-            </label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">
+                Supplier
+              </label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+              >
+                Add+
+              </button>
+            </div>
             <SearchableSelect
               options={supplierOptions}
               value={form.supplierLedger}
@@ -610,7 +663,20 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Item Name</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Item Name</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() =>
+                        navigateToCreateMaster("/masters/create/stock-item")
+                      }
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
                 <th className="px-4 py-3 font-medium">Qty</th>
                 <th className="px-4 py-3 font-medium">Rate</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>

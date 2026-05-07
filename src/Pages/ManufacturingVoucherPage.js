@@ -38,6 +38,8 @@ const blankForm = {
   outputQty: 1,
   notes: "",
 };
+const MANUFACTURING_VOUCHER_RETURN_STORAGE_KEY =
+  "manufacturing-voucher-return-draft";
 
 export default function ManufacturingVoucherPage({
   editVoucherId = "",
@@ -86,6 +88,31 @@ export default function ManufacturingVoucherPage({
       setForm((current) => ({ ...current, number: suggestedNumber }));
     }
   }, [editVoucherId, form.number, suggestedNumber]);
+
+  useEffect(() => {
+    if (
+      !editVoucherId &&
+      companyId &&
+      location.state?.restoreManufacturingVoucherDraft
+    ) {
+      try {
+        const raw = window.sessionStorage.getItem(
+          MANUFACTURING_VOUCHER_RETURN_STORAGE_KEY,
+        );
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (String(draft?.companyId || "") !== String(companyId)) return;
+        if (!draft?.form) return;
+        setForm(draft.form);
+        setStatus(draft.status || "");
+        window.sessionStorage.removeItem(
+          MANUFACTURING_VOUCHER_RETURN_STORAGE_KEY,
+        );
+      } catch (error) {
+        console.error("Unable to restore manufacturing voucher draft:", error);
+      }
+    }
+  }, [companyId, editVoucherId, location.state]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -138,6 +165,29 @@ export default function ManufacturingVoucherPage({
     () => boms.find((row) => row._id === form.bomId) || null,
     [boms, form.bomId],
   );
+
+  function navigateToCreateBom() {
+    if (editVoucherId) return;
+    try {
+      window.sessionStorage.setItem(
+        MANUFACTURING_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          status,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store manufacturing voucher draft:", error);
+    }
+
+    navigate("/masters/create/bom", {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreManufacturingVoucherDraft: true,
+      },
+    });
+  }
 
   const computed = useMemo(() => {
     if (!activeBom) {
@@ -327,7 +377,16 @@ export default function ManufacturingVoucherPage({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">BoM</label>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="text-sm font-semibold text-slate-700">BoM</label>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={navigateToCreateBom}
+                    >
+                      Add+
+                    </button>
+                  </div>
                   <select
                     data-enter-nav="true"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"

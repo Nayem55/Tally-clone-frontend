@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Boxes, Plus, Save, Trash2 } from "lucide-react";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
@@ -44,6 +44,7 @@ function formatQty(value) {
 export default function ManufacturingBomPage({ mode = "create" }) {
   const containerRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { companyId, selectedCompany } = useActiveCompany();
   const [reference, setReference] = useState({
     rawMaterials: [],
@@ -56,6 +57,25 @@ export default function ManufacturingBomPage({ mode = "create" }) {
   const [saving, setSaving] = useState(false);
 
   useEnterFieldNavigation(containerRef, [form.id, companyId, form.components.length]);
+
+  useEffect(() => {
+    function handleBack(event) {
+      if (!location.state?.returnTo) return;
+      if (event.key !== "Escape" && event.key !== "Backspace") return;
+      const target = event.target;
+      const tag = String(target?.tagName || "").toLowerCase();
+      const isTyping = tag === "input" || tag === "textarea" || tag === "select";
+      if (event.key === "Backspace" && isTyping) return;
+      event.preventDefault();
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: { ...location.state },
+      });
+    }
+
+    window.addEventListener("keydown", handleBack);
+    return () => window.removeEventListener("keydown", handleBack);
+  }, [location.state, navigate]);
 
   useEffect(() => {
     async function loadData() {
@@ -162,6 +182,13 @@ export default function ManufacturingBomPage({ mode = "create" }) {
       }
 
       setStatus("BoM saved successfully.");
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { ...location.state },
+        });
+        return;
+      }
       if (mode === "create" && !form.id) {
         setForm(blankForm);
       }
@@ -191,7 +218,16 @@ export default function ManufacturingBomPage({ mode = "create" }) {
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <button type="button" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500" onClick={() => navigate(-1)}>
+              <button type="button" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500" onClick={() => {
+                if (location.state?.returnTo) {
+                  navigate(location.state.returnTo, {
+                    replace: true,
+                    state: { ...location.state },
+                  });
+                  return;
+                }
+                navigate(-1);
+              }}>
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </button>
