@@ -2427,7 +2427,7 @@ function EmployeeCreationPage({ mode = "create" }) {
 
   function renderEditorShell({ inModal = false } = {}) {
     return (
-      <div className={inModal ? "space-y-6" : "mx-auto max-w-[1500px] space-y-6"}>
+      <div className={inModal ? "space-y-6 bg-white p-4 rounded-lg" : "mx-auto max-w-[1500px] space-y-6"}>
         <SectionCard
           title="Employee Creation"
           subtitle={
