@@ -77,6 +77,11 @@ export default function PosVoucherPage({
   const [statusMessage, setStatusMessage] = useState(null);
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [customerInsight, setCustomerInsight] = useState({
+    customer: null,
+    purchases: [],
+  });
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [form, setForm] = useState({
     number: "",
@@ -161,6 +166,43 @@ export default function PosVoucherPage({
   }, [effectiveCompanyId, form.phone]);
 
   useEffect(() => {
+    const phone = form.phone.replace(/\D/g, "");
+    if (!effectiveCompanyId || phone.length < 6) {
+      setCustomerInsight({ customer: null, purchases: [] });
+      setHistoryLoading(false);
+      return;
+    }
+
+    let alive = true;
+    setHistoryLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const response = await api.get(
+          `/companies/${effectiveCompanyId}/customers/purchase-history`,
+          {
+            params: { phone },
+          },
+        );
+        if (!alive) return;
+        setCustomerInsight({
+          customer: response.data?.customer || null,
+          purchases: response.data?.purchases || [],
+        });
+      } catch (error) {
+        if (!alive) return;
+        setCustomerInsight({ customer: null, purchases: [] });
+      } finally {
+        if (alive) setHistoryLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      alive = false;
+      clearTimeout(handle);
+    };
+  }, [effectiveCompanyId, form.phone]);
+
+  useEffect(() => {
     const handle = window.requestAnimationFrame(() => {
       const target = containerRef.current?.querySelector(
         "[data-voucher-date='true']",
@@ -226,8 +268,12 @@ export default function PosVoucherPage({
     [items],
   );
   const selectedCustomer = customerSuggestions.find(
-    (customer) => customer.phone === form.phone.replace(/\D/g, ""),
-  );
+      (customer) => customer.phone === form.phone.replace(/\D/g, ""),
+    );
+  const activeCustomer =
+    customerInsight.customer ||
+    selectedCustomer ||
+    null;
 
   const filteredItems = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -368,7 +414,7 @@ export default function PosVoucherPage({
       : Number(form.discountValue || 0);
   const redeemPoints = Math.min(
     Number(form.redeemPoints || 0),
-    Number(selectedCustomer?.rewardPoints || 0),
+    Number(activeCustomer?.rewardPoints || 0),
   );
   const totalAmount = Math.max(
     0,
@@ -390,6 +436,7 @@ export default function PosVoucherPage({
     Number(form.cashTendered || 0) - cashPayment,
   );
   const customerLine = [form.customerName, form.phone].filter(Boolean).join(" ");
+  const customerPurchases = customerInsight.purchases || [];
   const printData = useMemo(() => {
     const voucherDate = form.date ? new Date(form.date) : new Date();
     const formatCompactMoney = (value) =>
@@ -1110,16 +1157,16 @@ export default function PosVoucherPage({
                   />
                 </div>
 
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-                  <p className="text-sm font-medium text-emerald-700">
-                    Available Reward Points
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-emerald-700">
-                    {Number(selectedCustomer?.rewardPoints || 0).toLocaleString(
-                      "en-IN",
-                    )}
-                  </p>
-                </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+                    <p className="text-sm font-medium text-emerald-700">
+                      Available Reward Points
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-emerald-700">
+                      {Number(activeCustomer?.rewardPoints || 0).toLocaleString(
+                        "en-IN",
+                      )}
+                    </p>
+                  </div>
                 <div className="lg:col-span-4">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Address (Optional)
@@ -1447,6 +1494,49 @@ export default function PosVoucherPage({
                   <span>Reward to Earn</span>
                   <span>{rewardToEarn.toLocaleString("en-IN")} pts</span>
                 </div>
+              </div>
+            </section>
+
+            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Purchase History
+                </h3>
+                {activeCustomer?.name ? (
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                    {activeCustomer.name}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-4 h-[360px] overflow-y-auto pr-1">
+                {historyLoading ? (
+                  <p className="text-sm text-slate-500">Loading purchase history...</p>
+                ) : customerPurchases.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    Select or type a customer number to see past POS purchases here.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {customerPurchases.map((purchase, index) => (
+                      <div
+                        key={`${purchase.voucherId || "purchase"}-${index}`}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                      >
+                        <p className="text-sm font-semibold text-slate-900">
+                          {purchase.itemName || "-"} x {Number(purchase.qty || 0).toLocaleString("en-IN")}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Purchase Date:{" "}
+                          {purchase.purchaseDate
+                            ? new Date(purchase.purchaseDate)
+                                .toLocaleDateString("en-GB")
+                                .replace(/\//g, "-")
+                            : "-"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
 
