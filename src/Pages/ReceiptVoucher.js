@@ -398,7 +398,7 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
               <label className="text-sm font-semibold text-slate-700">Receive Into</label>
               <button
                 type="button"
-                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                 onClick={navigateToCreateLedger}
               >
                 Add+
@@ -435,7 +435,7 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
                     <span>Received From (Account)</span>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={navigateToCreateLedger}
                     >
                       Add+

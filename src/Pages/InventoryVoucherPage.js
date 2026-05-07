@@ -566,7 +566,7 @@ export default function InventoryVoucherPage({
                       <span>Item</span>
                       <button
                         type="button"
-                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                         onClick={() => navigateToCreateMaster("/masters/create/stock-item")}
                       >
                         Add+
@@ -580,7 +580,7 @@ export default function InventoryVoucherPage({
                       <span>Godown</span>
                       <button
                         type="button"
-                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                         onClick={() => navigateToCreateMaster("/masters/create/godown")}
                       >
                         Add+
@@ -593,7 +593,7 @@ export default function InventoryVoucherPage({
                         <span>To Godown</span>
                         <button
                           type="button"
-                          className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                          className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                           onClick={() => navigateToCreateMaster("/masters/create/godown")}
                         >
                           Add+

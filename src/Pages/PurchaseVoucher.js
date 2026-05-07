@@ -746,7 +746,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
               <label className="text-sm font-semibold text-slate-700">Party A/c Name</label>
               <button
                 type="button"
-                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                 onClick={() => navigateToCreateMaster("/masters/create/ledger")}
               >
                 Add+
@@ -785,7 +785,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                     <span>Item Name</span>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={() => navigateToCreateMaster("/masters/create/stock-item")}
                     >
                       Add+

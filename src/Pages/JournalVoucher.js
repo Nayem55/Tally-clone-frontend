@@ -450,7 +450,7 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
                     <span>From (Debit)</span>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={navigateToCreateLedger}
                     >
                       Add+
@@ -462,7 +462,7 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
                     <span>To (Credit)</span>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={navigateToCreateLedger}
                     >
                       Add+

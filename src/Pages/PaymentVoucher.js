@@ -422,7 +422,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
               <label className="text-sm font-semibold text-slate-700">Pay From</label>
               <button
                 type="button"
-                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                 onClick={navigateToCreateLedger}
               >
                 Add+
@@ -463,7 +463,7 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
                     <span>Paid To (Account)</span>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={navigateToCreateLedger}
                     >
                       Add+

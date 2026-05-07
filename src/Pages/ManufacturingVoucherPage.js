@@ -381,7 +381,7 @@ export default function ManufacturingVoucherPage({
                     <label className="text-sm font-semibold text-slate-700">BoM</label>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={navigateToCreateBom}
                     >
                       Add+

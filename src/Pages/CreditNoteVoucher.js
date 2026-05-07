@@ -606,7 +606,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
               </label>
               <button
                 type="button"
-                className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                 onClick={() => navigateToCreateMaster("/masters/create/ledger")}
               >
                 Add+
@@ -668,7 +668,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
                     <span>Item Name</span>
                     <button
                       type="button"
-                      className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                       onClick={() =>
                         navigateToCreateMaster("/masters/create/stock-item")
                       }
