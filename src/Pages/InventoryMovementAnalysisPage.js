@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, CalendarRange, Search, TrendingDown, TrendingUp } from "lucide-react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
@@ -26,13 +26,13 @@ const VARIANTS = {
   },
   group: {
     title: "Group Analysis",
-    searchLabel: "Party Name",
-    searchPlaceholder: "Search party name like Shwapno or Agora...",
+    searchLabel: "Group Name",
+    searchPlaceholder: "Search primary or child group...",
   },
   ledger: {
     title: "Ledger Analysis",
     searchLabel: "Ledger Name",
-    searchPlaceholder: "Search ledger name like Shwapno: Mirpur...",
+    searchPlaceholder: "Search ledger name...",
   },
   "sales-person": {
     title: "Sales Person Analysis",
@@ -219,11 +219,11 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     }
 
     if (variant === "group") {
-      return `/reports/inventory-books/party-details/ledger?${shared}&groupName=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-details/group?${shared}&groupId=${encodeURIComponent(row.id)}&groupName=${encodeURIComponent(row.name)}`;
     }
 
     if (variant === "ledger") {
-      return `/reports/inventory-books/party-details/voucher?${shared}&groupName=${encodeURIComponent(row.secondaryLabel || "")}&ledgerName=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-details/voucher?${shared}&ledgerId=${encodeURIComponent(row.id)}&ledgerName=${encodeURIComponent(row.name)}`;
     }
 
     if (variant === "sales-person") {

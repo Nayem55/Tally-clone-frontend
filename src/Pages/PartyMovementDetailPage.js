@@ -10,6 +10,11 @@ import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 
 const LEVEL_CONFIG = {
+  group: {
+    title: "Group Analysis Details",
+    searchLabel: "Group / Ledger",
+    searchPlaceholder: "Search child group or ledger...",
+  },
   ledger: {
     title: "Ledger Analysis Details",
     searchLabel: "Ledger",
@@ -80,6 +85,8 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
   const [report, setReport] = useState({ rows: [], totals: {} });
   const [loading, setLoading] = useState(false);
   const requestedCompanyId = searchParams.get("companyId") || "";
+  const groupId = searchParams.get("groupId") || "";
+  const ledgerId = searchParams.get("ledgerId") || "";
   const groupName = searchParams.get("groupName") || "";
   const ledgerName = searchParams.get("ledgerName") || "";
 
@@ -105,6 +112,8 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
             from: fromDate,
             to: toDate,
             level,
+            groupId,
+            ledgerId,
             groupName,
             ledgerName,
           },
@@ -115,7 +124,7 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
       }
     }
     loadReport();
-  }, [companyId, fromDate, toDate, level, groupName, ledgerName]);
+  }, [companyId, fromDate, toDate, level, groupId, ledgerId, groupName, ledgerName]);
 
   const selectedCompany = companies.find((company) => String(company._id) === String(companyId));
 
@@ -129,15 +138,21 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
     );
   }, [report.rows, search]);
 
-  useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, level, groupName, ledgerName]);
-  useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, level, groupName, ledgerName], {
+  useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, level, groupId, ledgerId, groupName, ledgerName]);
+  useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, level, groupId, ledgerId, groupName, ledgerName], {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
   function buildNextPath(row) {
     const shared = `companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+    if (level === "group") {
+      if (row.rowType === "group") {
+        return `/reports/inventory-books/party-details/group?${shared}&groupId=${encodeURIComponent(row.id)}&groupName=${encodeURIComponent(row.name)}`;
+      }
+      return `/reports/inventory-books/party-details/voucher?${shared}${groupId ? `&groupId=${encodeURIComponent(groupId)}` : ""}&ledgerId=${encodeURIComponent(row.id)}&ledgerName=${encodeURIComponent(row.name)}`;
+    }
     if (level === "ledger") {
-      return `/reports/inventory-books/party-details/voucher?${shared}&groupName=${encodeURIComponent(groupName)}&ledgerName=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-details/voucher?${shared}${groupId ? `&groupId=${encodeURIComponent(groupId)}` : ""}&ledgerId=${encodeURIComponent(row.id)}&ledgerName=${encodeURIComponent(row.name)}`;
     }
     if (level === "voucher") {
       return buildAlterVoucherPath(companyId, row.voucherId);
@@ -153,7 +168,7 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
                 <BarChart3 className="h-3.5 w-3.5" />
-                {groupName || "Group Analysis"}
+                {ledgerName || groupName || "Group Analysis"}
               </div>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">{view.title}</h1>
               <p className="mt-2 text-sm text-slate-500">
@@ -244,7 +259,9 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
             <p className="mt-1 text-sm text-slate-500">
               {level === "voucher"
                 ? "Voucher-wise purchase and sale lines for the selected ledger."
-                : "Click a ledger to drill to its voucher-wise purchase and sale activity."}
+                : level === "group"
+                  ? "Drill from primary group to child groups and direct ledgers using purchase and sale activity only."
+                  : "Click a ledger to drill to its voucher-wise purchase and sale activity."}
             </p>
           </div>
 
@@ -300,8 +317,8 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
               <table className="min-w-full w-full text-sm">
                 <thead className="bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium">Ledger</th>
-                    <th className="px-4 py-3 text-left font-medium">Group</th>
+                    <th className="px-4 py-3 text-left font-medium">{level === "group" ? "Particulars" : "Ledger"}</th>
+                    <th className="px-4 py-3 text-left font-medium">{level === "group" ? "Hierarchy" : "Group"}</th>
                     <th className="px-4 py-3 text-right font-medium">Invoices</th>
                     <th className="px-4 py-3 text-right font-medium">Purchase Qty</th>
                     <th className="px-4 py-3 text-right font-medium">Avg Purchase Rate</th>
@@ -328,6 +345,9 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
                           }
                         >
                           <p className="font-medium text-slate-900">{row.name}</p>
+                          {level === "group" && row.rowType ? (
+                            <p className="mt-0.5 text-xs uppercase tracking-wide text-slate-400">{row.rowType}</p>
+                          ) : null}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{row.secondaryLabel || groupName || "-"}</td>

@@ -504,6 +504,10 @@ function AppShell() {
               element={<InventoryMovementAnalysisPage variant="ledger" />}
             />
             <Route
+              path="/reports/inventory-books/party-details/group"
+              element={<PartyMovementDetailPage level="group" />}
+            />
+            <Route
               path="/reports/inventory-books/party-details/ledger"
               element={<PartyMovementDetailPage level="ledger" />}
             />
