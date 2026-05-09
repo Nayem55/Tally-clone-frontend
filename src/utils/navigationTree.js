@@ -143,6 +143,7 @@ export const menuTree = [
               { label: "Stock Item Analysis", to: "/reports/inventory-books/movement-analysis/stock-item" },
               { label: "Group Analysis", to: "/reports/inventory-books/movement-analysis/group" },
               { label: "Ledger Analysis", to: "/reports/inventory-books/movement-analysis/ledger" },
+              { label: "Sales Person Analysis", to: "/reports/inventory-books/movement-analysis/sales-person" },
             ],
           },
           { label: "Godown Summary", to: "/reports/inventory-books/godown-summary" },

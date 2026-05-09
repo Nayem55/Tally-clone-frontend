@@ -38,6 +38,8 @@ export default function StockItemDetailPage() {
   const requestedItemId = searchParams.get("itemId") || "";
   const requestedGroupId = searchParams.get("groupId") || "";
   const requestedCategory = searchParams.get("category") || "";
+  const requestedSalesPersonId = searchParams.get("salesPersonId") || "";
+  const requestedSalesPersonName = searchParams.get("salesPersonName") || "";
   const requestedCompanyId = searchParams.get("companyId") || "";
 
   useEffect(() => {
@@ -57,13 +59,30 @@ export default function StockItemDetailPage() {
       if (!companyId) return;
       const response = await api.get(
         `/companies/${companyId}/reports/stock-item-detailed`,
-        { params: { from: fromDate, to: toDate } }
+        {
+          params: {
+            from: fromDate,
+            to: toDate,
+            salesPersonId: requestedSalesPersonId,
+            groupId: requestedGroupId,
+            category: requestedCategory,
+            itemId: requestedItemId,
+          },
+        }
       );
       setReport(response.data);
     }
 
     loadReport();
-  }, [companyId, fromDate, toDate]);
+  }, [
+    companyId,
+    fromDate,
+    toDate,
+    requestedSalesPersonId,
+    requestedGroupId,
+    requestedCategory,
+    requestedItemId,
+  ]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
   const filteredRows = useMemo(() => {
@@ -95,8 +114,22 @@ export default function StockItemDetailPage() {
     () => (requestedItemId ? filteredRows.find((row) => String(row.itemId) === String(requestedItemId)) : null),
     [filteredRows, requestedItemId],
   );
-  useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, requestedItemId]);
-  useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, requestedItemId], {
+  useReportFocusRestore(containerRef, [
+    filteredRows,
+    companyId,
+    fromDate,
+    toDate,
+    requestedItemId,
+    requestedSalesPersonId,
+  ]);
+  useReportKeyboardNav(containerRef, [
+    filteredRows,
+    companyId,
+    fromDate,
+    toDate,
+    requestedItemId,
+    requestedSalesPersonId,
+  ], {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
@@ -109,7 +142,11 @@ export default function StockItemDetailPage() {
               <h1 className="text-3xl font-bold text-slate-900">Stock Item Details</h1>
               <p className="mt-2 text-sm text-slate-500">
                 {requestedItemId
-                  ? "Voucher-wise movement register for the selected stock item. Press Esc to step back."
+                  ? requestedSalesPersonId
+                    ? `Voucher-wise sales register for ${requestedSalesPersonName || "the selected sales person"} and the selected item. Press Esc to step back.`
+                    : "Voucher-wise movement register for the selected stock item. Press Esc to step back."
+                  : requestedSalesPersonId
+                  ? `Review item-wise sales for ${requestedSalesPersonName || "the selected sales person"} without expanding rows inline.`
                   : "Review item-wise opening, inward, outward, and closing stock without expanding rows inline."}
               </p>
               {requestedItemId ? (
@@ -229,12 +266,12 @@ export default function StockItemDetailPage() {
                             data-report-nav="true"
                             data-focus-key={`sid-item-${row.itemId}`}
                             className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
-                            onClick={() =>
-                              navigate(
-                                `/reports/inventory-books/stock-item?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&itemId=${encodeURIComponent(row.itemId)}`,
-                                {
-                                  state: buildReportReturnState(location, `sid-item-${row.itemId}`),
-                                },
+                              onClick={() =>
+                                navigate(
+                                    `/reports/inventory-books/stock-item?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}${requestedSalesPersonId ? `&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}` : ""}${requestedGroupId ? `&groupId=${encodeURIComponent(requestedGroupId)}` : ""}${requestedCategory ? `&category=${encodeURIComponent(requestedCategory)}` : ""}&itemId=${encodeURIComponent(row.itemId)}`,
+                                    {
+                                      state: buildReportReturnState(location, `sid-item-${row.itemId}`),
+                                    },
                               )
                             }
                           >

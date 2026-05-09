@@ -501,6 +501,10 @@ function AppShell() {
               path="/reports/inventory-books/movement-analysis/ledger"
               element={<InventoryMovementAnalysisPage variant="ledger" />}
             />
+            <Route
+              path="/reports/inventory-books/movement-analysis/sales-person"
+              element={<InventoryMovementAnalysisPage variant="sales-person" />}
+            />
             <Route path="/reports/inventory-books/godown-summary" element={Placeholder("Godown Summary", "Godown-wise stock summary is scaffolded for future warehouse-level reporting.")} />
             <Route path="/reports/inventory-books/batch-summary" element={Placeholder("Inventory Batch Summary", "Batch-wise stock reporting is reserved here for a later inventory enhancement.")} />
 

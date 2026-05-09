@@ -34,6 +34,11 @@ const VARIANTS = {
     searchLabel: "Ledger Name",
     searchPlaceholder: "Search ledger name like Shwapno: Mirpur...",
   },
+  "sales-person": {
+    title: "Sales Person Analysis",
+    searchLabel: "Sales Person",
+    searchPlaceholder: "Search sales employee name...",
+  },
 };
 
 function formatQty(value) {
@@ -86,7 +91,9 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const view = VARIANTS[variant] || VARIANTS["stock-group"];
-  const hideClosing = variant === "group" || variant === "ledger";
+  const hideClosing =
+    variant === "group" || variant === "ledger";
+  const isSalesPersonView = variant === "sales-person";
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [fromDate, setFromDate] = useState(searchParams.get("from") || defaultMonthStart());
@@ -95,6 +102,11 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   const [report, setReport] = useState({ rows: [], totals: {} });
   const [loading, setLoading] = useState(false);
   const requestedCompanyId = searchParams.get("companyId") || "";
+  const requestedSalesPersonId = searchParams.get("salesPersonId") || "";
+  const requestedSalesPersonName = searchParams.get("salesPersonName") || "";
+  const requestedGroupId = searchParams.get("groupId") || "";
+  const requestedGroupName = searchParams.get("groupName") || "";
+  const requestedCategory = searchParams.get("category") || "";
 
   useEffect(() => {
     async function loadCompanies() {
@@ -121,6 +133,9 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
               from: fromDate,
               to: toDate,
               dimension: variant,
+              salesPersonId: requestedSalesPersonId,
+              groupId: requestedGroupId,
+              category: requestedCategory,
             },
           },
         );
@@ -131,7 +146,15 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     }
 
     loadReport();
-  }, [companyId, fromDate, toDate, variant]);
+  }, [
+    companyId,
+    fromDate,
+    toDate,
+    variant,
+    requestedSalesPersonId,
+    requestedGroupId,
+    requestedCategory,
+  ]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
 
@@ -139,29 +162,60 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     const query = search.trim().toLowerCase();
     if (!query) return report.rows || [];
     return (report.rows || []).filter((row) =>
-      [row.name, row.secondaryLabel]
+      [row.name, row.secondaryLabel, row.metrics?.employeeNumber, row.metrics?.department]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [report.rows, search]);
-  useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, variant]);
-  useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, variant], {
+  useReportFocusRestore(containerRef, [
+    filteredRows,
+    companyId,
+    fromDate,
+    toDate,
+    variant,
+    requestedSalesPersonId,
+    requestedGroupId,
+    requestedCategory,
+  ]);
+  useReportKeyboardNav(
+    containerRef,
+    [
+      filteredRows,
+      companyId,
+      fromDate,
+      toDate,
+      variant,
+      requestedSalesPersonId,
+      requestedGroupId,
+      requestedCategory,
+    ],
+    {
     onExit: () => navigateBackFromReport(navigate, location),
-  });
+    },
+  );
 
   function buildDrillPath(row) {
     const shared = `companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+    const salesPersonScope = requestedSalesPersonId
+      ? `&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}`
+      : "";
 
     if (variant === "stock-group") {
+      if (requestedSalesPersonId) {
+        return `/reports/inventory-books/movement-analysis/stock-category?${shared}${salesPersonScope}&groupId=${encodeURIComponent(row.id)}&groupName=${encodeURIComponent(row.name)}`;
+      }
       return `/reports/inventory-books/stock-group-summary?${shared}&groupId=${encodeURIComponent(row.id)}`;
     }
 
     if (variant === "stock-category") {
+      if (requestedSalesPersonId) {
+        return `/reports/inventory-books/movement-analysis/stock-item?${shared}${salesPersonScope}&groupId=${encodeURIComponent(requestedGroupId)}&groupName=${encodeURIComponent(requestedGroupName)}&category=${encodeURIComponent(row.name)}`;
+      }
       return `/reports/inventory-books/stock-item?${shared}&category=${encodeURIComponent(row.name)}`;
     }
 
     if (variant === "stock-item") {
-      return `/reports/inventory-books/stock-item?${shared}&itemId=${encodeURIComponent(row.id)}`;
+      return `/reports/inventory-books/stock-item?${shared}${salesPersonScope}${requestedGroupId ? `&groupId=${encodeURIComponent(requestedGroupId)}` : ""}${requestedCategory ? `&category=${encodeURIComponent(requestedCategory)}` : ""}&itemId=${encodeURIComponent(row.id)}`;
     }
 
     if (variant === "group") {
@@ -170,6 +224,10 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
 
     if (variant === "ledger") {
       return `/reports/day-book?${shared}&ledger=${encodeURIComponent(row.name)}&q=${encodeURIComponent(row.name)}`;
+    }
+
+    if (variant === "sales-person") {
+      return `/reports/inventory-books/movement-analysis/stock-group?${shared}&salesPersonId=${encodeURIComponent(row.id)}&salesPersonName=${encodeURIComponent(row.name)}`;
     }
 
     return "";
@@ -181,6 +239,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     { key: "stock-item", label: "Stock Item Analysis" },
     { key: "group", label: "Group Analysis" },
     { key: "ledger", label: "Ledger Analysis" },
+    { key: "sales-person", label: "Sales Person Analysis" },
   ];
 
   const totals = report.totals || {};
@@ -197,7 +256,9 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
               </div>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">Movement Analysis</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Switch between stock, category, party-group, and ledger movement views without leaving inventory books.
+                {requestedSalesPersonId
+                  ? `Tracking item movement sold by ${requestedSalesPersonName || "the selected sales person"} through group, category, item, and voucher drilldown.`
+                  : "Switch between stock, category, party-group, and ledger movement views without leaving inventory books."}
               </p>
             </div>
 
@@ -246,7 +307,11 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
             {links.map((link) => (
               <Link
                 key={link.key}
-                to={`/reports/inventory-books/movement-analysis/${link.key}`}
+                to={`/reports/inventory-books/movement-analysis/${link.key}${
+                  requestedSalesPersonId
+                    ? `?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}`
+                    : ""
+                }`}
                 className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   link.key === variant
                     ? "bg-blue-600 text-white shadow-sm"
@@ -260,7 +325,34 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {hideClosing ? (
+          {isSalesPersonView ? (
+            <>
+              <SummaryCard
+                title="Sales Qty"
+                value={formatQty(totals.salesQty)}
+                icon={<TrendingDown className="h-5 w-5" />}
+                tone="text-rose-700"
+              />
+              <SummaryCard
+                title="Sales Value"
+                value={formatCurrencyAmount(totals.salesValue, selectedCompany)}
+                icon={<BarChart3 className="h-5 w-5" />}
+                tone="text-blue-700"
+              />
+              <SummaryCard
+                title="Invoices"
+                value={formatQty(totals.invoiceCount)}
+                icon={<CalendarRange className="h-5 w-5" />}
+                tone="text-slate-900"
+              />
+              <SummaryCard
+                title="Customers Served"
+                value={formatQty(totals.customerCount)}
+                icon={<Search className="h-5 w-5" />}
+                tone="text-emerald-700"
+              />
+            </>
+          ) : hideClosing ? (
             <>
               <SummaryCard
                 title="Purchase Qty"
@@ -320,13 +412,75 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
           <div className="border-b border-slate-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-slate-900">{view.title}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {hideClosing
+              {isSalesPersonView
+                ? "Track sales employee performance using saved salesperson selections from sales vouchers."
+                : hideClosing
                 ? "Purchase and sales movement for the selected analysis view."
                 : "Opening, inwards, outwards, and closing balance for the selected analysis view."}
             </p>
           </div>
 
           <div className="overflow-x-auto">
+            {isSalesPersonView ? (
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Sales Person</th>
+                    <th className="px-4 py-3 text-left font-medium">Employee No.</th>
+                    <th className="px-4 py-3 text-left font-medium">Department</th>
+                    <th className="px-4 py-3 text-right font-medium">Invoices</th>
+                    <th className="px-4 py-3 text-right font-medium">Customers</th>
+                    <th className="px-4 py-3 text-right font-medium">Sales Qty</th>
+                    <th className="px-4 py-3 text-right font-medium">Sales Value</th>
+                    <th className="px-4 py-3 text-right font-medium">Avg / Invoice</th>
+                    <th className="px-4 py-3 text-right font-medium">Last Sale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((row, index) => (
+                    <tr key={`${row.id}-${index}`} className="border-t border-slate-100">
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          data-report-nav="true"
+                          data-focus-key={`ima-${variant}-${row.id || row.name}`}
+                          className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                          onClick={() => {
+                            const nextPath = buildDrillPath(row);
+                            if (nextPath) {
+                              navigate(nextPath, {
+                                state: buildReportReturnState(location, `ima-${variant}-${row.id || row.name}`),
+                              });
+                            }
+                          }}
+                        >
+                          <p className="font-medium text-slate-900">{row.name}</p>
+                          {row.secondaryLabel ? (
+                            <p className="mt-0.5 text-xs text-slate-400">{row.secondaryLabel}</p>
+                          ) : null}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{row.metrics?.employeeNumber || "-"}</td>
+                      <td className="px-4 py-3 text-slate-700">{row.metrics?.department || "-"}</td>
+                      <td className="px-4 py-3 text-right">{formatQty(row.metrics?.invoiceCount)}</td>
+                      <td className="px-4 py-3 text-right">{formatQty(row.metrics?.customerCount)}</td>
+                      <td className="px-4 py-3 text-right text-rose-700">{formatQty(row.metrics?.salesQty)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                        {formatCurrencyAmount(row.metrics?.salesValue, selectedCompany)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {formatCurrencyAmount(row.metrics?.averageValuePerInvoice, selectedCompany)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-600">
+                        {row.metrics?.lastSaleOn
+                          ? new Date(row.metrics.lastSaleOn).toLocaleDateString("en-GB")
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
             <table className={`w-full text-sm ${hideClosing ? "min-w-[1120px]" : "min-w-[1480px]"}`}>
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
@@ -407,6 +561,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 })}
               </tbody>
             </table>
+            )}
           </div>
 
           {loading ? (

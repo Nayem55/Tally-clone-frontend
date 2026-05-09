@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import api from "../api/api";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import TallyDateInput from "../Component/TallyDateInput";
 import { getCompanyCurrency } from "../utils/currency";
@@ -566,6 +567,8 @@ function CardTitle({ title, subtitle }) {
 }
 
 function EmployeeCreationPage({ mode = "create" }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { companyId, selectedCompany } = useActiveCompany();
   const isAlterMode = mode === "alter";
   const [employees, setEmployees] = useState([]);
@@ -583,6 +586,24 @@ function EmployeeCreationPage({ mode = "create" }) {
 
   const currency = getCompanyCurrency(selectedCompany);
   const summary = useMemo(() => calculateSalarySummary(employee), [employee]);
+  const returnTo = location.state?.returnTo || "";
+  const returnState = useMemo(() => {
+    if (!location.state) return undefined;
+    const { returnTo: _returnTo, ...rest } = location.state;
+    return Object.keys(rest || {}).length > 0 ? rest : undefined;
+  }, [location.state]);
+
+  const goBackToReturnTarget = useCallback(() => {
+    if (showEditModal) {
+      setShowEditModal(false);
+      return;
+    }
+    if (returnTo) {
+      navigate(returnTo, { state: returnState });
+      return;
+    }
+    window.history.back();
+  }, [navigate, returnState, returnTo, showEditModal]);
 
   const loadEmployees = useCallback(async () => {
     if (!companyId) return;
@@ -599,6 +620,37 @@ function EmployeeCreationPage({ mode = "create" }) {
   useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
+
+  useEffect(() => {
+    if (isAlterMode || showEditModal) return undefined;
+
+    function handleKeydown(event) {
+      const target = event.target;
+      const isEditable =
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        goBackToReturnTarget();
+        return;
+      }
+
+      if (
+        event.key === "Backspace" &&
+        !isEditable
+      ) {
+        event.preventDefault();
+        goBackToReturnTarget();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  }, [goBackToReturnTarget, isAlterMode, showEditModal]);
 
   useEffect(() => {
     if (!companyId || !selectedEmployeeId) {
@@ -745,6 +797,10 @@ function EmployeeCreationPage({ mode = "create" }) {
           setSelectedEmployeeId(created._id);
         }
         setNotice("Employee saved successfully.");
+        if (!resetAfterSave && returnTo) {
+          navigate(returnTo, { state: returnState });
+          return;
+        }
       }
     } catch (error) {
       setNotice(
@@ -2440,11 +2496,7 @@ function EmployeeCreationPage({ mode = "create" }) {
               type="button"
               className="rounded-full border border-slate-200 p-2 text-slate-500"
               onClick={() => {
-                if (inModal) {
-                  setShowEditModal(false);
-                } else {
-                  window.history.back();
-                }
+                goBackToReturnTarget();
               }}
             >
               <ArrowLeft className="h-5 w-5" />
@@ -2486,6 +2538,8 @@ function EmployeeCreationPage({ mode = "create" }) {
                 onClick={() => {
                   if (inModal) {
                     setShowEditModal(false);
+                  } else if (returnTo) {
+                    goBackToReturnTarget();
                   } else {
                     setEmployee(createEmptyEmployee());
                   }
@@ -2563,7 +2617,7 @@ function EmployeeCreationPage({ mode = "create" }) {
             <button
               type="button"
               className="rounded-full border border-slate-200 p-2 text-slate-500"
-              onClick={() => window.history.back()}
+              onClick={goBackToReturnTarget}
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
