@@ -227,7 +227,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     }
 
     if (variant === "sales-person") {
-      return `/reports/inventory-books/movement-analysis/stock-group?${shared}&salesPersonId=${encodeURIComponent(row.id)}&salesPersonName=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/sales-person-details/group?${shared}&salesPersonId=${encodeURIComponent(row.id)}&salesPersonName=${encodeURIComponent(row.name)}`;
     }
 
     return "";

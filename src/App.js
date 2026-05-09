@@ -44,6 +44,7 @@ import RawMaterialSummaryPage from "./Pages/RawMaterialSummaryPage";
 import ManufacturingBomRegisterPage from "./Pages/ManufacturingBomRegisterPage";
 import ProductionRegisterPage from "./Pages/ProductionRegisterPage";
 import ComponentConsumptionPage from "./Pages/ComponentConsumptionPage";
+import SalesPersonDetailPage from "./Pages/SalesPersonDetailPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -504,6 +505,22 @@ function AppShell() {
             <Route
               path="/reports/inventory-books/movement-analysis/sales-person"
               element={<InventoryMovementAnalysisPage variant="sales-person" />}
+            />
+            <Route
+              path="/reports/inventory-books/sales-person-details/group"
+              element={<SalesPersonDetailPage level="group" />}
+            />
+            <Route
+              path="/reports/inventory-books/sales-person-details/category"
+              element={<SalesPersonDetailPage level="category" />}
+            />
+            <Route
+              path="/reports/inventory-books/sales-person-details/item"
+              element={<SalesPersonDetailPage level="item" />}
+            />
+            <Route
+              path="/reports/inventory-books/sales-person-details/voucher"
+              element={<SalesPersonDetailPage level="voucher" />}
             />
             <Route path="/reports/inventory-books/godown-summary" element={Placeholder("Godown Summary", "Godown-wise stock summary is scaffolded for future warehouse-level reporting.")} />
             <Route path="/reports/inventory-books/batch-summary" element={Placeholder("Inventory Batch Summary", "Batch-wise stock reporting is reserved here for a later inventory enhancement.")} />
