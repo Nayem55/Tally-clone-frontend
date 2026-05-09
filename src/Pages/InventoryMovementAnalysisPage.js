@@ -233,14 +233,14 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     return "";
   }
 
-  const links = [
-    { key: "stock-group", label: "Stock Group Analysis" },
-    { key: "stock-category", label: "Stock Category Analysis" },
-    { key: "stock-item", label: "Stock Item Analysis" },
-    { key: "group", label: "Group Analysis" },
-    { key: "ledger", label: "Ledger Analysis" },
-    { key: "sales-person", label: "Sales Person Analysis" },
-  ];
+  // const links = [
+  //   { key: "stock-group", label: "Stock Group Analysis" },
+  //   { key: "stock-category", label: "Stock Category Analysis" },
+  //   { key: "stock-item", label: "Stock Item Analysis" },
+  //   { key: "group", label: "Group Analysis" },
+  //   { key: "ledger", label: "Ledger Analysis" },
+  //   { key: "sales-person", label: "Sales Person Analysis" },
+  // ];
 
   const totals = report.totals || {};
 
@@ -252,9 +252,9 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
                 <BarChart3 className="h-3.5 w-3.5" />
-                Inventory Books
+                Reports
               </div>
-              <h1 className="mt-3 text-3xl font-bold text-slate-900">Movement Analysis</h1>
+              <h1 className="mt-3 text-3xl font-bold text-slate-900">Report Analysis</h1>
               <p className="mt-2 text-sm text-slate-500">
                 {requestedSalesPersonId
                   ? `Tracking item movement sold by ${requestedSalesPersonName || "the selected sales person"} through group, category, item, and voucher drilldown.`
@@ -304,23 +304,23 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            {links.map((link) => (
-              <Link
-                key={link.key}
-                to={`/reports/inventory-books/movement-analysis/${link.key}${
-                  requestedSalesPersonId
-                    ? `?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}`
-                    : ""
-                }`}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  link.key === variant
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+              {/* {links.map((link) => (
+                <Link
+                  key={link.key}
+                  to={`/reports/inventory-books/movement-analysis/${link.key}${
+                    requestedSalesPersonId
+                      ? `?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}`
+                      : ""
+                  }`}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                    link.key === variant
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))} */}
           </div>
         </section>
 

@@ -101,12 +101,30 @@ export const menuTree = [
         label: "Inventory Vouchers",
         children: [
           { label: "Receipt Note", to: "/transactions/inventory/receipt-note" },
-          { label: "Delivery Note", to: "/transactions/inventory/delivery-note" },
-          { label: "Rejections In", to: "/transactions/inventory/rejections-in" },
-          { label: "Rejections Out", to: "/transactions/inventory/rejections-out" },
-          { label: "Stock Journal", to: "/transactions/inventory/stock-journal" },
-          { label: "Manufacturing", to: "/transactions/inventory/manufacturing" },
-          { label: "Physical Stock", to: "/transactions/inventory/physical-stock" },
+          {
+            label: "Delivery Note",
+            to: "/transactions/inventory/delivery-note",
+          },
+          {
+            label: "Rejections In",
+            to: "/transactions/inventory/rejections-in",
+          },
+          {
+            label: "Rejections Out",
+            to: "/transactions/inventory/rejections-out",
+          },
+          {
+            label: "Stock Journal",
+            to: "/transactions/inventory/stock-journal",
+          },
+          {
+            label: "Manufacturing",
+            to: "/transactions/inventory/manufacturing",
+          },
+          {
+            label: "Physical Stock",
+            to: "/transactions/inventory/physical-stock",
+          },
         ],
       },
       { label: "Alter Vouchers", to: "/transactions/alter-vouchers" },
@@ -130,34 +148,88 @@ export const menuTree = [
         label: "Inventory Books",
         children: [
           { label: "Stock Item", to: "/reports/inventory-books/stock-item" },
-          { label: "Stock Group Summary", to: "/reports/inventory-books/stock-group-summary" },
-          { label: "Raw Material Summary", to: "/reports/inventory-books/raw-material-summary" },
-          { label: "BoM Register", to: "/reports/inventory-books/bom-register" },
-          { label: "Production Register", to: "/reports/inventory-books/production-register" },
-          { label: "Component Consumption", to: "/reports/inventory-books/component-consumption" },
+          {
+            label: "Stock Group Summary",
+            to: "/reports/inventory-books/stock-group-summary",
+          },
+          {
+            label: "Raw Material Summary",
+            to: "/reports/inventory-books/raw-material-summary",
+          },
+          {
+            label: "BoM Register",
+            to: "/reports/inventory-books/bom-register",
+          },
+          {
+            label: "Production Register",
+            to: "/reports/inventory-books/production-register",
+          },
+          {
+            label: "Component Consumption",
+            to: "/reports/inventory-books/component-consumption",
+          },
           {
             label: "Movement Analysis",
             children: [
-              { label: "Stock Group Analysis", to: "/reports/inventory-books/movement-analysis/stock-group" },
-              { label: "Stock Category Analysis", to: "/reports/inventory-books/movement-analysis/stock-category" },
-              { label: "Stock Item Analysis", to: "/reports/inventory-books/movement-analysis/stock-item" },
-              { label: "Group Analysis", to: "/reports/inventory-books/movement-analysis/group" },
-              { label: "Ledger Analysis", to: "/reports/inventory-books/movement-analysis/ledger" },
-              { label: "Sales Person Analysis", to: "/reports/inventory-books/movement-analysis/sales-person" },
+              {
+                label: "Stock Group Analysis",
+                to: "/reports/inventory-books/movement-analysis/stock-group",
+              },
+              {
+                label: "Stock Category Analysis",
+                to: "/reports/inventory-books/movement-analysis/stock-category",
+              },
+              {
+                label: "Stock Item Analysis",
+                to: "/reports/inventory-books/movement-analysis/stock-item",
+              },
+              {
+                label: "Sales Person Analysis",
+                to: "/reports/inventory-books/movement-analysis/sales-person",
+              },
             ],
           },
-          { label: "Godown Summary", to: "/reports/inventory-books/godown-summary" },
-          { label: "Batch Summary", to: "/reports/inventory-books/batch-summary" },
+          {
+            label: "Godown Summary",
+            to: "/reports/inventory-books/godown-summary",
+          },
+          {
+            label: "Batch Summary",
+            to: "/reports/inventory-books/batch-summary",
+          },
         ],
       },
       {
         label: "Account Books",
         children: [
-          { label: "Sales Register", to: "/reports/account-books/sales-register" },
-          { label: "Purchase Register", to: "/reports/account-books/purchase-register" },
-          { label: "Journal Register", to: "/reports/account-books/journal-register" },
-          { label: "Debit Note Register", to: "/reports/account-books/debit-note-register" },
-          { label: "Credit Note Register", to: "/reports/account-books/credit-note-register" },
+          {
+            label: "Sales Register",
+            to: "/reports/account-books/sales-register",
+          },
+          {
+            label: "Purchase Register",
+            to: "/reports/account-books/purchase-register",
+          },
+          {
+            label: "Journal Register",
+            to: "/reports/account-books/journal-register",
+          },
+          {
+            label: "Debit Note Register",
+            to: "/reports/account-books/debit-note-register",
+          },
+          {
+            label: "Credit Note Register",
+            to: "/reports/account-books/credit-note-register",
+          },
+          {
+            label: "Group",
+            to: "/reports/inventory-books/movement-analysis/group",
+          },
+          {
+            label: "Ledger",
+            to: "/reports/inventory-books/movement-analysis/ledger",
+          },
         ],
       },
       { label: "Day Book", to: "/reports/day-book" },
@@ -165,49 +237,106 @@ export const menuTree = [
         label: "Customer Behaviour",
         children: [
           { label: "Overview", to: "/reports/customer-behaviour/overview" },
-          { label: "Product-wise", to: "/reports/customer-behaviour/product-wise" },
-          { label: "Stock Group-wise", to: "/reports/customer-behaviour/stock-group-wise" },
-          { label: "Category-wise", to: "/reports/customer-behaviour/category-wise" },
+          {
+            label: "Product-wise",
+            to: "/reports/customer-behaviour/product-wise",
+          },
+          {
+            label: "Stock Group-wise",
+            to: "/reports/customer-behaviour/stock-group-wise",
+          },
+          {
+            label: "Category-wise",
+            to: "/reports/customer-behaviour/category-wise",
+          },
         ],
       },
       {
         label: "Display More Reports",
         children: [
-          { label: "Trial Balance (Detailed)", to: "/reports/more/trial-balance-detailed" },
-          { label: "Day Book (Filtered)", to: "/reports/more/day-book-filtered" },
-          { label: "Cash Flow (Detailed)", to: "/reports/more/cash-flow-detailed" },
+          {
+            label: "Trial Balance (Detailed)",
+            to: "/reports/more/trial-balance-detailed",
+          },
+          {
+            label: "Day Book (Filtered)",
+            to: "/reports/more/day-book-filtered",
+          },
+          {
+            label: "Cash Flow (Detailed)",
+            to: "/reports/more/cash-flow-detailed",
+          },
           { label: "Fund Flow", to: "/reports/more/fund-flow" },
           {
             label: "Receivables & Payables",
             children: [
-              { label: "Bills Receivable", to: "/reports/more/receivables/bills-receivable" },
-              { label: "Bills Payable", to: "/reports/more/receivables/bills-payable" },
-              { label: "Outstanding Receivables", to: "/reports/more/receivables/outstanding-receivables" },
-              { label: "Outstanding Payables", to: "/reports/more/receivables/outstanding-payables" },
+              {
+                label: "Bills Receivable",
+                to: "/reports/more/receivables/bills-receivable",
+              },
+              {
+                label: "Bills Payable",
+                to: "/reports/more/receivables/bills-payable",
+              },
+              {
+                label: "Outstanding Receivables",
+                to: "/reports/more/receivables/outstanding-receivables",
+              },
+              {
+                label: "Outstanding Payables",
+                to: "/reports/more/receivables/outstanding-payables",
+              },
             ],
           },
           {
             label: "Exception Reports",
             children: [
-              { label: "Negative Stock", to: "/reports/more/exceptions/negative-stock" },
-              { label: "Overdue Receivables", to: "/reports/more/exceptions/overdue-receivables" },
-              { label: "Overdue Payables", to: "/reports/more/exceptions/overdue-payables" },
-              { label: "Memorandum Vouchers", to: "/reports/more/exceptions/memorandum-vouchers" },
+              {
+                label: "Negative Stock",
+                to: "/reports/more/exceptions/negative-stock",
+              },
+              {
+                label: "Overdue Receivables",
+                to: "/reports/more/exceptions/overdue-receivables",
+              },
+              {
+                label: "Overdue Payables",
+                to: "/reports/more/exceptions/overdue-payables",
+              },
+              {
+                label: "Memorandum Vouchers",
+                to: "/reports/more/exceptions/memorandum-vouchers",
+              },
             ],
           },
           {
             label: "Cost Centre Reports",
             children: [
-              { label: "Cost Centre Summary", to: "/reports/more/cost-centres/cost-centre-summary" },
-              { label: "Cost Category Summary", to: "/reports/more/cost-centres/cost-category-summary" },
+              {
+                label: "Cost Centre Summary",
+                to: "/reports/more/cost-centres/cost-centre-summary",
+              },
+              {
+                label: "Cost Category Summary",
+                to: "/reports/more/cost-centres/cost-category-summary",
+              },
             ],
           },
           {
             label: "Analysis Reports",
             children: [
-              { label: "Ratio Analysis", to: "/reports/more/analysis/ratio-analysis" },
-              { label: "Cash/Funds Flow", to: "/reports/more/analysis/cash-funds-flow" },
-              { label: "Performance Analysis", to: "/reports/more/analysis/performance-analysis" },
+              {
+                label: "Ratio Analysis",
+                to: "/reports/more/analysis/ratio-analysis",
+              },
+              {
+                label: "Cash/Funds Flow",
+                to: "/reports/more/analysis/cash-funds-flow",
+              },
+              {
+                label: "Performance Analysis",
+                to: "/reports/more/analysis/performance-analysis",
+              },
             ],
           },
         ],
@@ -239,7 +368,9 @@ export function hasActiveNode(node, pathname) {
 export function flattenNavigation(nodes = menuTree, ancestors = []) {
   return nodes.flatMap((node) => {
     const currentAncestors = [...ancestors, node.label];
-    const children = node.children ? flattenNavigation(node.children, currentAncestors) : [];
+    const children = node.children
+      ? flattenNavigation(node.children, currentAncestors)
+      : [];
     const parentLabel = ancestors[ancestors.length - 1] || "";
     const breadcrumbs = currentAncestors.join(" / ");
     const self = {

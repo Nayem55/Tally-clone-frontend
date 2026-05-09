@@ -8,9 +8,10 @@ export function resolvePriceEntryByDate(item, priceLevelId, voucherDate) {
   if (!item) return null;
   const selectedDateKey = normalizeDateKey(voucherDate);
   const prices = Array.isArray(item.prices) ? item.prices : [];
+  const normalizedPriceLevelId = priceLevelId ? String(priceLevelId) : "";
 
   const matchingByLevel = priceLevelId
-    ? prices.filter((entry) => entry.priceLevelId === priceLevelId)
+    ? prices.filter((entry) => String(entry.priceLevelId || "") === normalizedPriceLevelId)
     : prices;
 
   const datedEntries = matchingByLevel

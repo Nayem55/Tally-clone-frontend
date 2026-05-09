@@ -25,8 +25,9 @@ function formatDate(value) {
 
 function resolvePriceForDate(item, priceLevelId, effectiveFromDate) {
   const selectedDateKey = normalizeDateKey(effectiveFromDate);
+  const normalizedPriceLevelId = priceLevelId ? String(priceLevelId) : "";
   const entries = (item.prices || [])
-    .filter((entry) => entry.priceLevelId === priceLevelId)
+    .filter((entry) => String(entry.priceLevelId || "") === normalizedPriceLevelId)
     .map((entry) => ({
       ...entry,
       effectiveKey: normalizeDateKey(entry.effectiveFrom),
@@ -44,6 +45,20 @@ function resolvePriceForDate(item, priceLevelId, effectiveFromDate) {
   return undatedEntry || null;
 }
 
+function resolveNextPriceAfterDate(item, priceLevelId, asOnDate) {
+  const asOnKey = normalizeDateKey(asOnDate);
+  const normalizedPriceLevelId = priceLevelId ? String(priceLevelId) : "";
+
+  return (item.prices || [])
+    .filter((entry) => String(entry.priceLevelId || "") === normalizedPriceLevelId)
+    .map((entry) => ({
+      ...entry,
+      effectiveKey: normalizeDateKey(entry.effectiveFrom),
+    }))
+    .filter((entry) => entry.effectiveKey && (!asOnKey || entry.effectiveKey > asOnKey))
+    .sort((left, right) => left.effectiveKey.localeCompare(right.effectiveKey))[0] || null;
+}
+
 export default function AlterItemPrices() {
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
@@ -57,6 +72,7 @@ export default function AlterItemPrices() {
   const [bulkGroupId, setBulkGroupId] = useState("");
   const [bulkPriceLevelId, setBulkPriceLevelId] = useState("");
   const [bulkRate, setBulkRate] = useState("");
+  const [asOnDate, setAsOnDate] = useState(today);
   const [effectiveFrom, setEffectiveFrom] = useState(today);
 
   useEffect(() => {
@@ -113,12 +129,36 @@ export default function AlterItemPrices() {
   const selectedPriceLevel =
     priceLevels.find((level) => level._id === bulkPriceLevelId) || priceLevels[0];
 
+  const selectedGroup = useMemo(
+    () =>
+      groups.find(
+        (group) => String(group.id || group._id) === String(bulkGroupId || "")
+      ) || null,
+    [groups, bulkGroupId]
+  );
+
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return items.filter((item) =>
-      `${item.name} ${item.group?.name || ""}`.toLowerCase().includes(query)
+    return items.filter((item) => {
+      const itemGroupId = String(item.group?._id || item.groupId || "");
+      if (bulkGroupId && itemGroupId !== String(bulkGroupId)) return false;
+      return `${item.name} ${item.group?.name || ""}`.toLowerCase().includes(query);
+    });
+  }, [items, search, bulkGroupId]);
+
+  const hasUpcomingRateView = useMemo(() => {
+    const previewIsUpcoming =
+      bulkRate !== "" &&
+      normalizeDateKey(effectiveFrom) &&
+      normalizeDateKey(asOnDate) &&
+      normalizeDateKey(effectiveFrom) > normalizeDateKey(asOnDate);
+
+    if (previewIsUpcoming) return true;
+
+    return rows.some((item) =>
+      Boolean(resolveNextPriceAfterDate(item, selectedPriceLevel?._id, asOnDate))
     );
-  }, [items, search]);
+  }, [rows, selectedPriceLevel?._id, bulkRate, effectiveFrom, asOnDate]);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -140,7 +180,7 @@ export default function AlterItemPrices() {
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">Bulk Update</h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-5">
+          <div className="mt-6 grid gap-4 md:grid-cols-6">
             <select
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               value={bulkGroupId}
@@ -172,14 +212,33 @@ export default function AlterItemPrices() {
               value={bulkRate}
               onChange={(event) => setBulkRate(event.target.value)}
             />
-            <div className="relative">
-              <CalendarRange className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-              <input
-                type="date"
-                className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                value={effectiveFrom}
-                onChange={(event) => setEffectiveFrom(event.target.value)}
-              />
+            {/* <div>
+              <label className="mb-2 block text-sm font-medium text-slate-600">
+                As on
+              </label>
+              <div className="relative">
+                <CalendarRange className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  value={asOnDate}
+                  onChange={(event) => setAsOnDate(event.target.value)}
+                />
+              </div>
+            </div> */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-600">
+                Applied from
+              </label>
+              <div className="relative">
+                <CalendarRange className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  value={effectiveFrom}
+                  onChange={(event) => setEffectiveFrom(event.target.value)}
+                />
+              </div>
             </div>
             <button
               type="button"
@@ -199,8 +258,13 @@ export default function AlterItemPrices() {
                 Price List - {selectedPriceLevel?.code || "MRP"}
               </h2>
               <p className="mt-1 text-xs text-slate-400">
-                Applicable from: {formatDate(effectiveFrom)}
+                As on: {formatDate(asOnDate)}
               </p>
+              {selectedGroup ? (
+                <p className="mt-1 text-xs font-medium text-emerald-600">
+                  Group filter: {selectedGroup.name}
+                </p>
+              ) : null}
             </div>
             <div className="relative w-full max-w-xs">
               <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
@@ -219,33 +283,105 @@ export default function AlterItemPrices() {
                   <th className="px-4 py-3 font-medium">S.No.</th>
                   <th className="px-4 py-3 font-medium">Particulars</th>
                   <th className="px-4 py-3 font-medium">Group</th>
-                  <th className="px-4 py-3 text-right font-medium">Rate</th>
-                  <th className="px-4 py-3 font-medium">Effective From</th>
+                  {hasUpcomingRateView ? (
+                    <>
+                      <th className="px-4 py-3 text-right font-medium">Current Rate</th>
+                      <th className="px-4 py-3 font-medium">As on</th>
+                      <th className="px-4 py-3 text-right font-medium">Updated Rate</th>
+                      <th className="px-4 py-3 font-medium">Effective From</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-4 py-3 text-right font-medium">Rate</th>
+                      <th className="px-4 py-3 font-medium">Effective From</th>
+                    </>
+                  )}
                   <th className="px-4 py-3 text-right font-medium">Cost Price</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((item, index) => {
-                  const selectedEntry = resolvePriceForDate(
+                  const currentEntry = resolvePriceForDate(
                     item,
                     selectedPriceLevel?._id,
-                    effectiveFrom
+                    asOnDate
                   );
+                  const savedUpcomingEntry = resolveNextPriceAfterDate(
+                    item,
+                    selectedPriceLevel?._id,
+                    asOnDate
+                  );
+                  const isPreviewTargetedGroup =
+                    bulkGroupId &&
+                    String(item.group?._id || item.groupId || "") === String(bulkGroupId);
+                  const previewIsUpcoming =
+                    bulkRate !== "" &&
+                    isPreviewTargetedGroup &&
+                    normalizeDateKey(effectiveFrom) > normalizeDateKey(asOnDate);
+                  const previewEntry =
+                    previewIsUpcoming && bulkRate !== ""
+                      ? {
+                          rate: Number(bulkRate || 0),
+                          effectiveFrom,
+                        }
+                      : null;
+
+                  const upcomingEntry = previewEntry || savedUpcomingEntry;
+                  const currentRate = Number(currentEntry?.rate || 0);
+                  const upcomingRate = Number(upcomingEntry?.rate || 0);
+                  const rowHasUpcoming =
+                    hasUpcomingRateView &&
+                    upcomingEntry &&
+                    normalizeDateKey(upcomingEntry.effectiveFrom);
+
                   return (
                     <tr key={item._id} className="border-t border-slate-100">
                       <td className="px-4 py-3 text-blue-700">{index + 1}</td>
                       <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
-                      <td className="px-4 py-3 text-slate-500">{item.group?.name || "-"}</td>
-                      <td className="px-4 py-3 text-right text-slate-800">
-                        {formatMoney(selectedEntry?.rate || 0)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {selectedEntry?.effectiveFrom
-                          ? formatDate(selectedEntry.effectiveFrom)
-                          : "Opening / Legacy"}
-                      </td>
+                      <td className="px-4 py-3 text-slate-500">{item.group?.name || "- -"}</td>
+                      {hasUpcomingRateView ? (
+                        <>
+                          <td className="px-4 py-3 text-right text-slate-800">
+                            {rowHasUpcoming ? formatMoney(currentRate) : "- -"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">
+                            {rowHasUpcoming
+                              ? currentEntry?.effectiveFrom
+                                ? formatDate(currentEntry.effectiveFrom)
+                                : "Opening / Legacy"
+                              : "- -"}
+                          </td>
+                          <td className="px-4 py-3 text-right text-slate-800">
+                            {rowHasUpcoming ? (
+                              <span className="font-semibold text-emerald-600">
+                                {formatMoney(upcomingRate)}
+                              </span>
+                            ) : (
+                              "- -"
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">
+                            {rowHasUpcoming
+                              ? formatDate(upcomingEntry.effectiveFrom)
+                              : currentEntry?.effectiveFrom
+                                ? formatDate(currentEntry.effectiveFrom)
+                                : "- -"}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3 text-right text-slate-800">
+                            {formatMoney(currentRate)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">
+                            {currentEntry?.effectiveFrom
+                              ? formatDate(currentEntry.effectiveFrom)
+                              : "Opening / Legacy"}
+                          </td>
+                        </>
+                      )}
                       <td className="px-4 py-3 text-right text-slate-500">
-                        {formatMoney(item.openingRate)}
+                        {formatMoney(item.lastPurchaseRate ?? item.openingRate)}
                       </td>
                     </tr>
                   );
