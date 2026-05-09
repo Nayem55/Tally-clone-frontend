@@ -45,6 +45,7 @@ import ManufacturingBomRegisterPage from "./Pages/ManufacturingBomRegisterPage";
 import ProductionRegisterPage from "./Pages/ProductionRegisterPage";
 import ComponentConsumptionPage from "./Pages/ComponentConsumptionPage";
 import SalesPersonDetailPage from "./Pages/SalesPersonDetailPage";
+import PartyMovementDetailPage from "./Pages/PartyMovementDetailPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -501,6 +502,14 @@ function AppShell() {
             <Route
               path="/reports/inventory-books/movement-analysis/ledger"
               element={<InventoryMovementAnalysisPage variant="ledger" />}
+            />
+            <Route
+              path="/reports/inventory-books/party-details/ledger"
+              element={<PartyMovementDetailPage level="ledger" />}
+            />
+            <Route
+              path="/reports/inventory-books/party-details/voucher"
+              element={<PartyMovementDetailPage level="voucher" />}
             />
             <Route
               path="/reports/inventory-books/movement-analysis/sales-person"

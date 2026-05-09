@@ -219,11 +219,11 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     }
 
     if (variant === "group") {
-      return `/reports/inventory-books/movement-analysis/ledger?${shared}&q=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-details/ledger?${shared}&groupName=${encodeURIComponent(row.name)}`;
     }
 
     if (variant === "ledger") {
-      return `/reports/day-book?${shared}&ledger=${encodeURIComponent(row.name)}&q=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-details/voucher?${shared}&groupName=${encodeURIComponent(row.secondaryLabel || "")}&ledgerName=${encodeURIComponent(row.name)}`;
     }
 
     if (variant === "sales-person") {
@@ -481,14 +481,11 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 </tbody>
               </table>
             ) : (
-            <table className={`w-full text-sm ${hideClosing ? "min-w-[1120px]" : "min-w-[1480px]"}`}>
+            <table className={`w-full text-sm ${hideClosing ? "min-w-[940px]" : "min-w-[1480px]"}`}>
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
                   <th rowSpan="2" className="px-4 py-3 text-left font-medium">
                     Particulars
-                  </th>
-                  <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    Opening Balance
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
                     {hideClosing ? "Purchase" : "Inwards"}
@@ -503,7 +500,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                   ) : null}
                 </tr>
                 <tr>
-                  {Array.from({ length: hideClosing ? 3 : 4 })
+                  {Array.from({ length: hideClosing ? 2 : 4 })
                     .flatMap(() => ["Quantity", "Rate", "Value"])
                     .map((label, index) => (
                     <th key={`${label}-${index}`} className="px-4 py-3 text-right font-medium">
@@ -538,9 +535,13 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                           ) : null}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-right">{formatQty(metrics.openingQty)}</td>
-                      <td className="px-4 py-3 text-right">{formatRate(metrics.openingRate)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(metrics.openingValue, selectedCompany)}</td>
+                      {!hideClosing ? (
+                        <>
+                          <td className="px-4 py-3 text-right">{formatQty(metrics.openingQty)}</td>
+                          <td className="px-4 py-3 text-right">{formatRate(metrics.openingRate)}</td>
+                          <td className="px-4 py-3 text-right">{formatCurrencyAmount(metrics.openingValue, selectedCompany)}</td>
+                        </>
+                      ) : null}
                       <td className="px-4 py-3 text-right text-emerald-700">{formatQty(metrics.inwardQty)}</td>
                       <td className="px-4 py-3 text-right">{formatRate(metrics.inwardRate)}</td>
                       <td className="px-4 py-3 text-right">{formatCurrencyAmount(metrics.inwardValue, selectedCompany)}</td>
