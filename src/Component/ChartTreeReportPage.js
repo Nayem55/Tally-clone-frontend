@@ -52,6 +52,7 @@ export default function ChartTreeReportPage({
   summaryLabel,
   renderMeta,
   rowTypeLabel,
+  summaryValueMode = "groups",
 }) {
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
@@ -105,6 +106,8 @@ export default function ChartTreeReportPage({
 
   const totalGroups = rows.filter((row) => row.type === "group").length;
   const totalLeafRows = rows.filter((row) => row.type !== "group").length;
+  const primarySummaryValue =
+    summaryValueMode === "ledgers" ? totalLeafRows : totalGroups;
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -145,7 +148,7 @@ export default function ChartTreeReportPage({
         <section className="grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">{summaryLabel}</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{totalGroups.toLocaleString("en-IN")}</p>
+            <p className="mt-2 text-3xl font-bold text-slate-900">{primarySummaryValue.toLocaleString("en-IN")}</p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">{rowTypeLabel}</p>
@@ -200,7 +203,9 @@ export default function ChartTreeReportPage({
                       <p className={`${isGroup ? "font-semibold text-slate-900" : "text-slate-700"}`}>
                         {row.name}
                       </p>
-                      {renderMeta ? renderMeta(row) : null}
+                      {renderMeta ? renderMeta(row) : row.groupPath ? (
+                        <p className="mt-0.5 text-xs text-slate-400">{row.groupPath}</p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="text-right text-xs text-slate-400">

@@ -95,6 +95,17 @@ export default function Groups({
     );
   }, [visibleGroups, stockOnly]);
 
+  const selectedParentGroup = useMemo(() => {
+    if (!form.parentId) return null;
+    return visibleGroups.find((group) => String(group._id) === String(form.parentId)) || null;
+  }, [form.parentId, visibleGroups]);
+
+  const effectiveNature = stockOnly
+    ? "ASSET"
+    : selectedParentGroup?.nature || form.nature;
+
+  const isNatureEditable = !stockOnly && !selectedParentGroup;
+
   async function saveGroup() {
     if (!companyId) return;
     setSaving(true);
@@ -102,7 +113,7 @@ export default function Groups({
       const payload = {
         name: form.name,
         parentId: form.parentId || (stockOnly ? rootParentOption?._id || null : null),
-        nature: stockOnly ? "ASSET" : form.nature,
+        nature: effectiveNature,
         affectsGrossProfit: stockOnly ? false : form.affectsGrossProfit,
       };
 
@@ -207,7 +218,12 @@ export default function Groups({
         const payload = {
           name: String(row.Name || "").trim(),
           parentId,
-          nature: stockOnly ? "ASSET" : String(row.Nature || "ASSET").trim().toUpperCase() || "ASSET",
+          nature:
+            stockOnly
+              ? "ASSET"
+              : parentId
+              ? resolveNamedOption(groupMap, parentName, "Parent Group")?.nature || "ASSET"
+              : String(row.Nature || "ASSET").trim().toUpperCase() || "ASSET",
           affectsGrossProfit: stockOnly
             ? false
             : normalizeExcelBoolean(row["Affects Gross Profit"], false),
@@ -327,32 +343,33 @@ export default function Groups({
 
               {!stockOnly ? (
                 <>
-                  <select
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                    value={form.nature}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, nature: event.target.value }))
-                    }
-                  >
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Group Nature
+                    </label>
+                    <select
+                      className={`w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none ${
+                        isNatureEditable
+                          ? "focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                          : "cursor-not-allowed bg-slate-50 text-slate-500"
+                      }`}
+                      value={effectiveNature}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, nature: event.target.value }))
+                      }
+                      disabled={!isNatureEditable}
+                    >
                     <option value="ASSET">Asset</option>
                     <option value="LIABILITY">Liability</option>
                     <option value="INCOME">Income</option>
                     <option value="EXPENSE">Expense</option>
-                  </select>
-
-                  <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={form.affectsGrossProfit}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          affectsGrossProfit: event.target.checked,
-                        }))
-                      }
-                    />
-                    Affects gross profit
-                  </label>
+                    </select>
+                    <p className="text-xs text-slate-500">
+                      {isNatureEditable
+                        ? "Choose the nature only for a primary group."
+                        : `Inherited automatically from parent group: ${selectedParentGroup?.name}.`}
+                    </p>
+                  </div>
                 </>
               ) : null}
 
