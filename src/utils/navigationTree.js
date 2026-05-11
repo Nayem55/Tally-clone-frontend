@@ -224,11 +224,11 @@ export const menuTree = [
           },
           {
             label: "Group",
-            to: "/reports/inventory-books/movement-analysis/group",
+            to: "/reports/account-books/group",
           },
           {
             label: "Ledger",
-            to: "/reports/inventory-books/movement-analysis/ledger",
+            to: "/reports/account-books/ledger",
           },
         ],
       },

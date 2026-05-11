@@ -46,6 +46,7 @@ import ProductionRegisterPage from "./Pages/ProductionRegisterPage";
 import ComponentConsumptionPage from "./Pages/ComponentConsumptionPage";
 import SalesPersonDetailPage from "./Pages/SalesPersonDetailPage";
 import PartyMovementDetailPage from "./Pages/PartyMovementDetailPage";
+import AccountBooksSummaryPage from "./Pages/AccountBooksSummaryPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -419,8 +420,9 @@ function AppShell() {
                 />
               }
             />
-            <Route path="/reports/account-books/ledger" element={Placeholder("Ledger Book", "A dedicated ledger drilldown report can be added next with running balance and voucher drill-ins.")} />
-            <Route path="/reports/account-books/group-summary" element={<TrialBalance />} />
+            <Route path="/reports/account-books/ledger" element={<AccountBooksSummaryPage mode="ledger" />} />
+            <Route path="/reports/account-books/group" element={<AccountBooksSummaryPage mode="group" />} />
+            <Route path="/reports/account-books/group-summary" element={<AccountBooksSummaryPage mode="group" />} />
             <Route path="/reports/account-books/ledger-detail" element={<LedgerDetailPage />} />
             <Route
               path="/reports/account-books/sales-register"
