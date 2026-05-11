@@ -3,6 +3,7 @@ import { BookOpen, Download, PencilLine, Plus, Search, Trash2, Upload } from "lu
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -309,33 +310,36 @@ export default function Ledgers() {
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               />
 
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 value={form.groupId}
-                onChange={(event) => setForm((current) => ({ ...current, groupId: event.target.value }))}
-              >
-                <option value="">Select group</option>
-                {sortedGroups.map((group) => (
-                  <option key={group._id} value={group._id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(newValue) => setForm((current) => ({ ...current, groupId: newValue }))}
+                placeholder="Select group"
+                options={[
+                  ...sortedGroups.map((group) => ({
+                    value: group._id,
+                    label: group.name,
+                  })),
+                ]}
+              />
 
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 value={form.priceLevelId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, priceLevelId: event.target.value }))
+                onChange={(newValue) =>
+                  setForm((current) => ({ ...current, priceLevelId: newValue }))
                 }
-              >
-                <option value="">No price level mapping</option>
-                {priceLevels.map((level) => (
-                  <option key={level._id} value={level._id}>
-                    {level.code} - {level.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="No price level mapping"
+                options={[
+                  { value: "", label: "No price level mapping" },
+                  ...priceLevels.map((level) => ({
+                    value: level._id,
+                    label: `${level.code} - ${level.name}`,
+                  })),
+                ]}
+              />
 
               <div className="grid gap-4 md:grid-cols-2">
                 <input
@@ -351,16 +355,19 @@ export default function Ledgers() {
                   }
                 />
 
-                <select
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                <SearchableSelect
+                  className="w-full"
+                  inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   value={form.openingDrCr}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, openingDrCr: event.target.value }))
+                  onChange={(newValue) =>
+                    setForm((current) => ({ ...current, openingDrCr: newValue }))
                   }
-                >
-                  <option value="DR">Debit</option>
-                  <option value="CR">Credit</option>
-                </select>
+                  placeholder="Select opening type"
+                  options={[
+                    { value: "DR", label: "Debit" },
+                    { value: "CR", label: "Credit" },
+                  ]}
+                />
               </div>
 
               <button

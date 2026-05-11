@@ -3,6 +3,7 @@ import { Download, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -283,21 +284,26 @@ export default function MasterDataPage({
                 if (field.type === "select") {
                   const options = field.options || parentOptions;
                   return (
-                    <select
+                    <SearchableSelect
                       key={field.name}
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                      className="w-full"
+                      inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100"
+                      options={[
+                        {
+                          value: "",
+                          label: field.placeholder || `Select ${field.label}`,
+                        },
+                        ...options.map((option) => ({
+                          value: option._id || option.id,
+                          label: option.name,
+                        })),
+                      ]}
                       value={form[field.name]}
-                      onChange={(event) =>
-                        setForm((current) => ({ ...current, [field.name]: event.target.value }))
+                      onChange={(newValue) =>
+                        setForm((current) => ({ ...current, [field.name]: newValue }))
                       }
-                    >
-                      <option value="">{field.placeholder || `Select ${field.label}`}</option>
-                      {options.map((option) => (
-                        <option key={option._id || option.id} value={option._id || option.id}>
-                          {option.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder={field.placeholder || `Select ${field.label}`}
+                    />
                   );
                 }
 

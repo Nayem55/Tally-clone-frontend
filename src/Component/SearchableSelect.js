@@ -7,9 +7,11 @@ export default function SearchableSelect({
   onChange,
   placeholder = "Search...",
   className = "",
+  inputClassName = "",
   optionClassName = "",
   dataNav = true,
   allowClear = false,
+  disabled = false,
 }) {
   const rootRef = useRef(null);
   const inputRef = useRef(null);
@@ -62,14 +64,17 @@ export default function SearchableSelect({
           ref={inputRef}
           type="text"
           data-vnav={dataNav ? "true" : undefined}
-          className="w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-9 pr-8 text-[14px] text-slate-900 outline-none focus:border-[#3f83f8]"
+          className={`w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-9 pr-8 text-[14px] text-slate-900 outline-none focus:border-[#3f83f8] ${inputClassName}`}
           value={query}
           placeholder={placeholder}
+          disabled={disabled}
           onFocus={() => {
+            if (disabled) return;
             setOpen(true);
             setHighlightedIndex(0);
           }}
           onChange={(event) => {
+            if (disabled) return;
             setQuery(event.target.value);
             if (selectedOption && event.target.value !== selectedOption.label && allowClear) {
               onChange("");
@@ -78,6 +83,7 @@ export default function SearchableSelect({
             setHighlightedIndex(0);
           }}
           onKeyDown={(event) => {
+            if (disabled) return;
             if (event.key === "ArrowDown") {
               event.preventDefault();
               setOpen(true);
@@ -110,6 +116,7 @@ export default function SearchableSelect({
           tabIndex={-1}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
           onClick={() => {
+            if (disabled) return;
             setOpen((current) => !current);
             inputRef.current?.focus();
           }}

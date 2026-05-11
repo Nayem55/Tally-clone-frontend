@@ -3,6 +3,7 @@ import { Download, FolderTree, PencilLine, Plus, Trash2, Upload } from "lucide-r
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -16,7 +17,7 @@ const defaultForm = {
   id: "",
   name: "",
   parentId: "",
-  nature: "ASSET",
+  nature: "",
   affectsGrossProfit: false,
 };
 
@@ -357,23 +358,28 @@ export default function Groups({
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               />
 
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                 value={form.parentId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, parentId: event.target.value }))
+                onChange={(newValue) =>
+                  setForm((current) => ({ ...current, parentId: newValue }))
                 }
-              >
-                <option value="">{stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group"}</option>
-                {visibleGroups
-                  .filter((group) => group._id !== form.id)
-                  .filter((group) => !stockOnly || String(group._id) !== String(rootParentOption?._id))
-                  .map((group) => (
-                    <option key={group._id} value={group._id}>
-                      {group.name}
-                    </option>
-                  ))}
-              </select>
+                placeholder={stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group"}
+                options={[
+                  {
+                    value: "",
+                    label: stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group",
+                  },
+                  ...visibleGroups
+                    .filter((group) => group._id !== form.id)
+                    .filter((group) => !stockOnly || String(group._id) !== String(rootParentOption?._id))
+                    .map((group) => ({
+                      value: group._id,
+                      label: group.name,
+                    })),
+                ]}
+              />
 
               {!stockOnly ? (
                 <>
@@ -381,23 +387,27 @@ export default function Groups({
                     <label className="block text-sm font-semibold text-slate-700">
                       Group Nature
                     </label>
-                    <select
-                      className={`w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none ${
+                    <SearchableSelect
+                      className="w-full"
+                      inputClassName={`rounded-xl border border-slate-200 px-4 py-3 text-sm ${
                         isNatureEditable
-                          ? "focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                          ? "bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                           : "cursor-not-allowed bg-slate-50 text-slate-500"
                       }`}
                       value={effectiveNature}
-                      onChange={(event) =>
-                        setForm((current) => ({ ...current, nature: event.target.value }))
+                      onChange={(newValue) =>
+                        setForm((current) => ({ ...current, nature: newValue }))
                       }
+                      placeholder="Select group nature"
+                      options={[
+                        { value: "ASSET", label: "Asset" },
+                        { value: "LIABILITY", label: "Liability" },
+                        { value: "INCOME", label: "Income" },
+                        { value: "EXPENSE", label: "Expense" },
+                      ]}
+                      dataNav={isNatureEditable}
                       disabled={!isNatureEditable}
-                    >
-                    <option value="ASSET">Asset</option>
-                    <option value="LIABILITY">Liability</option>
-                    <option value="INCOME">Income</option>
-                    <option value="EXPENSE">Expense</option>
-                    </select>
+                    />
                     <p className="text-xs text-slate-500">
                       {isNatureEditable
                         ? "Choose the nature only for a primary group."

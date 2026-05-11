@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import {
   exportMasterWorkbook,
   readWorkbookFromFile,
@@ -207,16 +208,19 @@ export default function VoucherTypesPage({
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               />
 
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 value={form.category}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, category: event.target.value }))
+                onChange={(newValue) =>
+                  setForm((current) => ({ ...current, category: newValue }))
                 }
-              >
-                <option value="ACCOUNTING">Accounting</option>
-                <option value="INVENTORY">Inventory</option>
-              </select>
+                placeholder="Select category"
+                options={[
+                  { value: "ACCOUNTING", label: "Accounting" },
+                  { value: "INVENTORY", label: "Inventory" },
+                ]}
+              />
 
               <button
                 type="button"

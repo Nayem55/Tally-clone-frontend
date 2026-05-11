@@ -3,6 +3,7 @@ import { ArrowLeft, Download, ImagePlus, PencilLine, Trash2, Upload } from "luci
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -412,14 +413,20 @@ export default function Items() {
                   Add+
                 </button>
               </div>
-              <select className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.groupId} onChange={(event) => setForm((current) => ({ ...current, groupId: event.target.value }))}>
-                <option value="">Select stock group</option>
-                {stockGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                value={form.groupId}
+                onChange={(newValue) => setForm((current) => ({ ...current, groupId: newValue }))}
+                placeholder="Select stock group"
+                options={[
+                  { value: "", label: "Select stock group" },
+                  ...stockGroups.map((group) => ({
+                    value: group.id,
+                    label: group.name,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -432,25 +439,27 @@ export default function Items() {
                   Add+
                 </button>
               </div>
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 value={form.stockCategoryId}
-                onChange={(event) => {
-                  const selected = categoryOptions.find((option) => option._id === event.target.value);
+                onChange={(newValue) => {
+                  const selected = categoryOptions.find((option) => option._id === newValue);
                   setForm((current) => ({
                     ...current,
-                    stockCategoryId: event.target.value,
+                    stockCategoryId: newValue,
                     stockCategory: selected?.name || "",
                   }));
                 }}
-              >
-                <option value="">Select stock category</option>
-                {categoryOptions.map((option) => (
-                  <option key={option._id} value={option._id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="Select stock category"
+                options={[
+                  { value: "", label: "Select stock category" },
+                  ...categoryOptions.map((option) => ({
+                    value: option._id,
+                    label: option.name,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -463,35 +472,40 @@ export default function Items() {
                   Add+
                 </button>
               </div>
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 value={form.unitId}
-                onChange={(event) => {
-                  const selected = unitOptions.find((option) => option._id === event.target.value);
+                onChange={(newValue) => {
+                  const selected = unitOptions.find((option) => option._id === newValue);
                   setForm((current) => ({
                     ...current,
-                    unitId: event.target.value,
+                    unitId: newValue,
                     unitOfMeasure: selected?.name || "",
                   }));
                 }}
-              >
-                <option value="">Select unit</option>
-                {unitOptions.map((option) => (
-                  <option key={option._id} value={option._id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="Select unit"
+                options={[
+                  { value: "", label: "Select unit" },
+                  ...unitOptions.map((option) => ({
+                    value: option._id,
+                    label: option.name,
+                  })),
+                ]}
+              />
             </div>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            <SearchableSelect
+              className="w-full"
+              inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               value={form.inventoryRole}
-              onChange={(event) => setForm((current) => ({ ...current, inventoryRole: event.target.value }))}
-            >
-              <option value="standard">Trading / Standard Item</option>
-              <option value="raw_material">Raw Material</option>
-              <option value="finished_good">Finished Good</option>
-            </select>
+              onChange={(newValue) => setForm((current) => ({ ...current, inventoryRole: newValue }))}
+              placeholder="Select inventory role"
+              options={[
+                { value: "standard", label: "Trading / Standard Item" },
+                { value: "raw_material", label: "Raw Material" },
+                { value: "finished_good", label: "Finished Good" },
+              ]}
+            />
           </div>
         </section>
 
@@ -540,18 +554,20 @@ export default function Items() {
                   Add+
                 </button>
               </div>
-              <select
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 value={form.godownId}
-                onChange={(event) => setForm((current) => ({ ...current, godownId: event.target.value }))}
-              >
-                <option value="">Select default godown</option>
-                {godowns.map((godown) => (
-                  <option key={godown._id} value={godown._id}>
-                    {godown.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(newValue) => setForm((current) => ({ ...current, godownId: newValue }))}
+                placeholder="Select default godown"
+                options={[
+                  { value: "", label: "Select default godown" },
+                  ...godowns.map((godown) => ({
+                    value: godown._id,
+                    label: godown.name,
+                  })),
+                ]}
+              />
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               <p className="text-xs uppercase tracking-wide text-slate-400">Opening value</p>
