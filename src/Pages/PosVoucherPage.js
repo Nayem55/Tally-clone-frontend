@@ -13,7 +13,9 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import api from "../api/api";
+import { useLocation, useNavigate } from "react-router-dom";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
+import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
@@ -37,6 +39,11 @@ import {
 } from "../utils/voucherExcel";
 
 const POS_TEMPLATE_SHEET = "POS Voucher";
+const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
+
+function employeeBelongsToSalesRole(employee = {}) {
+  return String(employee.under || "").trim().toLowerCase() === "sales";
+}
 
 function formatMoney(value, symbol = "Tk") {
   return `${symbol} ${Number(value || 0).toLocaleString("en-IN", {
@@ -62,6 +69,8 @@ export default function PosVoucherPage({
   const scannerLastKeyTimeRef = useRef(0);
   const scannerTimerRef = useRef(null);
 
+  const navigate = useNavigate();
+  const location = useLocation();
   const { companies, companyId } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
   const companyName =
@@ -71,6 +80,7 @@ export default function PosVoucherPage({
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [defaults, setDefaults] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [importBusy, setImportBusy] = useState(false);
@@ -88,6 +98,7 @@ export default function PosVoucherPage({
     date: formatDateForInput(new Date()),
     customerName: "",
     phone: "",
+    salesPersonId: "",
     address: "",
     note: "",
     discountType: "fixed",
@@ -120,14 +131,17 @@ export default function PosVoucherPage({
         itemResponse,
         levelResponse,
         defaultResponse,
+        employeeResponse,
       ] = await Promise.all([
         api.get(`/companies/${effectiveCompanyId}/voucher-types`),
         api.get(`/companies/${effectiveCompanyId}/items`),
         api.get(`/companies/${effectiveCompanyId}/price-levels`),
         api.get(`/companies/${effectiveCompanyId}/ledgers/defaults`),
+        api.get(`/companies/${effectiveCompanyId}/employees`),
       ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
+      setEmployees(employeeResponse.data || []);
       setDefaults(defaultResponse.data || {});
       const voucherType = voucherTypeResponse.data.find(
         (row) => row.name.toLowerCase() === "pos voucher",
@@ -143,6 +157,22 @@ export default function PosVoucherPage({
       prev.number ? prev : { ...prev, number: suggestedNumber },
     );
   }, [suggestedNumber, isEditMode]);
+
+  useEffect(() => {
+    if (isEditMode || !effectiveCompanyId || !location.state?.restorePosVoucherDraft) return;
+    try {
+      const raw = window.sessionStorage.getItem(POS_VOUCHER_RETURN_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (String(draft?.companyId || "") !== String(effectiveCompanyId)) return;
+      if (!draft?.form) return;
+      setForm(draft.form);
+      setStatusMessage(draft.statusMessage || null);
+      window.sessionStorage.removeItem(POS_VOUCHER_RETURN_STORAGE_KEY);
+    } catch (error) {
+      console.error("Unable to restore POS voucher draft:", error);
+    }
+  }, [effectiveCompanyId, isEditMode, location.state]);
 
   useEffect(() => {
     const phone = form.phone.replace(/\D/g, "");
@@ -230,6 +260,7 @@ export default function PosVoucherPage({
           : formatDateForInput(new Date()),
         customerName: voucher.customerSnapshot?.name || "",
         phone: voucher.customerSnapshot?.phone || "",
+        salesPersonId: String(voucher.salesMeta?.employeeId || ""),
         address: voucher.customerSnapshot?.address || "",
         note: voucher.narration || "",
         discountType: voucher.posMeta?.discountType || "fixed",
@@ -263,6 +294,25 @@ export default function PosVoucherPage({
     priceLevels.find(
       (level) => String(level.code || "").toUpperCase() === "MRP",
     )?._id || "";
+  const salesEmployees = useMemo(
+    () => employees.filter(employeeBelongsToSalesRole),
+    [employees],
+  );
+  const salesEmployeeOptions = useMemo(
+    () =>
+      salesEmployees.map((employee) => ({
+        value: String(employee._id),
+        label: employee.name || employee.employeeNumber || "Unnamed Employee",
+      })),
+    [salesEmployees],
+  );
+  const selectedSalesPerson = useMemo(
+    () =>
+      salesEmployees.find(
+        (employee) => String(employee._id) === String(form.salesPersonId),
+      ) || null,
+    [salesEmployees, form.salesPersonId],
+  );
   const itemNameMap = useMemo(
     () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
     [items],
@@ -781,6 +831,7 @@ export default function PosVoucherPage({
       date: formatDateForInput(new Date()),
       customerName: "",
       phone: "",
+      salesPersonId: "",
       address: "",
       note: "",
       discountType: "fixed",
@@ -795,6 +846,29 @@ export default function PosVoucherPage({
     setShowCustomerSuggestions(false);
     setSearchTerm("");
     focusSearchInput();
+  };
+
+  const navigateToCreateMaster = (path) => {
+    if (isEditMode) return;
+    try {
+      window.sessionStorage.setItem(
+        POS_VOUCHER_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId: effectiveCompanyId,
+          form,
+          statusMessage,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store POS voucher draft:", error);
+    }
+
+    navigate(path, {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restorePosVoucherDraft: true,
+      },
+    });
   };
 
   const submit = async (options = {}) => {
@@ -823,6 +897,15 @@ export default function PosVoucherPage({
         phone: form.phone,
         address: form.address,
       },
+      salesMeta: selectedSalesPerson
+        ? {
+            employeeId: selectedSalesPerson._id,
+            employeeName: selectedSalesPerson.name || "",
+            employeeNumber: selectedSalesPerson.employeeNumber || "",
+            department: selectedSalesPerson.otherDetails?.department || "",
+            designation: selectedSalesPerson.personalDetails?.designation || "",
+          }
+        : {},
       lines: [
         ...(cashPayment > 0 && defaults.cashLedger?._id
           ? [
@@ -897,6 +980,16 @@ export default function PosVoucherPage({
           phone: form.phone,
           address: form.address,
         },
+        salesMeta: selectedSalesPerson
+          ? {
+              employeeId: selectedSalesPerson._id,
+              employeeName: selectedSalesPerson.name || "",
+              employeeNumber: selectedSalesPerson.employeeNumber || "",
+              department: selectedSalesPerson.otherDetails?.department || "",
+              designation:
+                selectedSalesPerson.personalDetails?.designation || "",
+            }
+          : {},
         salesLedgerId: defaults.salesLedger?._id || "",
         discountType: form.discountType,
         discountValue: Number(form.discountValue || 0),
@@ -1092,7 +1185,7 @@ export default function PosVoucherPage({
                 Customer Details
               </h2>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-4">
+              <div className="mt-5 grid gap-4 lg:grid-cols-5">
                 <div className="relative">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Mobile Number
@@ -1155,6 +1248,39 @@ export default function PosVoucherPage({
                       }))
                     }
                   />
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="text-sm font-semibold text-slate-700">
+                      Sales Person
+                    </label>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/employee")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                  <SearchableSelect
+                    options={[
+                      { label: "Select sales person" },
+                      ...salesEmployeeOptions,
+                    ]}
+                    value={form.salesPersonId}
+                    onChange={(newValue) =>
+                      setForm((current) => ({
+                        ...current,
+                        salesPersonId: newValue,
+                      }))
+                    }
+                    placeholder="Search sales person"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">
+                    {selectedSalesPerson?.employeeNumber
+                      ? `Employee No.: ${selectedSalesPerson.employeeNumber}`
+                      : "Only employees under Sales are shown here."}
+                  </p>
                 </div>
 
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">

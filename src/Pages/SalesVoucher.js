@@ -43,10 +43,6 @@ const SALES_INSTRUCTION_SHEET = "Instructions";
 const SALES_REFERENCE_SHEET = "Reference Data";
 const SALES_VOUCHER_RETURN_STORAGE_KEY = "sales-voucher-return-draft";
 
-function employeeBelongsToSalesRole(employee = {}) {
-  return String(employee.under || "").trim().toLowerCase() === "sales";
-}
-
 export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
@@ -58,7 +54,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const [salesLedgers, setSalesLedgers] = useState([]);
   const [allLedgers, setAllLedgers] = useState([]);
   const [items, setItems] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +67,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     partyLedger: "",
     salesLedger: "",
     priceLevelId: "",
-    salesPersonId: "",
     narration: "",
     discountAmount: "",
     additionalCharges: "",
@@ -100,7 +94,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
           balanceResponse,
           salesLedgerResponse,
           priceLevelResponse,
-          employeeResponse,
         ] = await Promise.all([
           api.get(`/companies/${companyId}/voucher-types`),
           api.get(`/companies/${companyId}/ledgers/by-group?names=Sundry Debtors`),
@@ -110,7 +103,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
           api.get(`/companies/${companyId}/ledgers/with-balances`, { params: { to: form.date } }),
           api.get(`/companies/${companyId}/ledgers/by-group?names=Sales Accounts`),
           api.get(`/companies/${companyId}/price-levels`),
-          api.get(`/companies/${companyId}/employees`),
         ]);
 
         const salesType = voucherResponse.data.find((row) => row.name.toLowerCase() === "sales");
@@ -122,7 +114,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         setAllLedgers(balanceResponse.data);
         setSalesLedgers(salesLedgerResponse.data);
         setPriceLevels(priceLevelResponse.data);
-        setEmployees(employeeResponse.data || []);
         setSalesLedgerId(defaultSalesId);
         setForm((prev) => ({
           ...prev,
@@ -154,7 +145,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         partyLedger: String(debitLine?.ledgerId || ""),
         salesLedger: String(creditLine?.ledgerId || salesLedgerId || ""),
         priceLevelId: "",
-        salesPersonId: String(voucher.salesMeta?.employeeId || ""),
         narration: voucher.narration || "",
         discountAmount: String(voucher.commercialMeta?.invoiceDiscount || ""),
         additionalCharges: String(voucher.commercialMeta?.additionalCharges || ""),
@@ -236,29 +226,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     () => items.map((item) => ({ value: item._id, label: item.name })),
     [items]
   );
-  const salesEmployees = useMemo(
-    () => employees.filter(employeeBelongsToSalesRole),
-    [employees],
-  );
-  const salesEmployeeOptions = useMemo(
-    () =>
-      salesEmployees.map((employee) => ({
-        value: String(employee._id),
-        label:
-          employee.name ||
-          employee.employeeNumber ||
-          "Unnamed Employee",
-      })),
-    [salesEmployees],
-  );
-  const selectedSalesPerson = useMemo(
-    () =>
-      salesEmployees.find(
-        (employee) => String(employee._id) === String(form.salesPersonId),
-      ) || null,
-    [salesEmployees, form.salesPersonId],
-  );
-
   useEffect(() => {
     if (!partyLedger?.priceLevelId) return;
     setForm((prev) =>
@@ -358,9 +325,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             priceLevels.find((level) => level._id === activePriceLevelId)?.code ||
             "Not Applicable"
           }`,
-          selectedSalesPerson?.name
-            ? `Sales Person: ${selectedSalesPerson.name}`
-            : "",
         ],
         accountLabel: "Sales Ledger",
         accountName: salesLedger?.name || "",
@@ -410,7 +374,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       priceLevels,
       activePriceLevelId,
       salesLedger,
-      selectedSalesPerson,
       validRows,
       itemMap,
       currency.symbol,
@@ -430,7 +393,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       partyLedger: "",
       salesLedger: salesLedgerId,
       priceLevelId: "",
-      salesPersonId: "",
       narration: "",
       discountAmount: "",
       additionalCharges: "",
@@ -656,19 +618,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         additionalCharges,
         totalAmount,
       },
-      salesMeta: selectedSalesPerson
-        ? {
-            employeeId: selectedSalesPerson._id,
-            employeeName: selectedSalesPerson.name || "",
-            employeeNumber: selectedSalesPerson.employeeNumber || "",
-            department:
-              selectedSalesPerson.otherDetails?.department ||
-              "",
-            designation:
-              selectedSalesPerson.personalDetails?.designation ||
-              "",
-          }
-        : {},
+      salesMeta: {},
       lines: [
         { ledgerId: form.partyLedger, debit: totalAmount, credit: 0 },
         { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: totalAmount },
@@ -816,31 +766,6 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
                     currency.symbol
                   )
                 : "-"}
-            </p>
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="text-sm font-semibold text-slate-700">Sales Person</label>
-              <button
-                type="button"
-                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                onClick={() => navigateToCreateMaster("/masters/create/employee")}
-              >
-                Add+
-              </button>
-            </div>
-            <SearchableSelect
-              options={[{ label: "Select sales person" }, ...salesEmployeeOptions]}
-              value={form.salesPersonId}
-              onChange={(newValue) =>
-                setForm((prev) => ({ ...prev, salesPersonId: newValue }))
-              }
-              placeholder="Search sales person"
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              {selectedSalesPerson?.employeeNumber
-                ? `Employee No.: ${selectedSalesPerson.employeeNumber}`
-                : "Only employees under Sales are shown here."}
             </p>
           </div>
           <div>
