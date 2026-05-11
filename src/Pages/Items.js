@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, ImagePlus, PencilLine, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Download, ImagePlus, PencilLine, Trash2, Upload } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
@@ -30,6 +30,8 @@ const defaultForm = {
   openingRate: "",
   narration: "",
 };
+
+const STOCK_ITEM_RETURN_STORAGE_KEY = "stock-item-return-draft";
 
 function toBase64(file) {
   return new Promise((resolve, reject) => {
@@ -87,6 +89,23 @@ export default function Items() {
   useEffect(() => {
     loadData();
   }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId || !location.state?.restoreStockItemDraft) return;
+    try {
+      const raw = window.sessionStorage.getItem(STOCK_ITEM_RETURN_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (String(draft?.companyId || "") !== String(companyId)) return;
+      if (draft?.form) {
+        setForm(draft.form);
+      }
+      setStatus(draft?.status || "");
+      window.sessionStorage.removeItem(STOCK_ITEM_RETURN_STORAGE_KEY);
+    } catch (error) {
+      console.error("Unable to restore stock item draft:", error);
+    }
+  }, [companyId, location.state]);
 
   useEffect(() => {
     function handleReturnShortcut(event) {
@@ -149,6 +168,28 @@ export default function Items() {
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save stock item");
     }
+  }
+
+  function navigateToCreateMaster(path) {
+    try {
+      window.sessionStorage.setItem(
+        STOCK_ITEM_RETURN_STORAGE_KEY,
+        JSON.stringify({
+          companyId,
+          form,
+          status,
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to store stock item draft:", error);
+    }
+
+    navigate(path, {
+      state: {
+        returnTo: `${location.pathname}${location.search || ""}`,
+        restoreStockItemDraft: true,
+      },
+    });
   }
 
   async function deleteItem(itemId) {
@@ -360,7 +401,17 @@ export default function Items() {
           <div className="grid gap-4 xl:grid-cols-5">
             <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Item name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
             <input className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Alias / barcode" value={form.alias} onChange={(event) => setForm((current) => ({ ...current, alias: event.target.value }))} />
-            <div className="flex gap-2">
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-700">Stock Group</label>
+                <button
+                  type="button"
+                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigateToCreateMaster("/masters/create/stock-group")}
+                >
+                  Add+
+                </button>
+              </div>
               <select className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={form.groupId} onChange={(event) => setForm((current) => ({ ...current, groupId: event.target.value }))}>
                 <option value="">Select stock group</option>
                 {stockGroups.map((group) => (
@@ -369,48 +420,69 @@ export default function Items() {
                   </option>
                 ))}
               </select>
-              <button type="button" className="rounded-xl border border-slate-200 px-3 text-slate-600 hover:bg-slate-50">
-                <Plus className="h-4 w-4" />
-              </button>
             </div>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              value={form.stockCategoryId}
-              onChange={(event) => {
-                const selected = categoryOptions.find((option) => option._id === event.target.value);
-                setForm((current) => ({
-                  ...current,
-                  stockCategoryId: event.target.value,
-                  stockCategory: selected?.name || "",
-                }));
-              }}
-            >
-              <option value="">Select stock category</option>
-              {categoryOptions.map((option) => (
-                <option key={option._id} value={option._id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              value={form.unitId}
-              onChange={(event) => {
-                const selected = unitOptions.find((option) => option._id === event.target.value);
-                setForm((current) => ({
-                  ...current,
-                  unitId: event.target.value,
-                  unitOfMeasure: selected?.name || "",
-                }));
-              }}
-            >
-              <option value="">Select unit</option>
-              {unitOptions.map((option) => (
-                <option key={option._id} value={option._id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-700">Stock Category</label>
+                <button
+                  type="button"
+                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigateToCreateMaster("/masters/create/stock-category")}
+                >
+                  Add+
+                </button>
+              </div>
+              <select
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                value={form.stockCategoryId}
+                onChange={(event) => {
+                  const selected = categoryOptions.find((option) => option._id === event.target.value);
+                  setForm((current) => ({
+                    ...current,
+                    stockCategoryId: event.target.value,
+                    stockCategory: selected?.name || "",
+                  }));
+                }}
+              >
+                <option value="">Select stock category</option>
+                {categoryOptions.map((option) => (
+                  <option key={option._id} value={option._id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-700">Unit</label>
+                <button
+                  type="button"
+                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigateToCreateMaster("/masters/create/unit")}
+                >
+                  Add+
+                </button>
+              </div>
+              <select
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                value={form.unitId}
+                onChange={(event) => {
+                  const selected = unitOptions.find((option) => option._id === event.target.value);
+                  setForm((current) => ({
+                    ...current,
+                    unitId: event.target.value,
+                    unitOfMeasure: selected?.name || "",
+                  }));
+                }}
+              >
+                <option value="">Select unit</option>
+                {unitOptions.map((option) => (
+                  <option key={option._id} value={option._id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <select
               className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               value={form.inventoryRole}
@@ -457,18 +529,30 @@ export default function Items() {
           <div className="mt-4 grid gap-4 md:grid-cols-4">
             <input type="number" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Opening quantity" value={form.openingQty} onChange={(event) => setForm((current) => ({ ...current, openingQty: event.target.value }))} />
             <input type="number" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Opening rate" value={form.openingRate} onChange={(event) => setForm((current) => ({ ...current, openingRate: event.target.value }))} />
-            <select
-              className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              value={form.godownId}
-              onChange={(event) => setForm((current) => ({ ...current, godownId: event.target.value }))}
-            >
-              <option value="">Select default godown</option>
-              {godowns.map((godown) => (
-                <option key={godown._id} value={godown._id}>
-                  {godown.name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-700">Default Godown</label>
+                <button
+                  type="button"
+                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigateToCreateMaster("/masters/create/godown")}
+                >
+                  Add+
+                </button>
+              </div>
+              <select
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                value={form.godownId}
+                onChange={(event) => setForm((current) => ({ ...current, godownId: event.target.value }))}
+              >
+                <option value="">Select default godown</option>
+                {godowns.map((godown) => (
+                  <option key={godown._id} value={godown._id}>
+                    {godown.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               <p className="text-xs uppercase tracking-wide text-slate-400">Opening value</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">

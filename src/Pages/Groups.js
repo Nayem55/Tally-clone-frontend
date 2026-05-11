@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FolderTree, PencilLine, Plus, Trash2, Upload } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import {
@@ -28,6 +29,8 @@ export default function Groups({
   title = "Groups",
   subtitle = "Build your chart structure for assets, liabilities, income, expenses, and stock classification.",
 }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [groups, setGroups] = useState([]);
@@ -59,6 +62,29 @@ export default function Groups({
   useEffect(() => {
     loadGroups();
   }, [companyId]);
+
+  useEffect(() => {
+    function handleReturnShortcut(event) {
+      if (!location.state?.returnTo) return;
+      if (event.key !== "Escape" && event.key !== "Backspace") return;
+      const target = event.target;
+      const tag = String(target?.tagName || "").toLowerCase();
+      const isTyping =
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target?.isContentEditable;
+      if (event.key === "Backspace" && isTyping) return;
+      event.preventDefault();
+      navigate(location.state.returnTo, {
+        replace: true,
+        state: { ...location.state },
+      });
+    }
+
+    window.addEventListener("keydown", handleReturnShortcut);
+    return () => window.removeEventListener("keydown", handleReturnShortcut);
+  }, [location.state, navigate]);
 
   const sortedGroups = useMemo(
     () => [...groups].sort((left, right) => left.name.localeCompare(right.name)),
@@ -121,6 +147,14 @@ export default function Groups({
         await api.put(`/companies/${companyId}/groups/${form.id}`, payload);
       } else {
         await api.post(`/companies/${companyId}/groups`, payload);
+      }
+
+      if (location.state?.returnTo) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { ...location.state },
+        });
+        return;
       }
 
       setForm(defaultForm);
