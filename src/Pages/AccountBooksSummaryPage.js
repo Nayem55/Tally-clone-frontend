@@ -31,6 +31,10 @@ function SummaryCard({ icon: Icon, title, value, tone = "text-slate-900" }) {
   );
 }
 
+function formatBalanceWithSide(value, side, company) {
+  return `${formatCurrencyAmount(Math.abs(Number(value || 0)), company)} ${side || "DR"}`;
+}
+
 export default function AccountBooksSummaryPage({ mode = "group" }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -187,7 +191,7 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             icon={Layers3}
             title={mode === "group" ? "Visible Groups / Ledgers" : "Visible Ledgers"}
@@ -196,10 +200,28 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
           />
           <SummaryCard
             icon={Building2}
-            title="Total Value"
-            value={formatCurrencyAmount(report.totals?.value, selectedCompany)}
-            tone="text-blue-700"
+            title="Opening Value"
+            value={formatCurrencyAmount(report.totals?.openingValue, selectedCompany)}
+            tone="text-slate-900"
           />
+          <SummaryCard
+            icon={Building2}
+            title="Debit"
+            value={formatCurrencyAmount(report.totals?.debit, selectedCompany)}
+            tone="text-emerald-700"
+          />
+          <SummaryCard
+            icon={Building2}
+            title="Credit"
+            value={formatCurrencyAmount(Math.abs(Number(report.totals?.credit || 0)), selectedCompany)}
+            tone="text-rose-700"
+          />
+          {/* <SummaryCard
+            icon={Building2}
+            title="Closing Value"
+            value={formatCurrencyAmount(Math.abs(Number(report.totals?.closingValue || 0)), selectedCompany)}
+            tone="text-blue-700"
+          /> */}
         </section>
 
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
@@ -207,8 +229,8 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
             <h2 className="text-lg font-semibold text-slate-900">{title} Report</h2>
             <p className="mt-1 text-sm text-slate-500">
               {mode === "group"
-                ? "Only group and ledger values are shown here. Voucher details remain in the ledger drill screen."
-                : "Ledger values only. Open any ledger to continue to voucher details and alteration."}
+                ? "Opening, debit, credit, and closing values are shown here. Voucher details remain in the ledger drill screen."
+                : "Ledger opening, debit, credit, and closing values are shown here. Open any ledger to continue to voucher details and alteration."}
             </p>
           </div>
 
@@ -217,7 +239,10 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
                   <th className="px-6 py-3 font-medium">{title}</th>
-                  <th className="px-6 py-3 text-right font-medium">Value</th>
+                  <th className="px-6 py-3 text-right font-medium">Opening Value</th>
+                  <th className="px-6 py-3 text-right font-medium">Debit</th>
+                  <th className="px-6 py-3 text-right font-medium">Credit</th>
+                  <th className="px-6 py-3 text-right font-medium">Closing (DR/CR)</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,13 +263,22 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
                       </button>
                     </td>
                     <td className="px-6 py-4 text-right font-semibold text-slate-900">
-                      {formatCurrencyAmount(row.value, selectedCompany)}
+                      {formatCurrencyAmount(row.openingValue, selectedCompany)}
+                    </td>
+                    <td className="px-6 py-4 text-right font-semibold text-emerald-700">
+                      {formatCurrencyAmount(row.debit, selectedCompany)}
+                    </td>
+                    <td className="px-6 py-4 text-right font-semibold text-rose-700">
+                      {formatCurrencyAmount(Math.abs(Number(row.credit || 0)), selectedCompany)}
+                    </td>
+                    <td className="px-6 py-4 text-right font-semibold text-blue-700">
+                      {formatBalanceWithSide(row.closingValue, row.closingSide, selectedCompany)}
                     </td>
                   </tr>
                 ))}
                 {!loading && filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="px-6 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-500">
                       No rows found for the selected filters.
                     </td>
                   </tr>
