@@ -20,6 +20,21 @@ const defaultForm = {
   openingBalance: "",
   openingDrCr: "DR",
   priceLevelId: "",
+  bankDetails: {
+    accountHolderName: "",
+    accountNumber: "",
+    bankCode: "",
+    swiftCode: "",
+    bankName: "",
+    branchName: "",
+    branchCode: "",
+    bankConfigurationEnabled: false,
+    mailingName: "",
+    mailingAddress: "",
+    division: "",
+    country: "",
+    postalCode: "",
+  },
 };
 
 export default function Ledgers() {
@@ -91,10 +106,58 @@ export default function Ledgers() {
     [groups]
   );
 
+  const groupById = useMemo(
+    () => new Map(groups.map((group) => [String(group._id), group])),
+    [groups]
+  );
+
   const priceLevelById = useMemo(
     () => new Map(priceLevels.map((level) => [String(level._id), level])),
     [priceLevels]
   );
+
+  const bankAccountGroupIds = useMemo(() => {
+    const bankRoots = groups.filter((group) => String(group.name || "").trim().toLowerCase() === "bank accounts");
+    if (bankRoots.length === 0) return new Set();
+
+    const childMap = new Map();
+    groups.forEach((group) => {
+      const parentKey = group.parentId ? String(group.parentId) : "ROOT";
+      if (!childMap.has(parentKey)) childMap.set(parentKey, []);
+      childMap.get(parentKey).push(group);
+    });
+
+    const visited = new Set();
+    const stack = bankRoots.map((group) => String(group._id));
+    while (stack.length) {
+      const currentId = stack.pop();
+      if (!currentId || visited.has(currentId)) continue;
+      visited.add(currentId);
+      (childMap.get(currentId) || []).forEach((child) => stack.push(String(child._id)));
+    }
+
+    return visited;
+  }, [groups]);
+
+  const isBankLedger = useMemo(
+    () => bankAccountGroupIds.has(String(form.groupId || "")),
+    [bankAccountGroupIds, form.groupId]
+  );
+
+  const selectedGroup = useMemo(
+    () => groupById.get(String(form.groupId || "")) || null,
+    [groupById, form.groupId]
+  );
+
+  function updateBankDetail(key, value) {
+    setForm((current) => ({
+      ...current,
+      bankDetails: {
+        ...(current.bankDetails || defaultForm.bankDetails),
+        [key]: value,
+      },
+    }));
+  }
 
   async function saveLedger() {
     if (!companyId) return;
@@ -105,6 +168,7 @@ export default function Ledgers() {
         openingBalance: Number(form.openingBalance || 0),
         openingDrCr: form.openingDrCr,
         priceLevelId: form.priceLevelId || null,
+        bankDetails: isBankLedger ? form.bankDetails : null,
       };
 
       if (form.id) {
@@ -341,6 +405,108 @@ export default function Ledgers() {
                 ]}
               />
 
+              {isBankLedger ? (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-5">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-slate-900">Bank Account Details</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      This ledger sits under <span className="font-medium text-slate-700">{selectedGroup?.name || "Bank Accounts"}</span>, so bank details are available here automatically.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="space-y-4">
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="A/c Holder's Name"
+                        value={form.bankDetails.accountHolderName}
+                        onChange={(event) => updateBankDetail("accountHolderName", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="A/c No."
+                        value={form.bankDetails.accountNumber}
+                        onChange={(event) => updateBankDetail("accountNumber", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Bank Code"
+                        value={form.bankDetails.bankCode}
+                        onChange={(event) => updateBankDetail("bankCode", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="SWIFT Code"
+                        value={form.bankDetails.swiftCode}
+                        onChange={(event) => updateBankDetail("swiftCode", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Bank Name"
+                        value={form.bankDetails.bankName}
+                        onChange={(event) => updateBankDetail("bankName", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Branch"
+                        value={form.bankDetails.branchName}
+                        onChange={(event) => updateBankDetail("branchName", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Branch Code"
+                        value={form.bankDetails.branchCode}
+                        onChange={(event) => updateBankDetail("branchCode", event.target.value)}
+                      />
+                      <SearchableSelect
+                        className="w-full"
+                        inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        value={form.bankDetails.bankConfigurationEnabled ? "yes" : "no"}
+                        onChange={(newValue) => updateBankDetail("bankConfigurationEnabled", newValue === "yes")}
+                        placeholder="Set/Alter Bank configuration"
+                        options={[
+                          { value: "no", label: "Set/Alter Bank configuration: No" },
+                          { value: "yes", label: "Set/Alter Bank configuration: Yes" },
+                        ]}
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Mailing Name"
+                        value={form.bankDetails.mailingName}
+                        onChange={(event) => updateBankDetail("mailingName", event.target.value)}
+                      />
+                      <textarea
+                        className="min-h-[96px] w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Address"
+                        value={form.bankDetails.mailingAddress}
+                        onChange={(event) => updateBankDetail("mailingAddress", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Division"
+                        value={form.bankDetails.division}
+                        onChange={(event) => updateBankDetail("division", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Country"
+                        value={form.bankDetails.country}
+                        onChange={(event) => updateBankDetail("country", event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Postal Code"
+                        value={form.bankDetails.postalCode}
+                        onChange={(event) => updateBankDetail("postalCode", event.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <input
                   type="number"
@@ -435,6 +601,10 @@ export default function Ledgers() {
                                 openingBalance: ledger.openingBalance,
                                 openingDrCr: ledger.openingDrCr,
                                 priceLevelId: ledger.priceLevelId || "",
+                                bankDetails: {
+                                  ...defaultForm.bankDetails,
+                                  ...(ledger.bankDetails || {}),
+                                },
                               })
                             }
                           >

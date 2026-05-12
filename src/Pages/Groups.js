@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FolderTree, PencilLine, Plus, Trash2, Upload } from "lucide-react";
+import { Download, FolderTree, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
@@ -36,6 +36,7 @@ export default function Groups({
   const [companyId, setCompanyId] = useState("");
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState(defaultForm);
+  const [searchTerm, setSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [importing, setImporting] = useState(false);
@@ -121,6 +122,24 @@ export default function Groups({
       ["stock-in-trade", "stock in trade", "primary"].includes(nameKey(group.name))
     );
   }, [visibleGroups, stockOnly]);
+
+  const filteredGroups = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return visibleGroups;
+
+    return visibleGroups.filter((group) => {
+      const parent = visibleGroups.find(
+        (candidate) => String(candidate._id) === String(group.parentId),
+      );
+      const parentLabel =
+        parent?.name ||
+        (stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary");
+
+      return [group.name, group.nature, parentLabel]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [searchTerm, visibleGroups, stockOnly, rootParentOption]);
 
   const selectedParentGroup = useMemo(() => {
     if (!form.parentId) return null;
@@ -434,6 +453,15 @@ export default function Groups({
               <h2 className="text-lg font-semibold text-slate-900">
                 Existing {stockOnly ? "Stock Groups" : "Groups"}
               </h2>
+              <div className="relative mt-4 max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder={`Search existing ${stockOnly ? "stock groups" : "groups"}...`}
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -447,7 +475,7 @@ export default function Groups({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleGroups.map((group) => {
+                  {filteredGroups.map((group) => {
                     const parent = visibleGroups.find((candidate) => candidate._id === group.parentId);
                     return (
                       <tr key={group._id} className="border-t border-slate-100">
@@ -494,6 +522,12 @@ export default function Groups({
               {visibleGroups.length === 0 && (
                 <div className="p-10 text-center text-sm text-slate-500">
                   No {stockOnly ? "stock groups" : "groups"} found for this company yet.
+                </div>
+              )}
+
+              {visibleGroups.length > 0 && filteredGroups.length === 0 && (
+                <div className="p-10 text-center text-sm text-slate-500">
+                  No matching {stockOnly ? "stock groups" : "groups"} found for your search.
                 </div>
               )}
             </div>
