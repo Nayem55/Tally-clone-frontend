@@ -48,7 +48,7 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
   const [fromDate, setFromDate] = useState(searchParams.get("from") || monthStart);
   const [toDate, setToDate] = useState(searchParams.get("to") || monthEnd);
   const [search, setSearch] = useState(searchParams.get("q") || "");
-  const [report, setReport] = useState({ rows: [], totals: {}, trail: [] });
+  const [report, setReport] = useState({ rows: [], searchRows: [], totals: {}, trail: [] });
   const [loading, setLoading] = useState(false);
   const groupId = searchParams.get("groupId") || "";
 
@@ -65,7 +65,7 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
             groupId: mode === "group" ? groupId : "",
           },
         });
-        setReport(response.data || { rows: [], totals: {}, trail: [] });
+        setReport(response.data || { rows: [], searchRows: [], totals: {}, trail: [] });
       } finally {
         setLoading(false);
       }
@@ -75,13 +75,13 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return report.rows || [];
-    return (report.rows || []).filter((row) =>
+    const sourceRows = query ? report.searchRows || report.rows || [] : report.rows || [];
+    return sourceRows.filter((row) =>
       [row.name, row.groupName, row.groupTrail]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query)),
     );
-  }, [report.rows, search]);
+  }, [report.rows, report.searchRows, search]);
 
   useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, mode, groupId]);
   useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, mode, groupId], {
@@ -257,7 +257,7 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
                         onClick={() => openRow(row)}
                       >
                         <div className="font-medium text-slate-900">{row.name}</div>
-                        {mode === "ledger" && row.groupTrail ? (
+                        {row.groupTrail ? (
                           <div className="mt-1 text-xs text-slate-500">{row.groupTrail}</div>
                         ) : null}
                       </button>
