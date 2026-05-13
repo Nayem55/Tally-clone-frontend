@@ -487,6 +487,11 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                   <th rowSpan="2" className="px-4 py-3 text-left font-medium">
                     Particulars
                   </th>
+                  {!hideClosing ? (
+                    <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                      Opening
+                    </th>
+                  ) : null}
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
                     {hideClosing ? "Purchase" : "Inwards"}
                   </th>

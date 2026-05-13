@@ -243,18 +243,29 @@ export default function StockItemDetailPage() {
           <div className="overflow-x-auto">
             {!requestedItemId ? (
               <>
-                <table className="min-w-[1180px] text-sm">
+                <table className="min-w-[1700px] text-sm">
                   <thead className="bg-slate-50 text-left text-slate-500">
                     <tr>
-                      <th className="px-4 py-3 font-medium">Item</th>
-                      <th className="px-4 py-3 font-medium">Group</th>
-                      <th className="px-4 py-3 text-right font-medium">Opening Qty</th>
-                      <th className="px-4 py-3 text-right font-medium">Opening Rate</th>
-                      <th className="px-4 py-3 text-right font-medium">Inward Qty</th>
-                      <th className="px-4 py-3 text-right font-medium">Outward Qty</th>
-                      <th className="px-4 py-3 text-right font-medium">Closing Qty</th>
-                      <th className="px-4 py-3 text-right font-medium">Closing Rate</th>
-                      <th className="px-4 py-3 text-right font-medium">Closing Value</th>
+                      <th className="px-4 py-3 font-medium" rowSpan={2}>Item</th>
+                      <th className="px-4 py-3 font-medium" rowSpan={2}>Group</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Opening</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Inwards</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Outwards</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Closing</th>
+                    </tr>
+                    <tr>
+                      <th className="px-4 py-3 text-right font-medium">Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
+                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                      <th className="px-4 py-3 text-right font-medium">Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
+                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                      <th className="px-4 py-3 text-right font-medium">Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
+                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                      <th className="px-4 py-3 text-right font-medium">Qty</th>
+                      <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
+                      <th className="px-4 py-3 text-right font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -284,8 +295,13 @@ export default function StockItemDetailPage() {
                         <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
                         <td className="px-4 py-3 text-right">{formatNumber(row.openingQty)}</td>
                         <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingRate, selectedCompany)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingValue, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right text-emerald-700">{formatNumber(row.inwardQty)}</td>
+                        <td className="px-4 py-3 text-right text-emerald-700">{formatCurrencyAmount(row.inwardRate, selectedCompany)}</td>
+                        <td className="px-4 py-3 text-right text-emerald-700">{formatCurrencyAmount(row.inwardValue, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right text-rose-700">{formatNumber(row.outwardQty)}</td>
+                        <td className="px-4 py-3 text-right text-rose-700">{formatCurrencyAmount(row.outwardRate, selectedCompany)}</td>
+                        <td className="px-4 py-3 text-right text-rose-700">{formatCurrencyAmount(row.outwardValue, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatNumber(row.closingQty)}</td>
                         <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingRate, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.closingValue, selectedCompany)}</td>
