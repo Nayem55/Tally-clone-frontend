@@ -74,12 +74,22 @@ export default function LedgerDetailPage() {
       if (!companyId || !ledgerId) return;
       setState({ loading: true, error: "", data: null });
       try {
-        const response = await api.get(`/companies/${companyId}/reports/ledger-drilldown`, {
-          params: {
-            ledgerId,
-            from: fromDate || undefined,
-            to: toDate || undefined,
-          },
+        const endpoint =
+          mode === "profit-loss"
+            ? `/companies/${companyId}/reports/profit-loss-drilldown`
+            : `/companies/${companyId}/reports/ledger-drilldown`;
+        const response = await api.get(endpoint, {
+          params:
+            mode === "profit-loss"
+              ? {
+                  from: fromDate || undefined,
+                  to: toDate || undefined,
+                }
+              : {
+                  ledgerId,
+                  from: fromDate || undefined,
+                  to: toDate || undefined,
+                },
         });
         if (active) {
           setState({ loading: false, error: "", data: response.data });
@@ -332,7 +342,9 @@ export default function LedgerDetailPage() {
               </button>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">{ledgerName}</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Voucher-wise ledger register. Press <span className="font-semibold">Esc</span> or <span className="font-semibold">Backspace</span> to go back.
+                {mode === "profit-loss"
+                  ? <>Profit & loss contribution register. Press <span className="font-semibold">Esc</span> or <span className="font-semibold">Backspace</span> to go back.</>
+                  : <>Voucher-wise ledger register. Press <span className="font-semibold">Esc</span> or <span className="font-semibold">Backspace</span> to go back.</>}
               </p>
               <button
                 type="button"
@@ -459,17 +471,20 @@ export default function LedgerDetailPage() {
                         </td>
                         <td className="px-3 py-2 text-right">
                           <button
+                            disabled={!entry.voucherId}
                             type="button"
                             data-report-nav="true"
                             data-focus-key={`entry-${entry.voucherId}-${entry.lineIndex}-${index}`}
-                            className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                            className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
                             onClick={() =>
-                              navigate(buildAlterVoucherPath(companyId, entry.voucherId), {
-                                state: buildReportReturnState(
-                                  location,
-                                  `entry-${entry.voucherId}-${entry.lineIndex}-${index}`,
-                                ),
-                              })
+                              entry.voucherId
+                                ? navigate(buildAlterVoucherPath(companyId, entry.voucherId), {
+                                    state: buildReportReturnState(
+                                      location,
+                                      `entry-${entry.voucherId}-${entry.lineIndex}-${index}`,
+                                    ),
+                                  })
+                                : null
                             }
                           >
                             Alter

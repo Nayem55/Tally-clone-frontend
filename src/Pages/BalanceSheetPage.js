@@ -199,8 +199,11 @@ export default function BalanceSheetPage() {
   }
 
   function openLedger(ledger) {
+    const targetMode = ledger.virtualMode || "inventory";
+    const targetLedgerId =
+      ledger.virtualMode === "profit-loss" ? "__profit_loss__" : ledger.ledgerId;
     navigate(
-      `/reports/account-books/ledger-detail?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&ledgerId=${encodeURIComponent(ledger.ledgerId)}&ledgerName=${encodeURIComponent(ledger.ledgerName)}&mode=inventory`,
+      `/reports/account-books/ledger-detail?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&ledgerId=${encodeURIComponent(targetLedgerId)}&ledgerName=${encodeURIComponent(ledger.ledgerName)}&mode=${encodeURIComponent(targetMode)}`,
       {
         state: buildReportReturnState(location, `bs-ledger-${ledger.ledgerId}`),
       },
