@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, Search } from "lucide-react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString("en-IN", {
@@ -69,10 +70,12 @@ export default function AlterItemPrices() {
   const [search, setSearch] = useState("");
 
   const today = new Date().toISOString().slice(0, 10);
+  const [updateMode, setUpdateMode] = useState("group");
   const [bulkGroupId, setBulkGroupId] = useState("");
+  const [bulkItemId, setBulkItemId] = useState("");
   const [bulkPriceLevelId, setBulkPriceLevelId] = useState("");
   const [bulkRate, setBulkRate] = useState("");
-  const [asOnDate, setAsOnDate] = useState(today);
+  const [asOnDate] = useState(today);
   const [effectiveFrom, setEffectiveFrom] = useState(today);
 
   useEffect(() => {
@@ -104,23 +107,42 @@ export default function AlterItemPrices() {
   }, [companyId]);
 
   async function bulkUpdate() {
-    if (!bulkGroupId || !bulkPriceLevelId || !bulkRate || !effectiveFrom) {
-      alert("Fill group, price level, rate, and applicable from date");
+    if (!bulkPriceLevelId || !bulkRate || !effectiveFrom) {
+      alert("Fill price level, rate, and applicable from date");
+      return;
+    }
+
+    if (updateMode === "group" && !bulkGroupId) {
+      alert("Select a group for group-wise price update");
+      return;
+    }
+
+    if (updateMode === "item" && !bulkItemId) {
+      alert("Select an item for item-wise price update");
       return;
     }
 
     setLoading(true);
     try {
-      await api.put(`/companies/${companyId}/update-prices-by-group`, {
-        groupId: bulkGroupId,
-        priceLevelId: bulkPriceLevelId,
-        rate: Number(bulkRate),
-        effectiveFrom,
-      });
+      if (updateMode === "group") {
+        await api.put(`/companies/${companyId}/update-prices-by-group`, {
+          groupId: bulkGroupId,
+          priceLevelId: bulkPriceLevelId,
+          rate: Number(bulkRate),
+          effectiveFrom,
+        });
+      } else {
+        await api.put(`/companies/${companyId}/update-price-by-item`, {
+          itemId: bulkItemId,
+          priceLevelId: bulkPriceLevelId,
+          rate: Number(bulkRate),
+          effectiveFrom,
+        });
+      }
       setBulkRate("");
       await loadData();
     } catch (error) {
-      alert(error.response?.data?.message || "Bulk update failed");
+      alert(error.response?.data?.message || "Price update failed");
     } finally {
       setLoading(false);
     }
@@ -137,14 +159,20 @@ export default function AlterItemPrices() {
     [groups, bulkGroupId]
   );
 
+  const selectedItem = useMemo(
+    () => items.find((item) => String(item._id) === String(bulkItemId || "")) || null,
+    [items, bulkItemId]
+  );
+
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return items.filter((item) => {
       const itemGroupId = String(item.group?._id || item.groupId || "");
-      if (bulkGroupId && itemGroupId !== String(bulkGroupId)) return false;
+      if (updateMode === "group" && bulkGroupId && itemGroupId !== String(bulkGroupId)) return false;
+      if (updateMode === "item" && bulkItemId && String(item._id) !== String(bulkItemId)) return false;
       return `${item.name} ${item.group?.name || ""}`.toLowerCase().includes(query);
     });
-  }, [items, search, bulkGroupId]);
+  }, [items, search, bulkGroupId, bulkItemId, updateMode]);
 
   const hasUpcomingRateView = useMemo(() => {
     const previewIsUpcoming =
@@ -181,18 +209,51 @@ export default function AlterItemPrices() {
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">Bulk Update</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-6">
-            <select
-              className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              value={bulkGroupId}
-              onChange={(event) => setBulkGroupId(event.target.value)}
-            >
-              <option value="">Select Group</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              className="w-full"
+              inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              value={updateMode}
+              onChange={setUpdateMode}
+              placeholder="Select update mode"
+              options={[
+                { value: "group", label: "Group-wise update" },
+                { value: "item", label: "Single item update" },
+              ]}
+            />
+            {updateMode === "group" ? (
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                value={bulkGroupId}
+                onChange={(newValue) => {
+                  setBulkGroupId(newValue);
+                  setBulkItemId("");
+                }}
+                placeholder="Select Group"
+                options={groups.map((group) => ({
+                  value: String(group.id || group._id),
+                  label: group.name,
+                }))}
+              />
+            ) : (
+              <SearchableSelect
+                className="w-full"
+                inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                value={bulkItemId}
+                onChange={(newValue) => {
+                  setBulkItemId(newValue);
+                  const linkedItem = items.find((item) => String(item._id) === String(newValue));
+                  if (linkedItem) {
+                    setBulkGroupId(String(linkedItem.group?._id || linkedItem.groupId || ""));
+                  }
+                }}
+                placeholder="Select Item"
+                options={items.map((item) => ({
+                  value: String(item._id),
+                  label: item.group?.name ? `${item.name} (${item.group.name})` : item.name,
+                }))}
+              />
+            )}
             <select
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               value={bulkPriceLevelId}
@@ -246,7 +307,7 @@ export default function AlterItemPrices() {
               onClick={bulkUpdate}
               disabled={loading}
             >
-              Update Group
+              {updateMode === "group" ? "Update Group" : "Update Item"}
             </button>
           </div>
         </section>
@@ -263,6 +324,11 @@ export default function AlterItemPrices() {
               {selectedGroup ? (
                 <p className="mt-1 text-xs font-medium text-emerald-600">
                   Group filter: {selectedGroup.name}
+                </p>
+              ) : null}
+              {selectedItem ? (
+                <p className="mt-1 text-xs font-medium text-blue-600">
+                  Item filter: {selectedItem.name}
                 </p>
               ) : null}
             </div>
@@ -316,7 +382,9 @@ export default function AlterItemPrices() {
                     String(item.group?._id || item.groupId || "") === String(bulkGroupId);
                   const previewIsUpcoming =
                     bulkRate !== "" &&
-                    isPreviewTargetedGroup &&
+                    (updateMode === "group"
+                      ? isPreviewTargetedGroup
+                      : String(item._id) === String(bulkItemId || "")) &&
                     normalizeDateKey(effectiveFrom) > normalizeDateKey(asOnDate);
                   const previewEntry =
                     previewIsUpcoming && bulkRate !== ""

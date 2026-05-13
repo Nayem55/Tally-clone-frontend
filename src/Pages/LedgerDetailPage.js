@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarRange, Landmark } from "lucide-react";
+import { ArrowLeft, CalendarRange, Download, Landmark } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { jsPDF } from "jspdf/dist/jspdf.umd.min.js";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
@@ -14,6 +15,24 @@ function formatLocalDateInput(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatShortDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+function formatPlainAmount(value, company) {
+  const decimals = Number(company?.decimalPlaces || 2);
+  return Math.abs(Number(value || 0)).toLocaleString("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 export default function LedgerDetailPage() {
@@ -92,6 +111,211 @@ export default function LedgerDetailPage() {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function exportToPdf() {
+    const entries = state.data?.entries || [];
+    const debitRows = [];
+    const creditRows = [];
+
+    const openingBalance = Number(state.data?.openingBalance || 0);
+    if (openingBalance > 0) {
+      debitRows.push({
+        date: formatShortDate(fromDate),
+        particulars: "Opening Balance",
+        amount: openingBalance,
+      });
+    } else if (openingBalance < 0) {
+      creditRows.push({
+        date: formatShortDate(fromDate),
+        particulars: "Opening Balance",
+        amount: Math.abs(openingBalance),
+      });
+    }
+
+    entries.forEach((entry) => {
+      const particulars =
+        mode === "inventory"
+          ? `${entry.voucherName}${entry.itemName ? ` ${entry.itemName}` : ""}`.trim()
+          : `${entry.voucherName}${entry.voucherNumber ? ` ${entry.voucherNumber}` : ""}${entry.counterpart ? ` ${entry.counterpart}` : ""}`.trim();
+
+      if (Number(entry.debit || 0) > 0) {
+        debitRows.push({
+          date: entry.dateLabel || formatShortDate(toDate),
+          particulars,
+          amount: Number(entry.debit || 0),
+        });
+      }
+      if (Number(entry.credit || 0) > 0) {
+        creditRows.push({
+          date: entry.dateLabel || formatShortDate(toDate),
+          particulars,
+          amount: Number(entry.credit || 0),
+        });
+      }
+    });
+
+    if (debitRows.length === 0 && creditRows.length === 0) {
+      window.alert("No ledger entries available for PDF export.");
+      return;
+    }
+
+    const debitTotal = debitRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const creditTotal = creditRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const closingBalance = Math.abs(Number(state.data?.closingBalance || 0));
+    const closingOnDebit = Number(state.data?.closingBalance || 0) > 0;
+    const debitFinal =
+      closingOnDebit && closingBalance > 0 ? closingBalance : debitTotal;
+    const creditFinal =
+      !closingOnDebit && closingBalance > 0 ? closingBalance : creditTotal;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 12;
+    const verticalDividerX = pageWidth / 2;
+    const leftX = marginX;
+    const rightX = verticalDividerX + 3;
+    const amountRightLeft = verticalDividerX - 2;
+    const amountRightRight = pageWidth - marginX;
+    const lineHeight = 5.2;
+    const companyName = selectedCompany?.name || "Company";
+    const groupName = state.data?.ledger?.groupName || "-";
+    const todayText = formatShortDate(new Date());
+
+    function drawHeader() {
+      let y = 14;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text("To :", leftX, y);
+      doc.text("From :", rightX, y);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(ledgerName, leftX + 12, y);
+      doc.text(companyName, rightX + 18, y);
+      y += 5;
+      doc.text(`Group: ${groupName}`, leftX + 12, y);
+      y += 5;
+      doc.text(`Ledger Register`, leftX + 12, y);
+
+      y += 12;
+      doc.text("Dear Sir/Madam,", leftX, y);
+      doc.text(`Date : ${todayText}`, pageWidth - marginX, y, { align: "right" });
+
+      y += 9;
+      doc.setFont("helvetica", "bold");
+      doc.text("Sub: Confirmation of Accounts", pageWidth / 2, y, { align: "center" });
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.text(`${formatShortDate(fromDate)} to ${formatShortDate(toDate)}`, pageWidth / 2, y, {
+        align: "center",
+      });
+
+      y += 10;
+      const paragraph1 =
+        "Given below is the details of your Accounts as standing in my/our Books of Accounts for the above mentioned period.";
+      const paragraph2 =
+        "Kindly return 3 copies stating your I.T. Permanent A/c No., duly signed and sealed, in confirmation of the same. Please note that if no reply is received from you within a fortnight, it will be assumed that you have accepted the balance shown below.";
+      doc.text(doc.splitTextToSize(paragraph1, pageWidth - marginX * 2), leftX, y);
+      y += 12;
+      doc.text(doc.splitTextToSize(paragraph2, pageWidth - marginX * 2), leftX, y);
+      y += 15;
+
+      doc.setDrawColor(60);
+      doc.setLineWidth(0.25);
+      doc.line(leftX, y - 3, pageWidth - marginX, y - 3);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text("Date", leftX + 4, y);
+      doc.text("Particulars", leftX + 28, y);
+      doc.text("Debit Amount", amountRightLeft, y, { align: "right" });
+      doc.text("Date", rightX + 4, y);
+      doc.text("Particulars", rightX + 28, y);
+      doc.text("Credit Amount", amountRightRight, y, { align: "right" });
+      doc.line(verticalDividerX, y - 6, verticalDividerX, pageHeight - 36);
+      return y + 4;
+    }
+
+    let y = drawHeader();
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const maxRows = Math.max(debitRows.length, creditRows.length);
+
+    for (let index = 0; index < maxRows; index += 1) {
+      if (y > pageHeight - 32) {
+        doc.addPage();
+        y = drawHeader();
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+      }
+
+      const leftRow = debitRows[index];
+      const rightRow = creditRows[index];
+
+      if (leftRow) {
+        doc.text(leftRow.date, leftX + 2, y);
+        doc.text(String(leftRow.particulars || "").slice(0, 34), leftX + 24, y);
+        doc.text(formatPlainAmount(leftRow.amount, selectedCompany), amountRightLeft, y, {
+          align: "right",
+        });
+      }
+
+      if (rightRow) {
+        doc.text(rightRow.date, rightX + 2, y);
+        doc.text(String(rightRow.particulars || "").slice(0, 34), rightX + 24, y);
+        doc.text(formatPlainAmount(rightRow.amount, selectedCompany), amountRightRight, y, {
+          align: "right",
+        });
+      }
+
+      y += lineHeight;
+    }
+
+    y += 3;
+    doc.line(leftX, y, amountRightLeft, y);
+    doc.line(rightX, y, amountRightRight, y);
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.text(formatPlainAmount(debitTotal, selectedCompany), amountRightLeft, y, { align: "right" });
+    doc.text(formatPlainAmount(creditTotal, selectedCompany), amountRightRight, y, { align: "right" });
+
+    if (closingBalance > 0) {
+      y += 8;
+      doc.line(leftX, y - 3, amountRightLeft, y - 3);
+      doc.line(rightX, y - 3, amountRightRight, y - 3);
+      doc.setFont("helvetica", "normal");
+      // doc.text(
+      //   `Closing Balance (${closingOnDebit ? "DR" : "CR"})`,
+      //   pageWidth / 2,
+      //   y,
+      //   { align: "right" },
+      // );
+      if (closingOnDebit) {
+        doc.text(formatPlainAmount(closingBalance, selectedCompany), amountRightLeft, y, {
+          align: "right",
+        });
+      } else {
+        doc.text(formatPlainAmount(closingBalance, selectedCompany), amountRightRight, y, {
+          align: "right",
+        });
+      }
+    }
+
+    y += 8;
+    doc.line(leftX, y - 3, amountRightLeft, y - 3);
+    doc.line(rightX, y - 3, amountRightRight, y - 3);
+    doc.setFont("helvetica", "bold");
+    doc.text(formatPlainAmount(debitFinal, selectedCompany), amountRightLeft, y, { align: "right" });
+    doc.text(formatPlainAmount(creditFinal, selectedCompany), amountRightRight, y, { align: "right" });
+
+    y += 16;
+    doc.setFont("helvetica", "normal");
+    doc.text("I/We hereby confirm the above", leftX, y);
+    doc.text("Yours faithfully,", pageWidth - marginX, y, { align: "right" });
+
+    doc.save(`ledger-register-${ledgerName}-${fromDate}-to-${toDate}.pdf`);
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -110,6 +334,14 @@ export default function LedgerDetailPage() {
               <p className="mt-2 text-sm text-slate-500">
                 Voucher-wise ledger register. Press <span className="font-semibold">Esc</span> or <span className="font-semibold">Backspace</span> to go back.
               </p>
+              <button
+                type="button"
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                onClick={exportToPdf}
+              >
+                <Download className="h-4 w-4" />
+                Export PDF
+              </button>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">

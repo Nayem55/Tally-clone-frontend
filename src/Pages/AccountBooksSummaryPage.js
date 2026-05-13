@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Building2, CalendarDays, Layers3, ScrollText, Search } from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, Download, Layers3, ScrollText, Search } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { jsPDF } from "jspdf/dist/jspdf.umd.min.js";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { formatCurrencyAmount } from "../utils/currency";
@@ -33,6 +34,24 @@ function SummaryCard({ icon: Icon, title, value, tone = "text-slate-900" }) {
 
 function formatBalanceWithSide(value, side, company) {
   return `${formatCurrencyAmount(Math.abs(Number(value || 0)), company)} ${side || "DR"}`;
+}
+
+function formatShortDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+function formatPlainAmount(value, company) {
+  const decimals = Number(company?.decimalPlaces || 2);
+  return Math.abs(Number(value || 0)).toLocaleString("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 export default function AccountBooksSummaryPage({ mode = "group" }) {
@@ -114,6 +133,188 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
       ? report.trail.map((entry) => entry.name).join(" / ")
       : "";
 
+  function exportToPdf() {
+    const rowsForPdf = filteredRows.filter((row) => {
+      const opening = Math.abs(Number(row.openingValue || 0));
+      const debit = Math.abs(Number(row.debit || 0));
+      const credit = Math.abs(Number(row.credit || 0));
+      const closing = Math.abs(Number(row.closingValue || 0));
+      return opening > 0 || debit > 0 || credit > 0 || closing > 0;
+    });
+
+    if (rowsForPdf.length === 0) {
+      window.alert("No non-zero rows available for PDF export.");
+      return;
+    }
+
+    const debitRows = rowsForPdf
+      .filter((row) => String(row.closingSide || "DR").toUpperCase() !== "CR")
+      .map((row) => ({
+        date: formatShortDate(toDate),
+        particulars: row.groupTrail ? `${row.name} (${row.groupTrail})` : row.name,
+        amount: Number(row.closingValue || 0),
+      }));
+    const creditRows = rowsForPdf
+      .filter((row) => String(row.closingSide || "DR").toUpperCase() === "CR")
+      .map((row) => ({
+        date: formatShortDate(toDate),
+        particulars: row.groupTrail ? `${row.name} (${row.groupTrail})` : row.name,
+        amount: Number(row.closingValue || 0),
+      }));
+
+    const debitTotal = debitRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const creditTotal = creditRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const closingDifference = Math.abs(debitTotal - creditTotal);
+    const debitFinal = debitTotal < creditTotal ? debitTotal + closingDifference : debitTotal;
+    const creditFinal = creditTotal < debitTotal ? creditTotal + closingDifference : creditTotal;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 12;
+    const verticalDividerX = pageWidth / 2;
+    const leftX = marginX;
+    const rightX = verticalDividerX + 3;
+    const amountRightLeft = verticalDividerX - 2;
+    const amountRightRight = pageWidth - marginX;
+    const lineHeight = 5.2;
+    const scopeLabel = breadcrumbLabel || (mode === "group" ? "Primary Groups" : "All Ledgers");
+    const searchLabelText = search.trim() ? search.trim() : "All";
+    const companyName = selectedCompany?.name || "Company";
+    const reportTitle = mode === "group" ? "Group Report" : "Ledger Report";
+    const todayText = formatShortDate(new Date());
+
+    function drawHeader() {
+      let y = 14;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text("To :", leftX, y);
+      doc.text("From :", rightX, y);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(scopeLabel, leftX + 12, y);
+      doc.text(companyName, rightX + 18, y);
+      y += 5;
+      doc.text(`Filter: ${searchLabelText}`, leftX + 12, y);
+      y += 5;
+      doc.text(`Report: ${reportTitle}`, leftX + 12, y);
+
+      y += 12;
+      doc.text("Dear Sir/Madam,", leftX, y);
+      doc.text(`Date : ${todayText}`, pageWidth - marginX, y, { align: "right" });
+
+      y += 9;
+      doc.setFont("helvetica", "bold");
+      doc.text("Sub: Confirmation of Accounts", pageWidth / 2, y, { align: "center" });
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.text(`${formatShortDate(fromDate)} to ${formatShortDate(toDate)}`, pageWidth / 2, y, {
+        align: "center",
+      });
+
+      y += 10;
+      const paragraph1 =
+        "Given below is the details of your Accounts as standing in my/our Books of Accounts for the above mentioned period.";
+      const paragraph2 =
+        "Kindly return 3 copies stating your I.T. Permanent A/c No., duly signed and sealed, in confirmation of the same. Please note that if no reply is received from you within a fortnight, it will be assumed that you have accepted the balance shown below.";
+      doc.text(doc.splitTextToSize(paragraph1, pageWidth - marginX * 2), leftX, y);
+      y += 12;
+      doc.text(doc.splitTextToSize(paragraph2, pageWidth - marginX * 2), leftX, y);
+      y += 15;
+
+      doc.setDrawColor(60);
+      doc.setLineWidth(0.25);
+      doc.line(leftX, y - 3, pageWidth - marginX, y - 3);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text("Date", leftX + 4, y);
+      doc.text("Particulars", leftX + 28, y);
+      doc.text("Debit Amount", amountRightLeft, y, { align: "right" });
+      doc.text("Date", rightX + 4, y);
+      doc.text("Particulars", rightX + 28, y);
+      doc.text("Credit Amount", amountRightRight, y, { align: "right" });
+      doc.line(verticalDividerX, y - 6, verticalDividerX, pageHeight - 36);
+      return y + 4;
+    }
+
+    let y = drawHeader();
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const maxRows = Math.max(debitRows.length, creditRows.length);
+
+    for (let index = 0; index < maxRows; index += 1) {
+      if (y > pageHeight - 32) {
+        doc.addPage();
+        y = drawHeader();
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+      }
+
+      const leftRow = debitRows[index];
+      const rightRow = creditRows[index];
+
+      if (leftRow) {
+        doc.text(leftRow.date, leftX + 2, y);
+        doc.text(String(leftRow.particulars || "").slice(0, 34), leftX + 24, y);
+        doc.text(formatPlainAmount(leftRow.amount, selectedCompany), amountRightLeft, y, {
+          align: "right",
+        });
+      }
+
+      if (rightRow) {
+        doc.text(rightRow.date, rightX + 2, y);
+        doc.text(String(rightRow.particulars || "").slice(0, 34), rightX + 24, y);
+        doc.text(formatPlainAmount(rightRow.amount, selectedCompany), amountRightRight, y, {
+          align: "right",
+        });
+      }
+
+      y += lineHeight;
+    }
+
+    y += 3;
+    doc.line(leftX, y, amountRightLeft, y);
+    doc.line(rightX, y, amountRightRight, y);
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.text(formatPlainAmount(debitTotal, selectedCompany), amountRightLeft, y, { align: "right" });
+    doc.text(formatPlainAmount(creditTotal, selectedCompany), amountRightRight, y, { align: "right" });
+
+    if (closingDifference > 0) {
+      y += 8;
+      doc.line(leftX, y - 3, amountRightLeft, y - 3);
+      doc.line(rightX, y - 3, amountRightRight, y - 3);
+      doc.setFont("helvetica", "normal");
+      doc.text("Closing Balance", pageWidth / 2, y, { align: "center" });
+      if (debitTotal < creditTotal) {
+        doc.text(formatPlainAmount(closingDifference, selectedCompany), amountRightLeft, y, {
+          align: "right",
+        });
+      } else {
+        doc.text(formatPlainAmount(closingDifference, selectedCompany), amountRightRight, y, {
+          align: "right",
+        });
+      }
+    }
+
+    y += 8;
+    doc.line(leftX, y - 3, amountRightLeft, y - 3);
+    doc.line(rightX, y - 3, amountRightRight, y - 3);
+    doc.setFont("helvetica", "bold");
+    doc.text(formatPlainAmount(debitFinal, selectedCompany), amountRightLeft, y, { align: "right" });
+    doc.text(formatPlainAmount(creditFinal, selectedCompany), amountRightRight, y, { align: "right" });
+
+    y += 16;
+    doc.setFont("helvetica", "normal");
+    doc.text("I/We hereby confirm the above", leftX, y);
+    doc.text("Yours faithfully,", pageWidth - marginX, y, { align: "right" });
+
+    const fileScope = mode === "group" ? "group" : "ledger";
+    doc.save(`account-books-${fileScope}-${fromDate}-to-${toDate}.pdf`);
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1460px] space-y-6">
@@ -138,6 +339,14 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
+              </button>
+              <button
+                type="button"
+                className="mt-3 ml-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                onClick={exportToPdf}
+              >
+                <Download className="h-4 w-4" />
+                Export PDF
               </button>
             </div>
 
