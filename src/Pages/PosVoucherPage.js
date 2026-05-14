@@ -41,6 +41,23 @@ import {
 const POS_TEMPLATE_SHEET = "POS Voucher";
 const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
 
+function formatMaskedPhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 5) return digits;
+  const prefix = digits.slice(0, 3);
+  const suffix = digits.slice(-2);
+  const masked = "x".repeat(Math.max(0, digits.length - 5));
+  return `${prefix}${masked}${suffix}`;
+}
+
+function formatInvoiceTime24(value) {
+  const date = value ? new Date(value) : new Date();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}.${minutes}`;
+}
+
 function employeeBelongsToSalesRole(employee = {}) {
   return String(employee.under || "").trim().toLowerCase() === "sales";
 }
@@ -485,7 +502,12 @@ export default function PosVoucherPage({
     0,
     Number(form.cashTendered || 0) - cashPayment,
   );
-  const customerLine = [form.customerName, form.phone].filter(Boolean).join(" ");
+  const customerLine = [
+    form.customerName,
+    formatMaskedPhone(form.phone),
+  ]
+    .filter(Boolean)
+    .join(" ");
   const customerPurchases = customerInsight.purchases || [];
   const printData = useMemo(() => {
     const voucherDate = form.date ? new Date(form.date) : new Date();
@@ -526,12 +548,7 @@ export default function PosVoucherPage({
         "MUSHAK 6.3",
       ].filter(Boolean),
       billNo: form.number || "-",
-      timeText:
-        voucherDate.toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }) + " hrs",
+      timeText: formatInvoiceTime24(voucherDate),
       dateText: form.date
         ? new Date(form.date).toLocaleDateString("en-GB").replace(/\//g, "-")
         : "-",
@@ -580,7 +597,7 @@ export default function PosVoucherPage({
         { label: "Balance :", value: formatCompactMoney(changeAmount) },
         { label: "Total Paid", value: formatCompactMoney(totalAmount) },
       ],
-      customerLine,
+      // customerLine,
       footerLines: [
         "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.",
         `Thank you for shopping at ${selectedCompany?.name || "our store"}. Your business is greatly appreciated.`,

@@ -1,3 +1,5 @@
+import dayjs from "dayjs";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -671,7 +673,7 @@ function buildPosInvoiceMarkup(data) {
             </div>
             <div class="title">${escapeHtml(data.voucherTitle || "Invoice")}</div>
             <div class="meta-stack">
-              <div class="meta-line"><span>Bill No. : ${escapeHtml(data.billNo || "-")}</span><span>Time : ${escapeHtml(data.timeText || "-")}</span></div>
+              <div class="meta-line"><span>Bill No. : ${escapeHtml(data.billNo || "-")}</span><span>Time : ${escapeHtml(dayjs().format("HH.mm") || "-")}</span></div>
               <div class="meta-line"><span>Date : ${escapeHtml(data.dateText || "-")}</span><span>User : ${escapeHtml(data.userName || "Admin")}</span></div>
             </div>
             <div class="buyer-line">Buyer (Bill to) : ${escapeHtml(data.buyerLine || "POS Sales")}</div>
