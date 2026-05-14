@@ -347,7 +347,7 @@ export default function PosVoucherPage({
     if (!query) return items.slice(0, 8);
     return items
       .filter((item) =>
-        [item.name, item.alias, item.barcode]
+        [item.name, item.alias, item.barcode, ...(item.secondaryAliases || [])]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(query)),
       )
@@ -375,7 +375,10 @@ export default function PosVoucherPage({
       items.find(
         (item) =>
           String(item.barcode || "").trim().toLowerCase() === code ||
-          String(item.alias || "").trim().toLowerCase() === code,
+          String(item.alias || "").trim().toLowerCase() === code ||
+          (item.secondaryAliases || []).some(
+            (alias) => String(alias || "").trim().toLowerCase() === code,
+          ),
       ) ||
       items.find(
         (item) => String(item.name || "").trim().toLowerCase() === code,
