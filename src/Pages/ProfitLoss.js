@@ -15,6 +15,10 @@ import {
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { formatCurrencyAmount } from "../utils/currency";
+import {
+  exportProfitLossExcel,
+  exportProfitLossPdf,
+} from "../utils/financialStatementExport";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -183,6 +187,28 @@ export default function ProfitLoss() {
   const expenses = Number(report.totals?.netExpense || 0);
   const netProfit = Number(report.totals?.netProfit || 0);
 
+  function handleExportPdf() {
+    exportProfitLossPdf({
+      report,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      incomeGroups: filteredIncomeGroups,
+      expenseGroups: filteredExpenseGroups,
+    });
+  }
+
+  function handleExportExcel() {
+    exportProfitLossExcel({
+      report,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      incomeGroups: filteredIncomeGroups,
+      expenseGroups: filteredExpenseGroups,
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
       <div className="mx-auto max-w-[1380px]">
@@ -228,10 +254,19 @@ export default function ProfitLoss() {
                 </button>
                 <button
                   type="button"
+                  onClick={handleExportPdf}
                   className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
                 >
                   <Download className="h-4 w-4" />
-                  Export
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
                 </button>
                 <button
                   type="button"

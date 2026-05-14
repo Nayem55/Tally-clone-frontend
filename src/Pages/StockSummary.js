@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, PackageSearch } from "lucide-react";
+import { Boxes, Download, PackageSearch } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
@@ -64,6 +65,80 @@ export default function StockSummary() {
   const totals = report.totals || {};
   const selectedCompany = companies.find((company) => company._id === companyId);
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: "Stock Summary",
+      company: selectedCompany,
+      fromDate: "",
+      toDate: "",
+      summary: [
+        { label: "Opening Quantity", value: formatNumber(totals.openingQty) },
+        { label: "Inward Quantity", value: formatNumber(totals.inwardQty) },
+        { label: "Outward Quantity", value: formatNumber(totals.outwardQty) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+      ],
+      columns: [
+        { key: "itemName", label: "Item", width: 34 },
+        { key: "alias", label: "Alias", width: 22 },
+        { key: "groupName", label: "Group", width: 24 },
+        { key: "openingQty", label: "Opening Qty", width: 16 },
+        { key: "inwardQty", label: "Inward Qty", width: 16 },
+        { key: "outwardQty", label: "Outward Qty", width: 16 },
+        { key: "closingQty", label: "Closing Qty", width: 16 },
+        { key: "closingRate", label: "Closing Rate", width: 18 },
+        { key: "closingValue", label: "Closing Value", width: 18 },
+      ],
+      rows: filteredRows.map((row) => ({
+        itemName: row.itemName,
+        alias: row.alias || "-",
+        groupName: row.groupName || "-",
+        openingQty: formatNumber(row.openingQty),
+        inwardQty: formatNumber(row.inwardQty),
+        outwardQty: formatNumber(row.outwardQty),
+        closingQty: formatNumber(row.closingQty),
+        closingRate: formatCurrencyAmount(row.closingRate, selectedCompany),
+        closingValue: formatCurrencyAmount(row.closingValue, selectedCompany),
+      })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: "Stock Summary",
+      company: selectedCompany,
+      fromDate: "",
+      toDate: "",
+      summary: [
+        { label: "Opening Quantity", value: formatNumber(totals.openingQty) },
+        { label: "Inward Quantity", value: formatNumber(totals.inwardQty) },
+        { label: "Outward Quantity", value: formatNumber(totals.outwardQty) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+      ],
+      columns: [
+        { key: "itemName", label: "Item", width: 34 },
+        { key: "alias", label: "Alias", width: 22 },
+        { key: "groupName", label: "Group", width: 24 },
+        { key: "openingQty", label: "Opening Qty", width: 16 },
+        { key: "inwardQty", label: "Inward Qty", width: 16 },
+        { key: "outwardQty", label: "Outward Qty", width: 16 },
+        { key: "closingQty", label: "Closing Qty", width: 16 },
+        { key: "closingRate", label: "Closing Rate", width: 18 },
+        { key: "closingValue", label: "Closing Value", width: 18 },
+      ],
+      rows: filteredRows.map((row) => ({
+        itemName: row.itemName,
+        alias: row.alias || "-",
+        groupName: row.groupName || "-",
+        openingQty: Number(row.openingQty || 0),
+        inwardQty: Number(row.inwardQty || 0),
+        outwardQty: Number(row.outwardQty || 0),
+        closingQty: Number(row.closingQty || 0),
+        closingRate: Number(row.closingRate || 0),
+        closingValue: Number(row.closingValue || 0),
+      })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -98,6 +173,24 @@ export default function StockSummary() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
+              </div>
+              <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
             </div>
           </div>

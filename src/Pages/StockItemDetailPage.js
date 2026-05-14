@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarRange, PackageSearch } from "lucide-react";
+import { ArrowLeft, CalendarRange, Download, PackageSearch } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
@@ -133,6 +134,158 @@ export default function StockItemDetailPage() {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function handleExportPdf() {
+    const title = requestedItemId ? `${selectedItemRow?.itemName || "Stock Item"} Register` : "Stock Item Register";
+    const scopeParts = [];
+    if (requestedSalesPersonName) scopeParts.push(`Sales Person: ${requestedSalesPersonName}`);
+    if (requestedGroupId) scopeParts.push(`Group filtered`);
+    if (requestedCategory) scopeParts.push(`Category: ${requestedCategory}`);
+    if (requestedItemId && selectedItemRow?.itemName) scopeParts.push(`Item: ${selectedItemRow.itemName}`);
+    exportInventoryReportPdf({
+      title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: scopeParts.join(" | "),
+      summary: [
+        { label: "Opening Value", value: formatCurrencyAmount(report.totals?.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(report.totals?.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(report.totals?.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(report.totals?.closingValue, selectedCompany) },
+      ],
+      columns: requestedItemId
+        ? [
+            { key: "date", label: "Date", width: 18 },
+            { key: "voucher", label: "Voucher", width: 20 },
+            { key: "direction", label: "Direction", width: 14 },
+            { key: "qty", label: "Qty", width: 12 },
+            { key: "rate", label: "Rate", width: 14 },
+            { key: "value", label: "Value", width: 16 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ]
+        : [
+            { key: "item", label: "Item", width: 34 },
+            { key: "group", label: "Group", width: 24 },
+            { key: "openingQty", label: "Opening Qty", width: 14 },
+            { key: "openingRate", label: "Opening Rate", width: 16 },
+            { key: "openingValue", label: "Opening Value", width: 16 },
+            { key: "inwardQty", label: "Inward Qty", width: 14 },
+            { key: "inwardRate", label: "Inward Rate", width: 16 },
+            { key: "inwardValue", label: "Inward Value", width: 16 },
+            { key: "outwardQty", label: "Outward Qty", width: 14 },
+            { key: "outwardRate", label: "Outward Rate", width: 16 },
+            { key: "outwardValue", label: "Outward Value", width: 16 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingRate", label: "Closing Rate", width: 16 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ],
+      rows: requestedItemId
+        ? (selectedItemRow?.history || []).map((entry) => ({
+            date: entry.dateLabel,
+            voucher: entry.voucherName,
+            direction: entry.direction,
+            qty: formatNumber(entry.qty),
+            rate: formatCurrencyAmount(entry.rate, selectedCompany),
+            value: formatCurrencyAmount(entry.value, selectedCompany),
+            closingQty: formatNumber(entry.closingQty),
+            closingValue: formatCurrencyAmount(entry.closingValue, selectedCompany),
+          }))
+        : filteredRows.map((row) => ({
+            item: row.itemName,
+            group: row.groupName || "-",
+            openingQty: formatNumber(row.openingQty),
+            openingRate: formatCurrencyAmount(row.openingRate, selectedCompany),
+            openingValue: formatCurrencyAmount(row.openingValue, selectedCompany),
+            inwardQty: formatNumber(row.inwardQty),
+            inwardRate: formatCurrencyAmount(row.inwardRate, selectedCompany),
+            inwardValue: formatCurrencyAmount(row.inwardValue, selectedCompany),
+            outwardQty: formatNumber(row.outwardQty),
+            outwardRate: formatCurrencyAmount(row.outwardRate, selectedCompany),
+            outwardValue: formatCurrencyAmount(row.outwardValue, selectedCompany),
+            closingQty: formatNumber(row.closingQty),
+            closingRate: formatCurrencyAmount(row.closingRate, selectedCompany),
+            closingValue: formatCurrencyAmount(row.closingValue, selectedCompany),
+          })),
+    });
+  }
+
+  function handleExportExcel() {
+    const title = requestedItemId ? `${selectedItemRow?.itemName || "Stock Item"} Register` : "Stock Item Register";
+    const scopeParts = [];
+    if (requestedSalesPersonName) scopeParts.push(`Sales Person: ${requestedSalesPersonName}`);
+    if (requestedGroupId) scopeParts.push(`Group filtered`);
+    if (requestedCategory) scopeParts.push(`Category: ${requestedCategory}`);
+    if (requestedItemId && selectedItemRow?.itemName) scopeParts.push(`Item: ${selectedItemRow.itemName}`);
+    exportInventoryReportExcel({
+      title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: scopeParts.join(" | "),
+      summary: [
+        { label: "Opening Value", value: formatCurrencyAmount(report.totals?.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(report.totals?.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(report.totals?.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(report.totals?.closingValue, selectedCompany) },
+      ],
+      columns: requestedItemId
+        ? [
+            { key: "date", label: "Date", width: 18 },
+            { key: "voucher", label: "Voucher", width: 20 },
+            { key: "direction", label: "Direction", width: 14 },
+            { key: "qty", label: "Qty", width: 12 },
+            { key: "rate", label: "Rate", width: 14 },
+            { key: "value", label: "Value", width: 16 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ]
+        : [
+            { key: "item", label: "Item", width: 34 },
+            { key: "group", label: "Group", width: 24 },
+            { key: "openingQty", label: "Opening Qty", width: 14 },
+            { key: "openingRate", label: "Opening Rate", width: 16 },
+            { key: "openingValue", label: "Opening Value", width: 16 },
+            { key: "inwardQty", label: "Inward Qty", width: 14 },
+            { key: "inwardRate", label: "Inward Rate", width: 16 },
+            { key: "inwardValue", label: "Inward Value", width: 16 },
+            { key: "outwardQty", label: "Outward Qty", width: 14 },
+            { key: "outwardRate", label: "Outward Rate", width: 16 },
+            { key: "outwardValue", label: "Outward Value", width: 16 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingRate", label: "Closing Rate", width: 16 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ],
+      rows: requestedItemId
+        ? (selectedItemRow?.history || []).map((entry) => ({
+            date: entry.dateLabel,
+            voucher: entry.voucherName,
+            direction: entry.direction,
+            qty: Number(entry.qty || 0),
+            rate: Number(entry.rate || 0),
+            value: Number(entry.value || 0),
+            closingQty: Number(entry.closingQty || 0),
+            closingValue: Number(entry.closingValue || 0),
+          }))
+        : filteredRows.map((row) => ({
+            item: row.itemName,
+            group: row.groupName || "-",
+            openingQty: Number(row.openingQty || 0),
+            openingRate: Number(row.openingRate || 0),
+            openingValue: Number(row.openingValue || 0),
+            inwardQty: Number(row.inwardQty || 0),
+            inwardRate: Number(row.inwardRate || 0),
+            inwardValue: Number(row.inwardValue || 0),
+            outwardQty: Number(row.outwardQty || 0),
+            outwardRate: Number(row.outwardRate || 0),
+            outwardValue: Number(row.outwardValue || 0),
+            closingQty: Number(row.closingQty || 0),
+            closingRate: Number(row.closingRate || 0),
+            closingValue: Number(row.closingValue || 0),
+          })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -202,6 +355,24 @@ export default function StockItemDetailPage() {
                   value={toDate}
                   onChange={(event) => setToDate(event.target.value)}
                 />
+              </div>
+              <div className="xl:col-span-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
             </div>
           </div>

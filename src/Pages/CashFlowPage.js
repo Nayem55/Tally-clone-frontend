@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarRange, Landmark } from "lucide-react";
+import { CalendarRange, Download, Landmark, Printer } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import {
+  exportCashFlowExcel,
+  exportCashFlowPdf,
+} from "../utils/financialStatementExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
@@ -66,6 +70,26 @@ export default function CashFlowPage() {
     );
   }
 
+  function handleExportPdf() {
+    if (!report) return;
+    exportCashFlowPdf({
+      report,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+    });
+  }
+
+  function handleExportExcel() {
+    if (!report) return;
+    exportCashFlowExcel({
+      report,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -76,6 +100,32 @@ export default function CashFlowPage() {
               <p className="mt-2 text-sm text-slate-500">
                 Review opening balance, inflow, outflow, and period-wise movement for cash and bank accounts.
               </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                >
+                  <Printer className="h-4 w-4" />
+                  Print
+                </button>
+              </div>
             </div>
             <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
             <div className="grid gap-4 md:grid-cols-2">

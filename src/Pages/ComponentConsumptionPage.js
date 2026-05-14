@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Factory } from "lucide-react";
+import { Download, Factory } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
@@ -39,6 +40,52 @@ export default function ComponentConsumptionPage() {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: "Component Consumption",
+      company: { name: companyId || "-" },
+      fromDate,
+      toDate,
+      columns: [
+        { key: "itemName", label: "Raw Material", width: 30 },
+        { key: "unitName", label: "Unit", width: 14 },
+        { key: "qty", label: "Consumed Qty", width: 14 },
+        { key: "rate", label: "Average Rate", width: 14 },
+        { key: "value", label: "Consumed Value", width: 16 },
+      ],
+      rows: rows.map((row) => ({
+        itemName: row.itemName,
+        unitName: row.unitName || "-",
+        qty: Number(row.qty || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        rate: Number(row.rate || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        value: Number(row.value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: "Component Consumption",
+      company: { name: companyId || "-" },
+      fromDate,
+      toDate,
+      columns: [
+        { key: "itemName", label: "Raw Material", width: 30 },
+        { key: "unitName", label: "Unit", width: 14 },
+        { key: "qty", label: "Consumed Qty", width: 14 },
+        { key: "rate", label: "Average Rate", width: 14 },
+        { key: "value", label: "Consumed Value", width: 16 },
+      ],
+      rows: rows.map((row) => ({
+        itemName: row.itemName,
+        unitName: row.unitName || "-",
+        qty: Number(row.qty || 0),
+        rate: Number(row.rate || 0),
+        value: Number(row.value || 0),
+      })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -51,6 +98,24 @@ export default function ComponentConsumptionPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
             <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+              onClick={handleExportPdf}
+            >
+              <Download className="h-4 w-4" />
+              Export PDF
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              onClick={handleExportExcel}
+            >
+              <Download className="h-4 w-4" />
+              Export Excel
+            </button>
           </div>
         </section>
 

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BarChart3, CalendarRange, Search, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarRange, Download, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
@@ -143,6 +144,126 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: view.title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: [groupName, ledgerName].filter(Boolean).join(" | "),
+      summary: [
+        { label: "Purchase Qty", value: formatQty(report.totals?.purchaseQty) },
+        { label: "Purchase Value", value: formatCurrencyAmount(report.totals?.purchaseValue, selectedCompany) },
+        { label: "Sales Qty", value: formatQty(report.totals?.salesQty) },
+        { label: "Sales Value", value: formatCurrencyAmount(report.totals?.salesValue, selectedCompany) },
+      ],
+      columns: level === "voucher"
+        ? [
+            { key: "date", label: "Date", width: 16 },
+            { key: "voucher", label: "Voucher", width: 18 },
+            { key: "item", label: "Item", width: 28 },
+            { key: "direction", label: "Direction", width: 14 },
+            { key: "qty", label: "Qty", width: 12 },
+            { key: "rate", label: "Rate", width: 14 },
+            { key: "value", label: "Value", width: 16 },
+          ]
+        : [
+            { key: "name", label: level === "group" ? "Particulars" : "Ledger", width: 28 },
+            { key: "context", label: level === "group" ? "Hierarchy" : "Group", width: 24 },
+            { key: "invoices", label: "Invoices", width: 12 },
+            { key: "purchaseQty", label: "Purchase Qty", width: 14 },
+            { key: "purchaseRate", label: "Avg Purchase Rate", width: 16 },
+            { key: "purchaseValue", label: "Purchase Value", width: 16 },
+            { key: "salesQty", label: "Sales Qty", width: 14 },
+            { key: "salesRate", label: "Avg Sale Rate", width: 16 },
+            { key: "salesValue", label: "Sales Value", width: 16 },
+            { key: "lastVoucher", label: "Last Voucher", width: 16 },
+          ],
+      rows: level === "voucher"
+        ? filteredRows.map((row) => ({
+            date: row.dateLabel || "-",
+            voucher: row.voucherName,
+            item: row.itemName,
+            direction: row.direction,
+            qty: formatQty(row.qty),
+            rate: formatRate(row.rate),
+            value: formatCurrencyAmount(row.value, selectedCompany),
+          }))
+        : filteredRows.map((row) => ({
+            name: row.name,
+            context: row.secondaryLabel || groupName || "-",
+            invoices: formatQty(row.metrics?.invoiceCount),
+            purchaseQty: formatQty(row.metrics?.purchaseQty),
+            purchaseRate: formatRate(row.metrics?.averagePurchaseRate),
+            purchaseValue: formatCurrencyAmount(row.metrics?.purchaseValue, selectedCompany),
+            salesQty: formatQty(row.metrics?.salesQty),
+            salesRate: formatRate(row.metrics?.averageSaleRate),
+            salesValue: formatCurrencyAmount(row.metrics?.salesValue, selectedCompany),
+            lastVoucher: row.metrics?.lastVoucherOn ? new Date(row.metrics.lastVoucherOn).toLocaleDateString("en-GB") : "-",
+          })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: view.title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: [groupName, ledgerName].filter(Boolean).join(" | "),
+      summary: [
+        { label: "Purchase Qty", value: formatQty(report.totals?.purchaseQty) },
+        { label: "Purchase Value", value: formatCurrencyAmount(report.totals?.purchaseValue, selectedCompany) },
+        { label: "Sales Qty", value: formatQty(report.totals?.salesQty) },
+        { label: "Sales Value", value: formatCurrencyAmount(report.totals?.salesValue, selectedCompany) },
+      ],
+      columns: level === "voucher"
+        ? [
+            { key: "date", label: "Date", width: 16 },
+            { key: "voucher", label: "Voucher", width: 18 },
+            { key: "item", label: "Item", width: 28 },
+            { key: "direction", label: "Direction", width: 14 },
+            { key: "qty", label: "Qty", width: 12 },
+            { key: "rate", label: "Rate", width: 14 },
+            { key: "value", label: "Value", width: 16 },
+          ]
+        : [
+            { key: "name", label: level === "group" ? "Particulars" : "Ledger", width: 28 },
+            { key: "context", label: level === "group" ? "Hierarchy" : "Group", width: 24 },
+            { key: "invoices", label: "Invoices", width: 12 },
+            { key: "purchaseQty", label: "Purchase Qty", width: 14 },
+            { key: "purchaseRate", label: "Avg Purchase Rate", width: 16 },
+            { key: "purchaseValue", label: "Purchase Value", width: 16 },
+            { key: "salesQty", label: "Sales Qty", width: 14 },
+            { key: "salesRate", label: "Avg Sale Rate", width: 16 },
+            { key: "salesValue", label: "Sales Value", width: 16 },
+            { key: "lastVoucher", label: "Last Voucher", width: 16 },
+          ],
+      rows: level === "voucher"
+        ? filteredRows.map((row) => ({
+            date: row.dateLabel || "-",
+            voucher: row.voucherName,
+            item: row.itemName,
+            direction: row.direction,
+            qty: Number(row.qty || 0),
+            rate: Number(row.rate || 0),
+            value: Number(row.value || 0),
+          }))
+        : filteredRows.map((row) => ({
+            name: row.name,
+            context: row.secondaryLabel || groupName || "-",
+            invoices: Number(row.metrics?.invoiceCount || 0),
+            purchaseQty: Number(row.metrics?.purchaseQty || 0),
+            purchaseRate: Number(row.metrics?.averagePurchaseRate || 0),
+            purchaseValue: Number(row.metrics?.purchaseValue || 0),
+            salesQty: Number(row.metrics?.salesQty || 0),
+            salesRate: Number(row.metrics?.averageSaleRate || 0),
+            salesValue: Number(row.metrics?.salesValue || 0),
+            lastVoucher: row.metrics?.lastVoucherOn ? new Date(row.metrics.lastVoucherOn).toLocaleDateString("en-GB") : "-",
+          })),
+    });
+  }
+
   function buildNextPath(row) {
     const shared = `companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
     if (level === "group") {
@@ -221,6 +342,24 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
+              </div>
+              <div className="xl:col-span-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
             </div>
           </div>

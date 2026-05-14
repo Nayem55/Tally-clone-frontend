@@ -15,6 +15,10 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { formatCurrencyAmount } from "../utils/currency";
+import {
+  exportTrialBalanceExcel,
+  exportTrialBalancePdf,
+} from "../utils/financialStatementExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import {
@@ -53,52 +57,6 @@ function collectLedgerOptions(nodes, trail = []) {
     })),
     ...collectLedgerOptions(node.children || [], [...trail, node.name]),
   ]);
-}
-
-function exportTrialCsv(tree, company) {
-  const rows = [
-    ["Particulars", "Group", "Opening Dr", "Opening Cr", "Debit", "Credit", "Closing Dr", "Closing Cr"],
-  ];
-
-  function walk(nodes, depth = 0) {
-    (nodes || []).forEach((node) => {
-      rows.push([
-        `${" ".repeat(depth * 2)}${node.name}`,
-        node.nature || "",
-        node.totals?.openingDebit || 0,
-        node.totals?.openingCredit || 0,
-        node.totals?.debit || 0,
-        node.totals?.credit || 0,
-        node.totals?.closingDebit || 0,
-        node.totals?.closingCredit || 0,
-      ]);
-      (node.ledgers || []).forEach((ledger) => {
-        rows.push([
-          `${" ".repeat((depth + 1) * 2)}${ledger.name}`,
-          ledger.groupName || "",
-          ledger.totals?.openingDebit || 0,
-          ledger.totals?.openingCredit || 0,
-          ledger.totals?.debit || 0,
-          ledger.totals?.credit || 0,
-          ledger.totals?.closingDebit || 0,
-          ledger.totals?.closingCredit || 0,
-        ]);
-      });
-      walk(node.children || [], depth + 1);
-    });
-  }
-
-  walk(tree);
-  const csv = rows
-    .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `trial-balance-${company?.name || "company"}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function SummaryCard({ icon: Icon, title, value, subtitle, iconClass = "" }) {
@@ -218,6 +176,24 @@ export default function TrialBalance() {
     );
   }
 
+  function handleExportPdf() {
+    exportTrialBalancePdf({
+      topRows,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+    });
+  }
+
+  function handleExportExcel() {
+    exportTrialBalanceExcel({
+      topRows,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
       <div className="mx-auto max-w-[1380px]">
@@ -274,11 +250,19 @@ export default function TrialBalance() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => exportTrialCsv(report.tree || [], selectedCompany)}
+                  onClick={handleExportPdf}
                   className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
                 >
                   <Download className="h-4 w-4" />
-                  Export
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
                 </button>
                 <button
                   type="button"

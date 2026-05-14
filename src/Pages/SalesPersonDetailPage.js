@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BarChart3, CalendarRange, Search, TrendingDown } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarRange, Download, Search, TrendingDown } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
@@ -178,6 +179,126 @@ export default function SalesPersonDetailPage({ level = "group" }) {
     .filter(Boolean)
     .join(" / ");
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: view.title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: breadcrumbText,
+      summary: [
+        { label: "Sales Qty", value: formatQty(report.totals?.salesQty) },
+        { label: "Sales Value", value: formatCurrencyAmount(report.totals?.salesValue, selectedCompany) },
+        { label: "Invoices", value: formatQty(report.totals?.invoiceCount) },
+        { label: "Customers", value: formatQty(report.totals?.customerCount) },
+      ],
+      columns: level === "voucher"
+        ? [
+            { key: "date", label: "Date", width: 16 },
+            { key: "voucher", label: "Voucher", width: 18 },
+            { key: "customer", label: "Customer", width: 22 },
+            { key: "item", label: "Item", width: 24 },
+            { key: "group", label: "Group", width: 18 },
+            { key: "categoryName", label: "Category", width: 18 },
+            { key: "qty", label: "Sales Qty", width: 12 },
+            { key: "rate", label: "Sale Rate", width: 14 },
+            { key: "value", label: "Sales Value", width: 16 },
+          ]
+        : [
+            { key: "name", label: "Particulars", width: 30 },
+            { key: "context", label: "Context", width: 24 },
+            { key: "invoices", label: "Invoices", width: 12 },
+            { key: "customers", label: "Customers", width: 12 },
+            { key: "salesQty", label: "Sales Qty", width: 14 },
+            { key: "averageRate", label: "Avg Sale Rate", width: 14 },
+            { key: "salesValue", label: "Sales Value", width: 16 },
+            { key: "lastSale", label: "Last Sale", width: 16 },
+          ],
+      rows: level === "voucher"
+        ? filteredRows.map((row) => ({
+            date: row.dateLabel || "-",
+            voucher: row.voucherName,
+            customer: row.customerName,
+            item: row.itemName,
+            group: row.groupName,
+            categoryName: row.categoryName,
+            qty: formatQty(row.qty),
+            rate: formatRate(row.rate),
+            value: formatCurrencyAmount(row.value, selectedCompany),
+          }))
+        : filteredRows.map((row) => ({
+            name: row.name,
+            context: row.secondaryLabel || "-",
+            invoices: formatQty(row.metrics?.invoiceCount),
+            customers: formatQty(row.metrics?.customerCount),
+            salesQty: formatQty(row.metrics?.salesQty),
+            averageRate: formatRate(row.metrics?.averageRate),
+            salesValue: formatCurrencyAmount(row.metrics?.salesValue, selectedCompany),
+            lastSale: row.metrics?.lastSaleOn ? new Date(row.metrics.lastSaleOn).toLocaleDateString("en-GB") : "-",
+          })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: view.title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: breadcrumbText,
+      summary: [
+        { label: "Sales Qty", value: formatQty(report.totals?.salesQty) },
+        { label: "Sales Value", value: formatCurrencyAmount(report.totals?.salesValue, selectedCompany) },
+        { label: "Invoices", value: formatQty(report.totals?.invoiceCount) },
+        { label: "Customers", value: formatQty(report.totals?.customerCount) },
+      ],
+      columns: level === "voucher"
+        ? [
+            { key: "date", label: "Date", width: 16 },
+            { key: "voucher", label: "Voucher", width: 18 },
+            { key: "customer", label: "Customer", width: 22 },
+            { key: "item", label: "Item", width: 24 },
+            { key: "group", label: "Group", width: 18 },
+            { key: "categoryName", label: "Category", width: 18 },
+            { key: "qty", label: "Sales Qty", width: 12 },
+            { key: "rate", label: "Sale Rate", width: 14 },
+            { key: "value", label: "Sales Value", width: 16 },
+          ]
+        : [
+            { key: "name", label: "Particulars", width: 30 },
+            { key: "context", label: "Context", width: 24 },
+            { key: "invoices", label: "Invoices", width: 12 },
+            { key: "customers", label: "Customers", width: 12 },
+            { key: "salesQty", label: "Sales Qty", width: 14 },
+            { key: "averageRate", label: "Avg Sale Rate", width: 14 },
+            { key: "salesValue", label: "Sales Value", width: 16 },
+            { key: "lastSale", label: "Last Sale", width: 16 },
+          ],
+      rows: level === "voucher"
+        ? filteredRows.map((row) => ({
+            date: row.dateLabel || "-",
+            voucher: row.voucherName,
+            customer: row.customerName,
+            item: row.itemName,
+            group: row.groupName,
+            categoryName: row.categoryName,
+            qty: Number(row.qty || 0),
+            rate: Number(row.rate || 0),
+            value: Number(row.value || 0),
+          }))
+        : filteredRows.map((row) => ({
+            name: row.name,
+            context: row.secondaryLabel || "-",
+            invoices: Number(row.metrics?.invoiceCount || 0),
+            customers: Number(row.metrics?.customerCount || 0),
+            salesQty: Number(row.metrics?.salesQty || 0),
+            averageRate: Number(row.metrics?.averageRate || 0),
+            salesValue: Number(row.metrics?.salesValue || 0),
+            lastSale: row.metrics?.lastSaleOn ? new Date(row.metrics.lastSaleOn).toLocaleDateString("en-GB") : "-",
+          })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1550px] space-y-6">
@@ -239,6 +360,24 @@ export default function SalesPersonDetailPage({ level = "group" }) {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
+              </div>
+              <div className="xl:col-span-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
             </div>
           </div>

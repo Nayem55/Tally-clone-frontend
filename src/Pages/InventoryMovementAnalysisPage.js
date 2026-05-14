@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, CalendarRange, Search, TrendingDown, TrendingUp } from "lucide-react";
+import { BarChart3, CalendarRange, Download, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
@@ -244,6 +245,161 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
 
   const totals = report.totals || {};
 
+  function buildExportColumns() {
+    if (isSalesPersonView) {
+      return [
+        { key: "name", label: "Sales Person", width: 28 },
+        { key: "employeeNumber", label: "Employee No.", width: 18 },
+        { key: "department", label: "Department", width: 18 },
+        { key: "invoices", label: "Invoices", width: 12 },
+        { key: "customers", label: "Customers", width: 12 },
+        { key: "salesQty", label: "Sales Qty", width: 14 },
+        { key: "salesValue", label: "Sales Value", width: 16 },
+        { key: "avgInvoice", label: "Avg / Invoice", width: 16 },
+        { key: "lastSale", label: "Last Sale", width: 16 },
+      ];
+    }
+    const columns = [{ key: "name", label: "Particulars", width: 34 }];
+    if (!hideClosing) {
+      columns.push(
+        { key: "openingQty", label: "Opening Qty", width: 14 },
+        { key: "openingRate", label: "Opening Rate", width: 16 },
+        { key: "openingValue", label: "Opening Value", width: 16 },
+      );
+    }
+    columns.push(
+      { key: "inwardQty", label: hideClosing ? "Purchase Qty" : "Inward Qty", width: 14 },
+      { key: "inwardRate", label: hideClosing ? "Purchase Rate" : "Inward Rate", width: 16 },
+      { key: "inwardValue", label: hideClosing ? "Purchase Value" : "Inward Value", width: 16 },
+      { key: "outwardQty", label: hideClosing ? "Sales Qty" : "Outward Qty", width: 14 },
+      { key: "outwardRate", label: hideClosing ? "Sales Rate" : "Outward Rate", width: 16 },
+      { key: "outwardValue", label: hideClosing ? "Sales Value" : "Outward Value", width: 16 },
+    );
+    if (!hideClosing) {
+      columns.push(
+        { key: "closingQty", label: "Closing Qty", width: 14 },
+        { key: "closingRate", label: "Closing Rate", width: 16 },
+        { key: "closingValue", label: "Closing Value", width: 16 },
+      );
+    }
+    return columns;
+  }
+
+  function buildExportRows(numeric = false) {
+    if (isSalesPersonView) {
+      return filteredRows.map((row) => ({
+        name: row.name,
+        employeeNumber: row.metrics?.employeeNumber || "-",
+        department: row.metrics?.department || "-",
+        invoices: numeric ? Number(row.metrics?.invoiceCount || 0) : formatQty(row.metrics?.invoiceCount),
+        customers: numeric ? Number(row.metrics?.customerCount || 0) : formatQty(row.metrics?.customerCount),
+        salesQty: numeric ? Number(row.metrics?.salesQty || 0) : formatQty(row.metrics?.salesQty),
+        salesValue: numeric ? Number(row.metrics?.salesValue || 0) : formatCurrencyAmount(row.metrics?.salesValue, selectedCompany),
+        avgInvoice: numeric ? Number(row.metrics?.averageValuePerInvoice || 0) : formatCurrencyAmount(row.metrics?.averageValuePerInvoice, selectedCompany),
+        lastSale: row.metrics?.lastSaleOn ? new Date(row.metrics.lastSaleOn).toLocaleDateString("en-GB") : "-",
+      }));
+    }
+    return filteredRows.map((row) => {
+      const metrics = row.metrics || {};
+      const base = { name: row.name };
+      if (!hideClosing) {
+        base.openingQty = numeric ? Number(metrics.openingQty || 0) : formatQty(metrics.openingQty);
+        base.openingRate = numeric ? Number(metrics.openingRate || 0) : formatRate(metrics.openingRate);
+        base.openingValue = numeric ? Number(metrics.openingValue || 0) : formatCurrencyAmount(metrics.openingValue, selectedCompany);
+      }
+      base.inwardQty = numeric ? Number(metrics.inwardQty || 0) : formatQty(metrics.inwardQty);
+      base.inwardRate = numeric ? Number(metrics.inwardRate || 0) : formatRate(metrics.inwardRate);
+      base.inwardValue = numeric ? Number(metrics.inwardValue || 0) : formatCurrencyAmount(metrics.inwardValue, selectedCompany);
+      base.outwardQty = numeric ? Number(metrics.outwardQty || 0) : formatQty(metrics.outwardQty);
+      base.outwardRate = numeric ? Number(metrics.outwardRate || 0) : formatRate(metrics.outwardRate);
+      base.outwardValue = numeric ? Number(metrics.outwardValue || 0) : formatCurrencyAmount(metrics.outwardValue, selectedCompany);
+      if (!hideClosing) {
+        base.closingQty = numeric ? Number(metrics.closingQty || 0) : formatQty(metrics.closingQty);
+        base.closingRate = numeric ? Number(metrics.closingRate || 0) : formatRate(metrics.closingRate);
+        base.closingValue = numeric ? Number(metrics.closingValue || 0) : formatCurrencyAmount(metrics.closingValue, selectedCompany);
+      }
+      return base;
+    });
+  }
+
+  function handleExportPdf() {
+    const scope = [
+      requestedSalesPersonName ? `Sales Person: ${requestedSalesPersonName}` : "",
+      requestedGroupName ? `Group: ${requestedGroupName}` : "",
+      requestedCategory ? `Category: ${requestedCategory}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    exportInventoryReportPdf({
+      title: view.title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope,
+      summary: isSalesPersonView
+        ? [
+            { label: "Sales Qty", value: formatQty(totals.salesQty) },
+            { label: "Sales Value", value: formatCurrencyAmount(totals.salesValue, selectedCompany) },
+            { label: "Invoices", value: formatQty(totals.invoiceCount) },
+            { label: "Customers", value: formatQty(totals.customerCount) },
+          ]
+        : hideClosing
+        ? [
+            { label: "Purchase Qty", value: formatQty(totals.inwardQty) },
+            { label: "Purchase Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+            { label: "Sales Qty", value: formatQty(totals.outwardQty) },
+            { label: "Sales Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+          ]
+        : [
+            { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+            { label: "Inward Qty", value: formatQty(totals.inwardQty) },
+            { label: "Outward Qty", value: formatQty(totals.outwardQty) },
+            { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+          ],
+      columns: buildExportColumns(),
+      rows: buildExportRows(false),
+    });
+  }
+
+  function handleExportExcel() {
+    const scope = [
+      requestedSalesPersonName ? `Sales Person: ${requestedSalesPersonName}` : "",
+      requestedGroupName ? `Group: ${requestedGroupName}` : "",
+      requestedCategory ? `Category: ${requestedCategory}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    exportInventoryReportExcel({
+      title: view.title,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope,
+      summary: isSalesPersonView
+        ? [
+            { label: "Sales Qty", value: formatQty(totals.salesQty) },
+            { label: "Sales Value", value: formatCurrencyAmount(totals.salesValue, selectedCompany) },
+            { label: "Invoices", value: formatQty(totals.invoiceCount) },
+            { label: "Customers", value: formatQty(totals.customerCount) },
+          ]
+        : hideClosing
+        ? [
+            { label: "Purchase Qty", value: formatQty(totals.inwardQty) },
+            { label: "Purchase Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+            { label: "Sales Qty", value: formatQty(totals.outwardQty) },
+            { label: "Sales Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+          ]
+        : [
+            { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+            { label: "Inward Qty", value: formatQty(totals.inwardQty) },
+            { label: "Outward Qty", value: formatQty(totals.outwardQty) },
+            { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+          ],
+      columns: buildExportColumns(),
+      rows: buildExportRows(true),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1550px] space-y-6">
@@ -304,6 +460,22 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                onClick={handleExportPdf}
+              >
+                <Download className="h-4 w-4" />
+                Export PDF
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                onClick={handleExportExcel}
+              >
+                <Download className="h-4 w-4" />
+                Export Excel
+              </button>
               {/* {links.map((link) => (
                 <Link
                   key={link.key}

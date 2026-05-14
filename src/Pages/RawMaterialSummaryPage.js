@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarRange, PackageSearch } from "lucide-react";
+import { ArrowLeft, CalendarRange, Download, PackageSearch } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
@@ -71,6 +72,122 @@ export default function RawMaterialSummaryPage() {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: requestedItemId ? `${selectedItem?.itemName || "Raw Material"} Movement Register` : "Raw Material Summary",
+      company: { name: companyId || "-" },
+      fromDate,
+      toDate,
+      scope: requestedItemId && selectedItem ? `Raw Material: ${selectedItem.itemName}` : "",
+      summary: [
+        { label: "Opening Value", value: formatNumber(report.totals?.openingValue) },
+        { label: "Inward Value", value: formatNumber(report.totals?.inwardValue) },
+        { label: "Consumed Value", value: formatNumber(report.totals?.outwardValue) },
+        { label: "Closing Value", value: formatNumber(report.totals?.closingValue) },
+      ],
+      columns: requestedItemId
+        ? [
+            { key: "date", label: "Date", width: 18 },
+            { key: "voucher", label: "Voucher", width: 18 },
+            { key: "direction", label: "Direction", width: 14 },
+            { key: "qty", label: "Qty", width: 12 },
+            { key: "rate", label: "Rate", width: 14 },
+            { key: "value", label: "Value", width: 14 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ]
+        : [
+            { key: "itemName", label: "Raw Material", width: 34 },
+            { key: "groupName", label: "Group", width: 24 },
+            { key: "openingQty", label: "Opening Qty", width: 14 },
+            { key: "inwardQty", label: "Inward Qty", width: 14 },
+            { key: "consumedQty", label: "Consumed Qty", width: 14 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingRate", label: "Closing Rate", width: 14 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ],
+      rows: requestedItemId
+        ? (selectedItem?.history || []).map((entry) => ({
+            date: entry.dateLabel,
+            voucher: entry.voucherName,
+            direction: entry.direction,
+            qty: formatNumber(entry.qty),
+            rate: formatNumber(entry.rate),
+            value: formatNumber(entry.value),
+            closingQty: formatNumber(entry.closingQty),
+            closingValue: formatNumber(entry.closingValue),
+          }))
+        : filteredRows.map((row) => ({
+            itemName: row.itemName,
+            groupName: row.groupName || "-",
+            openingQty: formatNumber(row.openingQty),
+            inwardQty: formatNumber(row.inwardQty),
+            consumedQty: formatNumber(row.outwardQty),
+            closingQty: formatNumber(row.closingQty),
+            closingRate: formatNumber(row.closingRate),
+            closingValue: formatNumber(row.closingValue),
+          })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: requestedItemId ? `${selectedItem?.itemName || "Raw Material"} Movement Register` : "Raw Material Summary",
+      company: { name: companyId || "-" },
+      fromDate,
+      toDate,
+      scope: requestedItemId && selectedItem ? `Raw Material: ${selectedItem.itemName}` : "",
+      summary: [
+        { label: "Opening Value", value: formatNumber(report.totals?.openingValue) },
+        { label: "Inward Value", value: formatNumber(report.totals?.inwardValue) },
+        { label: "Consumed Value", value: formatNumber(report.totals?.outwardValue) },
+        { label: "Closing Value", value: formatNumber(report.totals?.closingValue) },
+      ],
+      columns: requestedItemId
+        ? [
+            { key: "date", label: "Date", width: 18 },
+            { key: "voucher", label: "Voucher", width: 18 },
+            { key: "direction", label: "Direction", width: 14 },
+            { key: "qty", label: "Qty", width: 12 },
+            { key: "rate", label: "Rate", width: 14 },
+            { key: "value", label: "Value", width: 14 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ]
+        : [
+            { key: "itemName", label: "Raw Material", width: 34 },
+            { key: "groupName", label: "Group", width: 24 },
+            { key: "openingQty", label: "Opening Qty", width: 14 },
+            { key: "inwardQty", label: "Inward Qty", width: 14 },
+            { key: "consumedQty", label: "Consumed Qty", width: 14 },
+            { key: "closingQty", label: "Closing Qty", width: 14 },
+            { key: "closingRate", label: "Closing Rate", width: 14 },
+            { key: "closingValue", label: "Closing Value", width: 16 },
+          ],
+      rows: requestedItemId
+        ? (selectedItem?.history || []).map((entry) => ({
+            date: entry.dateLabel,
+            voucher: entry.voucherName,
+            direction: entry.direction,
+            qty: Number(entry.qty || 0),
+            rate: Number(entry.rate || 0),
+            value: Number(entry.value || 0),
+            closingQty: Number(entry.closingQty || 0),
+            closingValue: Number(entry.closingValue || 0),
+          }))
+        : filteredRows.map((row) => ({
+            itemName: row.itemName,
+            groupName: row.groupName || "-",
+            openingQty: Number(row.openingQty || 0),
+            inwardQty: Number(row.inwardQty || 0),
+            consumedQty: Number(row.outwardQty || 0),
+            closingQty: Number(row.closingQty || 0),
+            closingRate: Number(row.closingRate || 0),
+            closingValue: Number(row.closingValue || 0),
+          })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -113,6 +230,24 @@ export default function RawMaterialSummaryPage() {
                   Search Raw Material
                 </label>
                 <input className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} />
+              </div>
+              <div className="md:col-span-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
             </div>
           </div>

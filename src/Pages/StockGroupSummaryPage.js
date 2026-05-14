@@ -13,6 +13,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import {
@@ -182,6 +183,85 @@ export default function StockGroupSummaryPage() {
 
   const totals = report.totals || {};
 
+  function buildScopeLabel() {
+    return activeGroup ? `${activeGroup.name} Summary` : "Top-level stock groups";
+  }
+
+  function buildExportColumns() {
+    return [
+      { key: "particulars", label: "Particulars", width: 34 },
+      { key: "openingQty", label: "Opening Qty", width: 14 },
+      { key: "openingRate", label: "Opening Rate", width: 16 },
+      { key: "openingValue", label: "Opening Value", width: 16 },
+      { key: "inwardQty", label: "Inward Qty", width: 14 },
+      { key: "inwardRate", label: "Inward Rate", width: 16 },
+      { key: "inwardValue", label: "Inward Value", width: 16 },
+      { key: "outwardQty", label: "Outward Qty", width: 14 },
+      { key: "outwardRate", label: "Outward Rate", width: 16 },
+      { key: "outwardValue", label: "Outward Value", width: 16 },
+      { key: "closingQty", label: "Closing Qty", width: 14 },
+      { key: "closingRate", label: "Closing Rate", width: 16 },
+      { key: "closingValue", label: "Closing Value", width: 16 },
+    ];
+  }
+
+  function buildExportRows(numeric = false) {
+    return visibleRows.map((row) => {
+      const metrics = row.metrics || {};
+      return {
+        particulars: row.name,
+        openingQty: numeric ? Number(metrics.openingQty || 0) : formatQty(metrics.openingQty),
+        openingRate: numeric ? Number(metrics.openingRate || 0) : formatCurrencyAmount(metrics.openingRate, selectedCompany),
+        openingValue: numeric ? Number(metrics.openingValue || 0) : formatCurrencyAmount(metrics.openingValue, selectedCompany),
+        inwardQty: numeric ? Number(metrics.inwardQty || 0) : formatQty(metrics.inwardQty),
+        inwardRate: numeric ? Number(metrics.inwardRate || 0) : formatCurrencyAmount(metrics.inwardRate, selectedCompany),
+        inwardValue: numeric ? Number(metrics.inwardValue || 0) : formatCurrencyAmount(metrics.inwardValue, selectedCompany),
+        outwardQty: numeric ? Number(metrics.outwardQty || 0) : formatQty(metrics.outwardQty),
+        outwardRate: numeric ? Number(metrics.outwardRate || 0) : formatCurrencyAmount(metrics.outwardRate, selectedCompany),
+        outwardValue: numeric ? Number(metrics.outwardValue || 0) : formatCurrencyAmount(metrics.outwardValue, selectedCompany),
+        closingQty: numeric ? Number(metrics.closingQty || 0) : formatQty(metrics.closingQty),
+        closingRate: numeric ? Number(metrics.closingRate || 0) : formatCurrencyAmount(metrics.closingRate, selectedCompany),
+        closingValue: numeric ? Number(metrics.closingValue || 0) : formatCurrencyAmount(metrics.closingValue, selectedCompany),
+      };
+    });
+  }
+
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: activeGroup ? `${activeGroup.name} Stock Group Summary` : "Stock Group Summary",
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: buildScopeLabel(),
+      summary: [
+        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+      ],
+      columns: buildExportColumns(),
+      rows: buildExportRows(false),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: activeGroup ? `${activeGroup.name} Stock Group Summary` : "Stock Group Summary",
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      scope: buildScopeLabel(),
+      summary: [
+        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+      ],
+      columns: buildExportColumns(),
+      rows: buildExportRows(true),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-[1500px] space-y-6">
@@ -242,20 +322,22 @@ export default function StockGroupSummaryPage() {
               <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
 
               <div className="flex items-end gap-3">
-                <button
-                  type="button"
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  <Filter className="h-4 w-4" />
-                  More Filters
-                </button>
 
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                  onClick={handleExportPdf}
                 >
                   <Download className="h-4 w-4" />
-                  Export
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
                 </button>
               </div>
             </div>

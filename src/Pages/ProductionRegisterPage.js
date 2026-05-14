@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Factory } from "lucide-react";
+import { Download, Factory } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import { buildAlterVoucherPath } from "../utils/voucherRoutes";
@@ -41,6 +42,60 @@ export default function ProductionRegisterPage() {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: "Production Register",
+      company: { name: companyId || "-" },
+      fromDate,
+      toDate,
+      columns: [
+        { key: "date", label: "Date", width: 16 },
+        { key: "number", label: "Production No.", width: 18 },
+        { key: "bomName", label: "BoM", width: 24 },
+        { key: "outputItemName", label: "Finished Good", width: 24 },
+        { key: "outputQty", label: "Output Qty", width: 14 },
+        { key: "effectiveRate", label: "Rate", width: 14 },
+        { key: "totalCost", label: "Total Cost", width: 16 },
+      ],
+      rows: rows.map((row) => ({
+        date: row.dateLabel,
+        number: row.number,
+        bomName: row.bomName || "-",
+        outputItemName: row.outputItemName || "-",
+        outputQty: Number(row.outputQty || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        effectiveRate: Number(row.effectiveRate || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        totalCost: Number(row.totalCost || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: "Production Register",
+      company: { name: companyId || "-" },
+      fromDate,
+      toDate,
+      columns: [
+        { key: "date", label: "Date", width: 16 },
+        { key: "number", label: "Production No.", width: 18 },
+        { key: "bomName", label: "BoM", width: 24 },
+        { key: "outputItemName", label: "Finished Good", width: 24 },
+        { key: "outputQty", label: "Output Qty", width: 14 },
+        { key: "effectiveRate", label: "Rate", width: 14 },
+        { key: "totalCost", label: "Total Cost", width: 16 },
+      ],
+      rows: rows.map((row) => ({
+        date: row.dateLabel,
+        number: row.number,
+        bomName: row.bomName || "-",
+        outputItemName: row.outputItemName || "-",
+        outputQty: Number(row.outputQty || 0),
+        effectiveRate: Number(row.effectiveRate || 0),
+        totalCost: Number(row.totalCost || 0),
+      })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -53,6 +108,24 @@ export default function ProductionRegisterPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
             <input type="date" className="rounded-xl border border-slate-200 px-4 py-3 text-sm" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+              onClick={handleExportPdf}
+            >
+              <Download className="h-4 w-4" />
+              Export PDF
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              onClick={handleExportExcel}
+            >
+              <Download className="h-4 w-4" />
+              Export Excel
+            </button>
           </div>
         </section>
 

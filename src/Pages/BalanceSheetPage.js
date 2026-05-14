@@ -11,6 +11,10 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { formatCurrencyAmount } from "../utils/currency";
+import {
+  exportBalanceSheetExcel,
+  exportBalanceSheetPdf,
+} from "../utils/financialStatementExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import {
@@ -32,29 +36,6 @@ function formatDisplayDate(value) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function exportBalanceCsv(report, company) {
-  const rows = [["Side", "Particulars", "Opening", "Closing"]];
-  ["liabilities", "assets"].forEach((side) => {
-    (report[side] || []).forEach((row) => {
-      rows.push([side, row.groupName, row.openingAmount || 0, row.amount || 0]);
-      (row.ledgers || []).forEach((ledger) => {
-        rows.push([side, `  ${ledger.ledgerName}`, ledger.openingAmount || 0, ledger.amount || 0]);
-      });
-    });
-  });
-
-  const csv = rows
-    .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `balance-sheet-${company?.name || "company"}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function GroupListColumn({ title, rows, company, onOpenGroup }) {
@@ -210,6 +191,30 @@ export default function BalanceSheetPage() {
     );
   }
 
+  function handleExportPdf() {
+    exportBalanceSheetPdf({
+      report,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      detailGroup,
+      detailSide,
+      detailRows,
+    });
+  }
+
+  function handleExportExcel() {
+    exportBalanceSheetExcel({
+      report,
+      company: selectedCompany,
+      fromDate,
+      toDate,
+      detailGroup,
+      detailSide,
+      detailRows,
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
       <div className="mx-auto max-w-[1380px]">
@@ -259,10 +264,18 @@ export default function BalanceSheetPage() {
             <button
               type="button"
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
-              onClick={() => exportBalanceCsv(report, selectedCompany)}
+              onClick={handleExportPdf}
             >
               <Download className="h-4 w-4" />
-              Export
+              Export PDF
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              onClick={handleExportExcel}
+            >
+              <Download className="h-4 w-4" />
+              Export Excel
             </button>
             <button
               type="button"

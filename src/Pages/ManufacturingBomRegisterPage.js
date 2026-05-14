@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Boxes } from "lucide-react";
+import { Boxes, Download } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
 import { navigateBackFromReport } from "../utils/reportNavigation";
@@ -35,6 +36,52 @@ export default function ManufacturingBomRegisterPage() {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
+  function handleExportPdf() {
+    exportInventoryReportPdf({
+      title: "BoM Register",
+      company: { name: companyId || "-" },
+      columns: [
+        { key: "name", label: "BoM", width: 30 },
+        { key: "finishedItemName", label: "Finished Good", width: 28 },
+        { key: "outputQty", label: "Output Qty", width: 14 },
+        { key: "components", label: "Components", width: 12 },
+        { key: "maxProducible", label: "Max Producible", width: 16 },
+        { key: "effectiveRate", label: "Effective Rate", width: 16 },
+      ],
+      rows: rows.map((row) => ({
+        name: row.name,
+        finishedItemName: row.finishedItemName || "-",
+        outputQty: formatQty(row.outputQty),
+        components: row.components?.length || 0,
+        maxProducible: formatQty(row.maxProducible),
+        effectiveRate: Number(row.effectiveRate || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      })),
+    });
+  }
+
+  function handleExportExcel() {
+    exportInventoryReportExcel({
+      title: "BoM Register",
+      company: { name: companyId || "-" },
+      columns: [
+        { key: "name", label: "BoM", width: 30 },
+        { key: "finishedItemName", label: "Finished Good", width: 28 },
+        { key: "outputQty", label: "Output Qty", width: 14 },
+        { key: "components", label: "Components", width: 12 },
+        { key: "maxProducible", label: "Max Producible", width: 16 },
+        { key: "effectiveRate", label: "Effective Rate", width: 16 },
+      ],
+      rows: rows.map((row) => ({
+        name: row.name,
+        finishedItemName: row.finishedItemName || "-",
+        outputQty: Number(row.outputQty || 0),
+        components: row.components?.length || 0,
+        maxProducible: Number(row.maxProducible || 0),
+        effectiveRate: Number(row.effectiveRate || 0),
+      })),
+    });
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -47,6 +94,24 @@ export default function ManufacturingBomRegisterPage() {
           <p className="mt-2 text-sm text-slate-500">
             Review every bill of material and see how many finished goods can be produced from current raw material stock.
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+              onClick={handleExportPdf}
+            >
+              <Download className="h-4 w-4" />
+              Export PDF
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              onClick={handleExportExcel}
+            >
+              <Download className="h-4 w-4" />
+              Export Excel
+            </button>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
