@@ -56,7 +56,18 @@ function GroupListColumn({ title, rows, company, onOpenGroup }) {
               className="flex w-full items-center justify-between gap-4 rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
               onClick={() => onOpenGroup(row)}
             >
-              <span className="font-semibold text-slate-900">{row.groupName}</span>
+              <span>
+                <span className="font-semibold text-slate-900">{row.groupName}</span>
+                {String(row.groupName || "").trim().toLowerCase() === "profit & loss" ? (
+                  <span
+                    className={`mt-1 block text-[12px] font-medium ${
+                      title === "Liabilities" ? "text-emerald-600" : "text-rose-600"
+                    }`}
+                  >
+                    {title === "Liabilities" ? "Current Profit" : "Current Loss"}
+                  </span>
+                ) : null}
+              </span>
               <span className="font-semibold text-slate-900">
                 {formatCurrencyAmount(row.amount, company)}
               </span>
@@ -171,6 +182,15 @@ export default function BalanceSheetPage() {
   });
 
   function openGroup(side, row) {
+    if (String(row.groupName || "").trim().toLowerCase() === "profit & loss") {
+      navigate(
+        `/reports/financial/profit-loss?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+        {
+          state: buildReportReturnState(location, `bs-group-${side === "assets" ? "Assets" : "Liabilities"}-${row.groupName}`),
+        },
+      );
+      return;
+    }
     navigate(
       `/reports/financial/balance-sheet?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&side=${encodeURIComponent(side)}&group=${encodeURIComponent(row.groupName)}`,
       {

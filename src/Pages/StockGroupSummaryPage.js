@@ -322,6 +322,13 @@ export default function StockGroupSummaryPage() {
               <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
 
               <div className="flex items-end gap-3">
+                {/* <button
+                  type="button"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  <Filter className="h-4 w-4" />
+                  More Filters
+                </button> */}
 
                 <button
                   type="button"

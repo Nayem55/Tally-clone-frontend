@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   BookText,
@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Wallet,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { formatCurrencyAmount } from "../utils/currency";
@@ -19,6 +20,10 @@ import {
   exportProfitLossExcel,
   exportProfitLossPdf,
 } from "../utils/financialStatementExport";
+import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
+import {
+  navigateBackFromReport,
+} from "../utils/reportNavigation";
 
 function formatLocalDateInput(date) {
   const year = date.getFullYear();
@@ -120,6 +125,9 @@ function LedgerBlock({ heading, rows, company, negative = false }) {
 }
 
 export default function ProfitLoss() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const containerRef = useRef(null);
   const today = new Date();
   const monthStart = formatLocalDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
   const monthEnd = formatLocalDateInput(
@@ -187,6 +195,23 @@ export default function ProfitLoss() {
   const expenses = Number(report.totals?.netExpense || 0);
   const netProfit = Number(report.totals?.netProfit || 0);
 
+  useReportKeyboardNav(
+    containerRef,
+    [
+      companyId,
+      fromDate,
+      toDate,
+      ledgerFilter,
+      reportView,
+      costCenter,
+      report?.totals,
+      report?.trading,
+    ],
+    {
+      onExit: () => navigateBackFromReport(navigate, location),
+    },
+  );
+
   function handleExportPdf() {
     exportProfitLossPdf({
       report,
@@ -210,12 +235,23 @@ export default function ProfitLoss() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
       <div className="mx-auto max-w-[1380px]">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_240px]">
           <div className="space-y-5">
             <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
+                {Array.isArray(location?.state?.reportTrail) && location.state.reportTrail.length > 0 ? (
+                  <button
+                    type="button"
+                    data-report-nav="true"
+                    data-focus-key="profit-loss-back"
+                    className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
+                    onClick={() => navigateBackFromReport(navigate, location)}
+                  >
+                    Back
+                  </button>
+                ) : null}
                 <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
                   Profit &amp; Loss Statement
                 </h1>
@@ -254,6 +290,8 @@ export default function ProfitLoss() {
                 </button>
                 <button
                   type="button"
+                  data-report-nav="true"
+                  data-focus-key="profit-loss-export-pdf"
                   onClick={handleExportPdf}
                   className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
                 >
@@ -262,6 +300,8 @@ export default function ProfitLoss() {
                 </button>
                 <button
                   type="button"
+                  data-report-nav="true"
+                  data-focus-key="profit-loss-export-excel"
                   onClick={handleExportExcel}
                   className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
                 >
@@ -270,6 +310,8 @@ export default function ProfitLoss() {
                 </button>
                 <button
                   type="button"
+                  data-report-nav="true"
+                  data-focus-key="profit-loss-print"
                   onClick={() => window.print()}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
                 >
@@ -298,7 +340,7 @@ export default function ProfitLoss() {
                 icon={Wallet}
                 title="Expenses"
                 value={formatCurrencyAmount(expenses, selectedCompany)}
-                helper="Indirect expenses"
+                helper="Expense nature ledgers"
                 iconClass="text-amber-500"
               />
               <MetricCard
