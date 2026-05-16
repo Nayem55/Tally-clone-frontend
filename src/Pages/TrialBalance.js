@@ -89,6 +89,29 @@ function findGroupById(nodes, targetId) {
   return findGroupPath(nodes, targetId).slice(-1)[0] || null;
 }
 
+function sumVisibleTotals(rows = []) {
+  return rows.reduce(
+    (accumulator, row) => {
+      const totals = row.totals || {};
+      accumulator.openingDebit += Number(totals.openingDebit || 0);
+      accumulator.openingCredit += Number(totals.openingCredit || 0);
+      accumulator.debit += Number(totals.debit || 0);
+      accumulator.credit += Number(totals.credit || 0);
+      accumulator.closingDebit += Number(totals.closingDebit || 0);
+      accumulator.closingCredit += Number(totals.closingCredit || 0);
+      return accumulator;
+    },
+    {
+      openingDebit: 0,
+      openingCredit: 0,
+      debit: 0,
+      credit: 0,
+      closingDebit: 0,
+      closingCredit: 0,
+    },
+  );
+}
+
 export default function TrialBalance() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -124,7 +147,7 @@ export default function TrialBalance() {
     loadReport();
   }, [companyId, fromDate, toDate]);
 
-  const summary = useMemo(() => report.totals || {}, [report.totals]);
+  const rootSummary = useMemo(() => report.totals || {}, [report.totals]);
   const ledgerOptions = useMemo(() => collectLedgerOptions(report.tree || []), [report.tree]);
   const activeGroup = useMemo(
     () => (detailGroupId ? findGroupById(report.tree || [], detailGroupId) : null),
@@ -152,6 +175,12 @@ export default function TrialBalance() {
     }
     return rows;
   }, [activeGroup, detailGroupId, report.tree, selectedGroup, selectedLedger]);
+  const summary = useMemo(() => {
+    if (detailGroupId || selectedGroup || selectedLedger) {
+      return sumVisibleTotals(topRows);
+    }
+    return rootSummary;
+  }, [detailGroupId, rootSummary, selectedGroup, selectedLedger, topRows]);
 
   useReportFocusRestore(containerRef, [topRows, companyId, fromDate, toDate, detailGroupId]);
   useReportKeyboardNav(containerRef, [topRows, detailGroupId, companyId], {
