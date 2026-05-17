@@ -168,6 +168,47 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [report.rows, search]);
+  const totals = useMemo(() => {
+    const rows = filteredRows || [];
+    if (isSalesPersonView) {
+      return rows.reduce(
+        (sum, row) => {
+          const metrics = row.metrics || {};
+          sum.salesQty += Number(metrics.salesQty || 0);
+          sum.salesValue += Number(metrics.salesValue || 0);
+          sum.invoiceCount += Number(metrics.invoiceCount || 0);
+          sum.customerCount += Number(metrics.customerCount || 0);
+          return sum;
+        },
+        { salesQty: 0, salesValue: 0, invoiceCount: 0, customerCount: 0 },
+      );
+    }
+
+    return rows.reduce(
+      (sum, row) => {
+        const metrics = row.metrics || {};
+        sum.openingQty += Number(metrics.openingQty || 0);
+        sum.openingValue += Number(metrics.openingValue || 0);
+        sum.inwardQty += Number(metrics.inwardQty || 0);
+        sum.inwardValue += Number(metrics.inwardValue || 0);
+        sum.outwardQty += Number(metrics.outwardQty || 0);
+        sum.outwardValue += Number(metrics.outwardValue || 0);
+        sum.closingQty += Number(metrics.closingQty || 0);
+        sum.closingValue += Number(metrics.closingValue || 0);
+        return sum;
+      },
+      {
+        openingQty: 0,
+        openingValue: 0,
+        inwardQty: 0,
+        inwardValue: 0,
+        outwardQty: 0,
+        outwardValue: 0,
+        closingQty: 0,
+        closingValue: 0,
+      },
+    );
+  }, [filteredRows, isSalesPersonView]);
   useReportFocusRestore(containerRef, [
     filteredRows,
     companyId,
@@ -242,8 +283,6 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   //   { key: "ledger", label: "Ledger Analysis" },
   //   { key: "sales-person", label: "Sales Person Analysis" },
   // ];
-
-  const totals = report.totals || {};
 
   function buildExportColumns() {
     if (isSalesPersonView) {

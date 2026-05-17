@@ -61,10 +61,10 @@ function GroupListColumn({ title, rows, company, onOpenGroup }) {
                 {String(row.groupName || "").trim().toLowerCase() === "profit & loss" ? (
                   <span
                     className={`mt-1 block text-[12px] font-medium ${
-                      title === "Liabilities" ? "text-emerald-600" : "text-rose-600"
+                      row.pnlType === "profit" ? "text-emerald-600" : "text-rose-600"
                     }`}
                   >
-                    {title === "Liabilities" ? "Current Profit" : "Current Loss"}
+                    {row.pnlType === "profit" ? "Current Profit" : "Current Loss"}
                   </span>
                 ) : null}
               </span>

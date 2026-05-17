@@ -115,6 +115,27 @@ export default function StockItemDetailPage() {
     () => (requestedItemId ? filteredRows.find((row) => String(row.itemId) === String(requestedItemId)) : null),
     [filteredRows, requestedItemId],
   );
+  const totals = useMemo(() => {
+    if (requestedItemId && selectedItemRow) {
+      return {
+        openingValue: Number(selectedItemRow.openingValue || 0),
+        inwardValue: Number(selectedItemRow.inwardValue || 0),
+        outwardValue: Number(selectedItemRow.outwardValue || 0),
+        closingValue: Number(selectedItemRow.closingValue || 0),
+      };
+    }
+
+    return filteredRows.reduce(
+      (sum, row) => {
+        sum.openingValue += Number(row.openingValue || 0);
+        sum.inwardValue += Number(row.inwardValue || 0);
+        sum.outwardValue += Number(row.outwardValue || 0);
+        sum.closingValue += Number(row.closingValue || 0);
+        return sum;
+      },
+      { openingValue: 0, inwardValue: 0, outwardValue: 0, closingValue: 0 },
+    );
+  }, [filteredRows, requestedItemId, selectedItemRow]);
   useReportFocusRestore(containerRef, [
     filteredRows,
     companyId,
@@ -148,10 +169,10 @@ export default function StockItemDetailPage() {
       toDate,
       scope: scopeParts.join(" | "),
       summary: [
-        { label: "Opening Value", value: formatCurrencyAmount(report.totals?.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(report.totals?.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(report.totals?.outwardValue, selectedCompany) },
-        { label: "Closing Value", value: formatCurrencyAmount(report.totals?.closingValue, selectedCompany) },
+        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
       columns: requestedItemId
         ? [
@@ -224,10 +245,10 @@ export default function StockItemDetailPage() {
       toDate,
       scope: scopeParts.join(" | "),
       summary: [
-        { label: "Opening Value", value: formatCurrencyAmount(report.totals?.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(report.totals?.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(report.totals?.outwardValue, selectedCompany) },
-        { label: "Closing Value", value: formatCurrencyAmount(report.totals?.closingValue, selectedCompany) },
+        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
       columns: requestedItemId
         ? [
@@ -382,25 +403,25 @@ export default function StockItemDetailPage() {
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">Opening Value</p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
-              {formatCurrencyAmount(report.totals?.openingValue, selectedCompany)}
+              {formatCurrencyAmount(totals.openingValue, selectedCompany)}
             </p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">Inward Value</p>
             <p className="mt-2 text-2xl font-bold text-emerald-700">
-              {formatCurrencyAmount(report.totals?.inwardValue, selectedCompany)}
+              {formatCurrencyAmount(totals.inwardValue, selectedCompany)}
             </p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">Outward Value</p>
             <p className="mt-2 text-2xl font-bold text-rose-700">
-              {formatCurrencyAmount(report.totals?.outwardValue, selectedCompany)}
+              {formatCurrencyAmount(totals.outwardValue, selectedCompany)}
             </p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">Closing Value</p>
             <p className="mt-2 text-2xl font-bold text-blue-700">
-              {formatCurrencyAmount(report.totals?.closingValue, selectedCompany)}
+              {formatCurrencyAmount(totals.closingValue, selectedCompany)}
             </p>
           </article>
         </section>
