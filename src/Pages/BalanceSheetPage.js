@@ -255,6 +255,15 @@ export default function BalanceSheetPage() {
   });
 
   function openGroup(side, row) {
+    if (String(row.groupName || "").trim().toLowerCase() === "closing stock") {
+      navigate(
+        `/reports/inventory-books/stock-group-summary?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+        {
+          state: buildReportReturnState(location, `bs-group-${side === "assets" ? "Assets" : "Liabilities"}-${row.id || row.groupName}`),
+        },
+      );
+      return;
+    }
     if (String(row.groupName || "").trim().toLowerCase() === "profit & loss") {
       navigate(
         `/reports/financial/profit-loss?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
