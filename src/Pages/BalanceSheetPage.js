@@ -38,6 +38,15 @@ function formatDisplayDate(value) {
   }).format(new Date(value));
 }
 
+function findBalanceGroupById(rows = [], targetId) {
+  for (const row of rows) {
+    if (String(row.id) === String(targetId)) return row;
+    const nested = findBalanceGroupById(row.children || [], targetId);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 function GroupListColumn({ title, rows, company, onOpenGroup }) {
   return (
     <div className="border-r border-slate-200 last:border-r-0">
@@ -48,11 +57,11 @@ function GroupListColumn({ title, rows, company, onOpenGroup }) {
       </div>
       <div className="border-t border-slate-100">
         {(rows || []).map((row) => (
-          <div key={`${title}-${row.groupName}`} className="border-b border-slate-100 px-6 py-4">
+          <div key={`${title}-${row.id || row.groupName}`} className="border-b border-slate-100 px-6 py-4">
             <button
               type="button"
               data-report-nav="true"
-              data-focus-key={`bs-group-${title}-${row.groupName}`}
+              data-focus-key={`bs-group-${title}-${row.id || row.groupName}`}
               className="flex w-full items-center justify-between gap-4 rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
               onClick={() => onOpenGroup(row)}
             >
@@ -136,6 +145,58 @@ function LedgerListPanel({ title, groupName, rows, company, onBack, onOpenLedger
   );
 }
 
+function ChildGroupPanel({ title, group, company, onBack, onOpenGroup }) {
+  return (
+    <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+        <div>
+          <h2 className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
+            {title}
+          </h2>
+          <p className="mt-2 text-[18px] font-semibold text-slate-900">{group.groupName}</p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          onClick={onBack}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+      </div>
+      <div className="border-t border-slate-100">
+        {(group.children || []).map((row) => (
+          <div key={`detail-${row.id || row.groupName}`} className="border-b border-slate-100 px-6 py-4">
+            <button
+              type="button"
+              data-report-nav="true"
+              data-focus-key={`bs-group-detail-${row.id || row.groupName}`}
+              className="flex w-full items-center justify-between gap-4 rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+              onClick={() => onOpenGroup(row)}
+            >
+              <span>
+                <span className="font-semibold text-slate-900">{row.groupName}</span>
+                {String(row.groupName || "").trim().toLowerCase() === "profit & loss" ? (
+                  <span
+                    className={`mt-1 block text-[12px] font-medium ${
+                      row.pnlType === "profit" ? "text-emerald-600" : "text-rose-600"
+                    }`}
+                  >
+                    {row.pnlType === "profit" ? "Current Profit" : "Current Loss"}
+                  </span>
+                ) : null}
+              </span>
+              <span className="font-semibold text-slate-900">
+                {formatCurrencyAmount(row.amount, company)}
+              </span>
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function BalanceSheetPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -152,7 +213,7 @@ export default function BalanceSheetPage() {
   const [report, setReport] = useState({ assets: [], liabilities: [], totals: {} });
 
   const detailSide = searchParams.get("side") || "";
-  const detailGroup = searchParams.get("group") || "";
+  const detailGroupId = searchParams.get("groupId") || "";
 
   useEffect(() => {
     async function loadReport() {
@@ -170,14 +231,26 @@ export default function BalanceSheetPage() {
     [report.totals],
   );
   const detailRows = useMemo(() => {
-    if (!detailSide || !detailGroup) return [];
+    if (!detailSide || !detailGroupId) return [];
     const source = detailSide === "assets" ? report.assets || [] : report.liabilities || [];
-    const group = source.find((row) => String(row.groupName) === String(detailGroup));
+    const group = findBalanceGroupById(source, detailGroupId);
+    if (group?.children?.length) return [];
     return group?.ledgers || [];
-  }, [detailGroup, detailSide, report.assets, report.liabilities]);
+  }, [detailGroupId, detailSide, report.assets, report.liabilities]);
+  const detailGroup = useMemo(() => {
+    if (!detailSide || !detailGroupId) return null;
+    const source = detailSide === "assets" ? report.assets || [] : report.liabilities || [];
+    return findBalanceGroupById(source, detailGroupId);
+  }, [detailGroupId, detailSide, report.assets, report.liabilities]);
+  const pageTotal = useMemo(() => {
+    if (detailGroup) {
+      return Number(detailGroup.amount || 0);
+    }
+    return netTotal;
+  }, [detailGroup, netTotal]);
 
-  useReportFocusRestore(containerRef, [companyId, fromDate, toDate, detailSide, detailGroup, report]);
-  useReportKeyboardNav(containerRef, [report, detailRows, detailSide, detailGroup], {
+  useReportFocusRestore(containerRef, [companyId, fromDate, toDate, detailSide, detailGroupId, report]);
+  useReportKeyboardNav(containerRef, [report, detailRows, detailSide, detailGroupId], {
     onExit: () => navigateBackFromReport(navigate, location),
   });
 
@@ -192,9 +265,9 @@ export default function BalanceSheetPage() {
       return;
     }
     navigate(
-      `/reports/financial/balance-sheet?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&side=${encodeURIComponent(side)}&group=${encodeURIComponent(row.groupName)}`,
+      `/reports/financial/balance-sheet?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&side=${encodeURIComponent(side)}&groupId=${encodeURIComponent(row.id)}`,
       {
-        state: buildReportReturnState(location, `bs-group-${side === "assets" ? "Assets" : "Liabilities"}-${row.groupName}`),
+        state: buildReportReturnState(location, `bs-group-${side === "assets" ? "Assets" : "Liabilities"}-${row.id || row.groupName}`),
       },
     );
   }
@@ -217,7 +290,7 @@ export default function BalanceSheetPage() {
       company: selectedCompany,
       fromDate,
       toDate,
-      detailGroup,
+      detailGroup: detailGroup?.groupName || "",
       detailSide,
       detailRows,
     });
@@ -229,7 +302,7 @@ export default function BalanceSheetPage() {
       company: selectedCompany,
       fromDate,
       toDate,
-      detailGroup,
+      detailGroup: detailGroup?.groupName || "",
       detailSide,
       detailRows,
     });
@@ -251,11 +324,11 @@ export default function BalanceSheetPage() {
               </button>
             ) : null}
             <h1 className="mt-1 text-[22px] font-semibold tracking-[-0.01em] text-slate-900">
-              {detailGroup ? `${detailGroup} Details` : "Balance Sheet"}
+              {detailGroup ? `${detailGroup.groupName} Details` : "Balance Sheet"}
             </h1>
             <div className="mt-2 text-[14px] text-slate-500">
               {detailGroup
-                ? `${detailSide === "assets" ? "Assets" : "Liabilities"} / ${detailGroup}`
+                ? `${detailSide === "assets" ? "Assets" : "Liabilities"} / ${detailGroup.groupName}`
                 : `As at ${formatDisplayDate(toDate)}`}
             </div>
           </div>
@@ -343,14 +416,24 @@ export default function BalanceSheetPage() {
 
         {detailGroup ? (
           <section className="mt-6">
-            <LedgerListPanel
-              title={detailSide === "assets" ? "Assets" : "Liabilities"}
-              groupName={detailGroup}
-              rows={detailRows}
-              company={selectedCompany}
-              onBack={() => navigateBackFromReport(navigate, location)}
-              onOpenLedger={openLedger}
-            />
+            {detailGroup.children?.length ? (
+              <ChildGroupPanel
+                title={detailSide === "assets" ? "Assets" : "Liabilities"}
+                group={detailGroup}
+                company={selectedCompany}
+                onBack={() => navigateBackFromReport(navigate, location)}
+                onOpenGroup={(row) => openGroup(detailSide, row)}
+              />
+            ) : (
+              <LedgerListPanel
+                title={detailSide === "assets" ? "Assets" : "Liabilities"}
+                groupName={detailGroup.groupName}
+                rows={detailRows}
+                company={selectedCompany}
+                onBack={() => navigateBackFromReport(navigate, location)}
+                onOpenLedger={openLedger}
+              />
+            )}
           </section>
         ) : (
           <section className="mt-6 overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
@@ -391,7 +474,7 @@ export default function BalanceSheetPage() {
             </div>
           </div>
           <div className="mt-3 text-[14px] font-semibold text-slate-900">
-            Total : {formatCurrencyAmount(netTotal, selectedCompany)}
+            Total : {formatCurrencyAmount(pageTotal, selectedCompany)}
           </div>
         </section>
       </div>
