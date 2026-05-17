@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./Component/Sidebar";
 import Navbar from "./Component/Navbar";
 import DashboardPage from "./Pages/DashboardPage";
+import ManufacturingDashboardPage from "./Pages/ManufacturingDashboardPage";
 import CompanyList from "./Pages/CompanyList";
 import Groups from "./Pages/Groups";
 import Ledgers from "./Pages/Ledgers";
@@ -62,6 +63,7 @@ function AppShell() {
         <main className="min-h-screen flex-1 bg-slate-100">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/dashboard/manufacturing" element={<ManufacturingDashboardPage />} />
             <Route path="/shortcuts" element={<ShortcutReferencePage />} />
 
             <Route path="/masters/create/group" element={<Groups />} />

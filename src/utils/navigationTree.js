@@ -10,7 +10,14 @@ import {
 } from "lucide-react";
 
 export const menuTree = [
-  { label: "Dashboard", to: "/", icon: Home },
+  {
+    label: "Dashboard",
+    icon: Home,
+    children: [
+      { label: "Regular Dashboard", to: "/" },
+      { label: "Manufacturing Dashboard", to: "/dashboard/manufacturing" },
+    ],
+  },
   { label: "All Short Keys", to: "/shortcuts", icon: ScrollText },
   {
     label: "Company",

@@ -12,7 +12,7 @@ export const voucherShortcuts = [
 ];
 
 export const sidebarParentShortcuts = [
-  { key: "d", label: "Dashboard", route: "/" },
+  { key: "d", label: "Dashboard", route: "/", scope: "Dashboard", openKey: "Dashboard" },
   { key: "y", label: "Company", scope: "Company" },
   { key: "g", label: "Create", scope: "Masters/Create", openKey: "Masters/Create" },
   { key: "m", label: "Alter", scope: "Masters/Alter", openKey: "Masters/Alter" },
@@ -59,6 +59,10 @@ export const sidebarParentShortcuts = [
 ];
 
 export const sidebarChildShortcuts = {
+  Dashboard: [
+    { key: "r", label: "Regular Dashboard", route: "/" },
+    { key: "m", label: "Manufacturing Dashboard", route: "/dashboard/manufacturing" },
+  ],
   Company: [
     { key: "c", label: "Create Company", route: "/company/create" },
     { key: "a", label: "Alter Company", route: "/company/alter" },
