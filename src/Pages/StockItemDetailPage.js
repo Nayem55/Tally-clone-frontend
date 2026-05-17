@@ -309,7 +309,7 @@ export default function StockItemDetailPage() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-8xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
             <div>

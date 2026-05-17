@@ -290,7 +290,7 @@ export default function StockGroupSummaryPage() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-[1500px] space-y-6">
+      <div className="mx-auto max-w-[1550px] space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div>
