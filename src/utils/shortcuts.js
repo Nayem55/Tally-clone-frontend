@@ -139,7 +139,6 @@ export const sidebarChildShortcuts = {
   "Reports/Inventory Books": [
     { key: "i", label: "Stock Item", route: "/reports/inventory-books/stock-item" },
     { key: "g", label: "Stock Group Summary", route: "/reports/inventory-books/stock-group-summary" },
-    { key: "r", label: "Raw Material Summary", route: "/reports/inventory-books/raw-material-summary" },
     { key: "o", label: "BoM Register", route: "/reports/inventory-books/bom-register" },
     { key: "p", label: "Production Register", route: "/reports/inventory-books/production-register" },
     { key: "c", label: "Component Consumption", route: "/reports/inventory-books/component-consumption" },

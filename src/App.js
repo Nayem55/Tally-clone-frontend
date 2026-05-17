@@ -41,7 +41,6 @@ import EmployeeCreationPage from "./Pages/EmployeeCreationPage";
 import LedgerDetailPage from "./Pages/LedgerDetailPage";
 import ManufacturingBomPage from "./Pages/ManufacturingBomPage";
 import ManufacturingVoucherPage from "./Pages/ManufacturingVoucherPage";
-import RawMaterialSummaryPage from "./Pages/RawMaterialSummaryPage";
 import ManufacturingBomRegisterPage from "./Pages/ManufacturingBomRegisterPage";
 import ProductionRegisterPage from "./Pages/ProductionRegisterPage";
 import ComponentConsumptionPage from "./Pages/ComponentConsumptionPage";
@@ -479,7 +478,7 @@ function AppShell() {
 
             <Route path="/reports/inventory-books/stock-item" element={<StockItemDetailPage />} />
             <Route path="/reports/inventory-books/stock-group-summary" element={<StockGroupSummaryPage />} />
-            <Route path="/reports/inventory-books/raw-material-summary" element={<RawMaterialSummaryPage />} />
+            <Route path="/reports/inventory-books/raw-material-summary" element={<Navigate to="/reports/inventory-books/stock-group-summary" replace />} />
             <Route path="/reports/inventory-books/bom-register" element={<ManufacturingBomRegisterPage />} />
             <Route path="/reports/inventory-books/production-register" element={<ProductionRegisterPage />} />
             <Route path="/reports/inventory-books/component-consumption" element={<ComponentConsumptionPage />} />

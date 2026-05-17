@@ -141,7 +141,7 @@ export default function ComponentConsumptionPage() {
                         data-focus-key={`cons-${row.itemId}`}
                         className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                         onClick={() =>
-                          navigate(`/reports/inventory-books/raw-material-summary?itemId=${encodeURIComponent(row.itemId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`, {
+                          navigate(`/reports/inventory-books/stock-item?itemId=${encodeURIComponent(row.itemId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`, {
                             state: buildReportReturnState(location, `cons-${row.itemId}`),
                           })
                         }

@@ -160,10 +160,6 @@ export const menuTree = [
             to: "/reports/inventory-books/stock-group-summary",
           },
           {
-            label: "Raw Material Summary",
-            to: "/reports/inventory-books/raw-material-summary",
-          },
-          {
             label: "BoM Register",
             to: "/reports/inventory-books/bom-register",
           },

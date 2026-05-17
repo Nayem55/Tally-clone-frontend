@@ -283,10 +283,10 @@ export default function ManufacturingDashboardPage() {
                     type="button"
                     className="rounded-xl border border-slate-200 px-3 py-2 text-[13px] font-medium text-blue-700"
                     onClick={() =>
-                      navigate("/reports/inventory-books/raw-material-summary")
+                      navigate("/reports/inventory-books/stock-group-summary")
                     }
                   >
-                    View Raw Materials
+                    View Stock Groups
                   </button>
                 }
               >
