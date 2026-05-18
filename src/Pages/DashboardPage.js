@@ -285,7 +285,7 @@ export default function DashboardPage() {
               />
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-[1.18fr_1.18fr_0.9fr_0.62fr]">
+            <section className="grid gap-4 xl:grid-cols-[1.18fr_1.18fr_1.18fr]">
               <PanelShell title="Sales Trend" right={<YearChip />}>
                 <TrendChart series={dashboard.salesTrend || []} color="#2a7be4" />
               </PanelShell>
@@ -324,7 +324,7 @@ export default function DashboardPage() {
                 </div>
               </PanelShell>
 
-              <PanelShell title="Top Groups / Ledgers" right={<YearChip />}>
+              {/* <PanelShell title="Top Groups / Ledgers" right={<YearChip />}>
                 <div className="mb-3 text-center text-[13px] text-slate-500">
                   For Bank Accounts (Ledger-wise)
                 </div>
@@ -340,10 +340,10 @@ export default function DashboardPage() {
                 >
                   View All
                 </button>
-              </PanelShell>
+              </PanelShell> */}
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-[0.92fr_0.92fr_1.06fr_1.08fr]">
+            <section className="grid gap-4 xl:grid-cols-[1.18fr_1.18fr_1.18fr]">
               <PanelShell title="Assets / Liabilities" right={<YearChip />}>
                 <SummaryList
                   rows={[
@@ -423,7 +423,7 @@ export default function DashboardPage() {
                 />
               </PanelShell>
 
-              <QuickShortcutsCard />
+              {/* <QuickShortcutsCard /> */}
 
               <PanelShell title="Accounting Ratios" right={<YearChip />}>
                 <SummaryList
@@ -511,7 +511,7 @@ export default function DashboardPage() {
               </PanelShell>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.15fr]">
+            {/* <section className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.15fr]">
               <ActionButton className="bg-blue-600 text-white">+ Create Voucher</ActionButton>
               <ActionButton className="bg-emerald-50 text-emerald-700">
                 Bank Reconciliation
@@ -520,7 +520,7 @@ export default function DashboardPage() {
               <ActionButton className="border border-slate-200 bg-white text-slate-700">
                 Configure Dashboard
               </ActionButton>
-            </section>
+            </section> */}
           </>
         )}
       </div>
