@@ -379,7 +379,7 @@ export default function Ledgers() {
                 inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 value={form.groupId}
                 onChange={(newValue) => setForm((current) => ({ ...current, groupId: newValue }))}
-                placeholder="Select group"
+                placeholder="Search group"
                 options={[
                   ...sortedGroups.map((group) => ({
                     value: group._id,
@@ -395,14 +395,13 @@ export default function Ledgers() {
                 onChange={(newValue) =>
                   setForm((current) => ({ ...current, priceLevelId: newValue }))
                 }
-                placeholder="No price level mapping"
-                options={[
-                  { value: "", label: "No price level mapping" },
-                  ...priceLevels.map((level) => ({
-                    value: level._id,
-                    label: `${level.code} - ${level.name}`,
-                  })),
-                ]}
+                placeholder="Search price level"
+                emptyOptionLabel="No price level mapping"
+                treatEmptyValueAsUnselected
+                options={priceLevels.map((level) => ({
+                  value: level._id,
+                  label: `${level.code} - ${level.name}`,
+                }))}
               />
 
               {isBankLedger ? (
@@ -463,7 +462,7 @@ export default function Ledgers() {
                         inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         value={form.bankDetails.bankConfigurationEnabled ? "yes" : "no"}
                         onChange={(newValue) => updateBankDetail("bankConfigurationEnabled", newValue === "yes")}
-                        placeholder="Set/Alter Bank configuration"
+                        placeholder="Search bank configuration"
                         options={[
                           { value: "no", label: "Set/Alter Bank configuration: No" },
                           { value: "yes", label: "Set/Alter Bank configuration: Yes" },
@@ -528,7 +527,7 @@ export default function Ledgers() {
                   onChange={(newValue) =>
                     setForm((current) => ({ ...current, openingDrCr: newValue }))
                   }
-                  placeholder="Select opening type"
+                  placeholder="Search opening type"
                   options={[
                     { value: "DR", label: "Debit" },
                     { value: "CR", label: "Credit" },

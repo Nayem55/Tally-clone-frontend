@@ -3,6 +3,7 @@ import { Calendar, Download, FileText, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
+import SearchableSelect from "../Component/SearchableSelect";
 import SaveVoucherModal from "../Component/SaveVoucherModal";
 import TallyDateInput from "../Component/TallyDateInput";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
@@ -172,6 +173,23 @@ export default function InventoryVoucherPage({
   const validRows = useMemo(
     () => form.rows.filter((row) => row.itemId && Number(row.qty || 0) > 0),
     [form.rows]
+  );
+  const itemOptions = useMemo(
+    () =>
+      items.map((item) => ({
+        value: item._id,
+        label: item.name,
+        meta: item.alias || item.group?.name || "",
+      })),
+    [items]
+  );
+  const godownOptions = useMemo(
+    () =>
+      godowns.map((godown) => ({
+        value: godown._id,
+        label: godown.name,
+      })),
+    [godowns]
   );
   const itemNameMap = useMemo(
     () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
@@ -556,8 +574,8 @@ export default function InventoryVoucherPage({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
-          <div className="overflow-x-auto">
+        <section className="overflow-visible rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+          <div className="overflow-x-auto overflow-y-visible">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
@@ -608,19 +626,15 @@ export default function InventoryVoucherPage({
               <tbody>
                 {form.rows.map((row, index) => (
                   <tr key={index} className="border-t border-slate-100">
-                    <td className="px-4 py-3">
-                      <select
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    <td className="relative px-4 py-3">
+                      <SearchableSelect
+                        className="w-full"
+                        inputClassName="rounded-lg border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        options={itemOptions}
                         value={row.itemId}
-                        onChange={(event) => updateRow(index, "itemId", event.target.value)}
-                      >
-                        <option value="">Select item</option>
-                        {items.map((item) => (
-                          <option key={item._id} value={item._id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "itemId", newValue)}
+                        placeholder="Search item"
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <input
@@ -640,34 +654,26 @@ export default function InventoryVoucherPage({
                         onChange={(event) => updateRow(index, "rate", event.target.value)}
                       />
                     </td>
-                    <td className="px-4 py-3">
-                      <select
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    <td className="relative px-4 py-3">
+                      <SearchableSelect
+                        className="w-full"
+                        inputClassName="rounded-lg border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        options={godownOptions}
                         value={row.godownId}
-                        onChange={(event) => updateRow(index, "godownId", event.target.value)}
-                      >
-                        <option value="">Select godown</option>
-                        {godowns.map((godown) => (
-                          <option key={godown._id} value={godown._id}>
-                            {godown.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(newValue) => updateRow(index, "godownId", newValue)}
+                        placeholder="Search godown"
+                      />
                     </td>
                     {mode === "transfer" ? (
-                      <td className="px-4 py-3">
-                        <select
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                      <td className="relative px-4 py-3">
+                        <SearchableSelect
+                          className="w-full"
+                          inputClassName="rounded-lg border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          options={godownOptions}
                           value={row.toGodownId}
-                          onChange={(event) => updateRow(index, "toGodownId", event.target.value)}
-                        >
-                          <option value="">Select target godown</option>
-                          {godowns.map((godown) => (
-                            <option key={godown._id} value={godown._id}>
-                              {godown.name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(newValue) => updateRow(index, "toGodownId", newValue)}
+                          placeholder="Search target godown"
+                        />
                       </td>
                     ) : null}
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">

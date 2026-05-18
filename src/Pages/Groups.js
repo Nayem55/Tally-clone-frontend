@@ -384,20 +384,16 @@ export default function Groups({
                 onChange={(newValue) =>
                   setForm((current) => ({ ...current, parentId: newValue }))
                 }
-                placeholder={stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group"}
-                options={[
-                  {
-                    value: "",
-                    label: stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group",
-                  },
-                  ...visibleGroups
-                    .filter((group) => group._id !== form.id)
-                    .filter((group) => !stockOnly || String(group._id) !== String(rootParentOption?._id))
-                    .map((group) => ({
-                      value: group._id,
-                      label: group.name,
-                    })),
-                ]}
+                placeholder={stockOnly ? "Search stock parent group" : "Search parent group"}
+                emptyOptionLabel={stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group"}
+                treatEmptyValueAsUnselected
+                options={visibleGroups
+                  .filter((group) => group._id !== form.id)
+                  .filter((group) => !stockOnly || String(group._id) !== String(rootParentOption?._id))
+                  .map((group) => ({
+                    value: group._id,
+                    label: group.name,
+                  }))}
               />
 
               {!stockOnly ? (

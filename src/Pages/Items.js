@@ -464,14 +464,11 @@ export default function Items() {
                 inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 value={form.groupId}
                 onChange={(newValue) => setForm((current) => ({ ...current, groupId: newValue }))}
-                placeholder="Select stock group"
-                options={[
-                  { value: "", label: "Select stock group" },
-                  ...stockGroups.map((group) => ({
-                    value: group.id,
-                    label: group.name,
-                  })),
-                ]}
+                placeholder="Search stock group"
+                options={stockGroups.map((group) => ({
+                  value: group.id,
+                  label: group.name,
+                }))}
               />
             </div>
             <div>
@@ -497,14 +494,11 @@ export default function Items() {
                     stockCategory: selected?.name || "",
                   }));
                 }}
-                placeholder="Select stock category"
-                options={[
-                  { value: "", label: "Select stock category" },
-                  ...categoryOptions.map((option) => ({
-                    value: option._id,
-                    label: option.name,
-                  })),
-                ]}
+                placeholder="Search stock category"
+                options={categoryOptions.map((option) => ({
+                  value: option._id,
+                  label: option.name,
+                }))}
               />
             </div>
             <div>
@@ -530,14 +524,11 @@ export default function Items() {
                     unitOfMeasure: selected?.name || "",
                   }));
                 }}
-                placeholder="Select unit"
-                options={[
-                  { value: "", label: "Select unit" },
-                  ...unitOptions.map((option) => ({
-                    value: option._id,
-                    label: option.name,
-                  })),
-                ]}
+                placeholder="Search unit"
+                options={unitOptions.map((option) => ({
+                  value: option._id,
+                  label: option.name,
+                }))}
               />
             </div>
             <SearchableSelect
@@ -545,7 +536,7 @@ export default function Items() {
               inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               value={form.inventoryRole}
               onChange={(newValue) => setForm((current) => ({ ...current, inventoryRole: newValue }))}
-              placeholder="Select inventory role"
+              placeholder="Search inventory role"
               options={[
                 { value: "standard", label: "Trading / Standard Item" },
                 { value: "raw_material", label: "Raw Material" },
@@ -605,14 +596,11 @@ export default function Items() {
                 inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 value={form.godownId}
                 onChange={(newValue) => setForm((current) => ({ ...current, godownId: newValue }))}
-                placeholder="Select default godown"
-                options={[
-                  { value: "", label: "Select default godown" },
-                  ...godowns.map((godown) => ({
-                    value: godown._id,
-                    label: godown.name,
-                  })),
-                ]}
+                placeholder="Search default godown"
+                options={godowns.map((godown) => ({
+                  value: godown._id,
+                  label: godown.name,
+                }))}
               />
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">

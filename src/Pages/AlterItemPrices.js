@@ -282,7 +282,7 @@ export default function AlterItemPrices() {
                     setBulkGroupId(newValue);
                     setBulkItemId("");
                   }}
-                  placeholder="Select Group"
+                  placeholder="Search group"
                   options={groups.map((group) => ({
                     value: String(group.id || group._id),
                     label: group.name,
@@ -308,7 +308,7 @@ export default function AlterItemPrices() {
                       );
                     }
                   }}
-                  placeholder="Select Item"
+                  placeholder="Search item"
                   options={items.map((item) => ({
                     value: String(item._id),
                     label: item.group?.name

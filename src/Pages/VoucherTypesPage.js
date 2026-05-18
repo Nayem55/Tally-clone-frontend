@@ -215,7 +215,7 @@ export default function VoucherTypesPage({
                 onChange={(newValue) =>
                   setForm((current) => ({ ...current, category: newValue }))
                 }
-                placeholder="Select category"
+                placeholder="Search category"
                 options={[
                   { value: "ACCOUNTING", label: "Accounting" },
                   { value: "INVENTORY", label: "Inventory" },

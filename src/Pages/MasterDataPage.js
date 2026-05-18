@@ -288,21 +288,15 @@ export default function MasterDataPage({
                       key={field.name}
                       className="w-full"
                       inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:ring-2 focus:ring-blue-100"
-                      options={[
-                        {
-                          value: "",
-                          label: field.placeholder || `Select ${field.label}`,
-                        },
-                        ...options.map((option) => ({
-                          value: option._id || option.id,
-                          label: option.name,
-                        })),
-                      ]}
+                      options={options.map((option) => ({
+                        value: option._id || option.id,
+                        label: option.name,
+                      }))}
                       value={form[field.name]}
                       onChange={(newValue) =>
                         setForm((current) => ({ ...current, [field.name]: newValue }))
                       }
-                      placeholder={field.placeholder || `Select ${field.label}`}
+                      placeholder={field.placeholder || `Search ${field.label}`}
                     />
                   );
                 }

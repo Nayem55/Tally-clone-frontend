@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Factory, Save } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
+import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
@@ -164,6 +165,15 @@ export default function ManufacturingVoucherPage({
   const activeBom = useMemo(
     () => boms.find((row) => row._id === form.bomId) || null,
     [boms, form.bomId],
+  );
+  const bomOptions = useMemo(
+    () =>
+      boms.map((row) => ({
+        value: row._id,
+        label: row.name,
+        meta: row.finishedItemName || "",
+      })),
+    [boms],
   );
 
   function navigateToCreateBom() {
@@ -387,27 +397,22 @@ export default function ManufacturingVoucherPage({
                       Add+
                     </button>
                   </div>
-                  <select
-                    data-enter-nav="true"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                  <SearchableSelect
+                    className="w-full"
+                    inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    options={bomOptions}
                     value={form.bomId}
-                    onChange={(event) => {
-                      const selected = boms.find((row) => row._id === event.target.value);
+                    onChange={(newValue) => {
+                      const selected = boms.find((row) => row._id === newValue);
                       setForm((current) => ({
                         ...current,
-                        bomId: event.target.value,
+                        bomId: newValue,
                         bomName: selected?.name || "",
                         outputQty: selected?.outputQty || 1,
                       }));
                     }}
-                  >
-                    <option value="">Select BoM</option>
-                    {boms.map((row) => (
-                      <option key={row._id} value={row._id}>
-                        {row.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Search BoM"
+                  />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">Output Quantity</label>

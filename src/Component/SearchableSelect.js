@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Search } from "lucide-react";
 
 export default function SearchableSelect({
@@ -6,6 +7,9 @@ export default function SearchableSelect({
   value,
   onChange,
   placeholder = "Search...",
+  emptyOptionLabel = "",
+  emptyOptionMeta = "",
+  treatEmptyValueAsUnselected = false,
   className = "",
   inputClassName = "",
   optionClassName = "",
@@ -15,14 +19,26 @@ export default function SearchableSelect({
 }) {
   const rootRef = useRef(null);
   const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [dropdownStyle, setDropdownStyle] = useState({});
 
-  const selectedOption = useMemo(
-    () => options.find((option) => String(option.value) === String(value)) || null,
-    [options, value]
-  );
+  const normalizedOptions = useMemo(() => {
+    if (!emptyOptionLabel) return options;
+    return [
+      { value: "", label: emptyOptionLabel, meta: emptyOptionMeta, isEmptyOption: true },
+      ...options.filter((option) => String(option.value) !== ""),
+    ];
+  }, [emptyOptionLabel, emptyOptionMeta, options]);
+
+  const selectedOption = useMemo(() => {
+    if ((value === "" || value === null || value === undefined) && treatEmptyValueAsUnselected) {
+      return null;
+    }
+    return normalizedOptions.find((option) => String(option.value) === String(value)) || null;
+  }, [normalizedOptions, treatEmptyValueAsUnselected, value]);
 
   useEffect(() => {
     setQuery(selectedOption?.label || "");
@@ -30,7 +46,10 @@ export default function SearchableSelect({
 
   useEffect(() => {
     function handleOutside(event) {
-      if (!rootRef.current?.contains(event.target)) {
+      if (
+        !rootRef.current?.contains(event.target) &&
+        !dropdownRef.current?.contains(event.target)
+      ) {
         setOpen(false);
         setQuery(selectedOption?.label || "");
       }
@@ -42,16 +61,42 @@ export default function SearchableSelect({
 
   const filteredOptions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return options;
-    return options.filter((option) => {
+    if (!normalized) return normalizedOptions;
+    return normalizedOptions.filter((option) => {
       const haystack = `${option.label} ${option.meta || ""}`.toLowerCase();
       return haystack.includes(normalized);
     });
-  }, [options, query]);
+  }, [normalizedOptions, query]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function updateDropdownPosition() {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setDropdownStyle({
+        position: "fixed",
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 120,
+      });
+    }
+
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [open, query, filteredOptions.length]);
 
   function selectOption(option) {
     onChange(option?.value || "");
-    setQuery(option?.label || "");
+    setQuery(
+      option?.isEmptyOption && treatEmptyValueAsUnselected ? "" : option?.label || ""
+    );
     setOpen(false);
     setHighlightedIndex(0);
   }
@@ -125,8 +170,13 @@ export default function SearchableSelect({
         </button>
       </div>
 
-      {open ? (
-        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-auto border border-[#bfcad8] bg-white shadow-xl">
+      {open
+        ? createPortal(
+        <div
+          ref={dropdownRef}
+          style={dropdownStyle}
+          className="max-h-60 overflow-auto border border-[#bfcad8] bg-white shadow-xl"
+        >
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, index) => (
               <button
@@ -148,8 +198,10 @@ export default function SearchableSelect({
           ) : (
             <div className="px-3 py-3 text-[13px] text-slate-500">No matches found.</div>
           )}
-        </div>
-      ) : null}
+        </div>,
+        document.body
+      )
+        : null}
     </div>
   );
 }
