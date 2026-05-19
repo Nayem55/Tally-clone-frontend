@@ -529,8 +529,8 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
                       {!partyMovementMode ? (
                         <th className="px-4 py-3 text-center font-medium" colSpan={3}>Opening</th>
                       ) : null}
-                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Net Purchase / Inwards</th>
-                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Net Sales / Outwards</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Inwards</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Outwards</th>
                       {!partyMovementMode ? (
                         <th className="px-4 py-3 text-center font-medium" colSpan={3}>Closing</th>
                       ) : null}

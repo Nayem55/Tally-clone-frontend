@@ -382,8 +382,8 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
                   <th rowSpan={2} className="px-4 py-3 text-left font-medium">Particulars</th>
-                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Net Purchase / Inwards</th>
-                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Net Sales / Outwards</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Inwards</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Outwards</th>
                 </tr>
                 <tr>
                   <th className="px-4 py-3 text-right font-medium">Quantity</th>

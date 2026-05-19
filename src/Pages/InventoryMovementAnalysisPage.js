@@ -717,10 +717,10 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                     </th>
                   ) : null}
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    {hideClosing ? "Net Purchase" : "Net Purchase / Inwards"}
+                    {hideClosing ? "Inwards" : "Inwards"}
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    {hideClosing ? "Net Sales" : "Net Sales / Outwards"}
+                    {hideClosing ? "Outwards" : "Outwards"}
                   </th>
                   {!hideClosing ? (
                     <th colSpan="3" className="px-4 py-3 text-center font-medium">

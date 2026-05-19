@@ -394,14 +394,14 @@ export default function StockGroupSummaryPage() {
 
           <SummaryCard
             icon={<TrendingUp className="h-5 w-5" />}
-            title="Total Net Purchase / Inwards"
+            title="Total Inwards"
             value={formatCurrencyAmount(totals.inwardValue, selectedCompany)}
             qty={`${formatQty(totals.inwardQty)} pcs`}
           />
 
           <SummaryCard
             icon={<TrendingDown className="h-5 w-5" />}
-            title="Total Net Sales / Outwards"
+            title="Total Outwards"
             value={formatCurrencyAmount(totals.outwardValue, selectedCompany)}
             qty={`${formatQty(totals.outwardQty)} pcs`}
           />
@@ -447,10 +447,10 @@ export default function StockGroupSummaryPage() {
                     Opening Balance
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    Net Purchase / Inwards
+                    Inwards
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    Net Sales / Outwards
+                    Outwards
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
                     Closing Balance
