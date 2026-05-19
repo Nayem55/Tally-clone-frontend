@@ -71,6 +71,13 @@ function SummaryCard({ title, value, tone = "text-slate-900", icon }) {
   );
 }
 
+const NET_PURCHASE_QTY = "Net Purchase / Inward Qty";
+const NET_PURCHASE_RATE = "Net Purchase / Inward Rate";
+const NET_PURCHASE_VALUE = "Net Purchase / Inward Value";
+const NET_SALES_QTY = "Net Sales / Outward Qty";
+const NET_SALES_RATE = "Net Sales / Outward Rate";
+const NET_SALES_VALUE = "Net Sales / Outward Value";
+
 export default function PartyMovementDetailPage({ level = "ledger" }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -179,42 +186,29 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
       toDate,
       scope: [groupName, ledgerName].filter(Boolean).join(" | "),
       summary: [
-        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
-        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+        { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Net Movement", value: formatCurrencyAmount(Number(totals.inwardValue || 0) - Number(totals.outwardValue || 0), selectedCompany) },
       ],
       columns: [
         { key: "name", label: "Particulars", width: 28 },
         { key: "context", label: "Context", width: 22 },
-        { key: "openingQty", label: "Opening Qty", width: 14 },
-        { key: "openingRate", label: "Opening Rate", width: 16 },
-        { key: "openingValue", label: "Opening Value", width: 16 },
-        { key: "inwardQty", label: "Inward Qty", width: 14 },
-        { key: "inwardRate", label: "Inward Rate", width: 16 },
-        { key: "inwardValue", label: "Inward Value", width: 16 },
-        { key: "outwardQty", label: "Outward Qty", width: 14 },
-        { key: "outwardRate", label: "Outward Rate", width: 16 },
-        { key: "outwardValue", label: "Outward Value", width: 16 },
-        { key: "closingQty", label: "Closing Qty", width: 14 },
-        { key: "closingRate", label: "Closing Rate", width: 16 },
-        { key: "closingValue", label: "Closing Value", width: 16 },
+        { key: "inwardQty", label: NET_PURCHASE_QTY, width: 14 },
+        { key: "inwardRate", label: NET_PURCHASE_RATE, width: 16 },
+        { key: "inwardValue", label: NET_PURCHASE_VALUE, width: 16 },
+        { key: "outwardQty", label: NET_SALES_QTY, width: 14 },
+        { key: "outwardRate", label: NET_SALES_RATE, width: 16 },
+        { key: "outwardValue", label: NET_SALES_VALUE, width: 16 },
       ],
       rows: filteredRows.map((row) => ({
         name: row.name,
         context: row.secondaryLabel || groupName || "-",
-        openingQty: formatQty(row.metrics?.openingQty),
-        openingRate: formatRate(row.metrics?.openingRate),
-        openingValue: formatCurrencyAmount(row.metrics?.openingValue, selectedCompany),
         inwardQty: formatQty(row.metrics?.inwardQty),
         inwardRate: formatRate(row.metrics?.inwardRate),
         inwardValue: formatCurrencyAmount(row.metrics?.inwardValue, selectedCompany),
         outwardQty: formatQty(row.metrics?.outwardQty),
         outwardRate: formatRate(row.metrics?.outwardRate),
         outwardValue: formatCurrencyAmount(row.metrics?.outwardValue, selectedCompany),
-        closingQty: formatQty(row.metrics?.closingQty),
-        closingRate: formatRate(row.metrics?.closingRate),
-        closingValue: formatCurrencyAmount(row.metrics?.closingValue, selectedCompany),
       })),
     });
   }
@@ -227,42 +221,29 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
       toDate,
       scope: [groupName, ledgerName].filter(Boolean).join(" | "),
       summary: [
-        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
-        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+        { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Net Movement", value: formatCurrencyAmount(Number(totals.inwardValue || 0) - Number(totals.outwardValue || 0), selectedCompany) },
       ],
       columns: [
         { key: "name", label: "Particulars", width: 28 },
         { key: "context", label: "Context", width: 22 },
-        { key: "openingQty", label: "Opening Qty", width: 14 },
-        { key: "openingRate", label: "Opening Rate", width: 16 },
-        { key: "openingValue", label: "Opening Value", width: 16 },
-        { key: "inwardQty", label: "Inward Qty", width: 14 },
-        { key: "inwardRate", label: "Inward Rate", width: 16 },
-        { key: "inwardValue", label: "Inward Value", width: 16 },
-        { key: "outwardQty", label: "Outward Qty", width: 14 },
-        { key: "outwardRate", label: "Outward Rate", width: 16 },
-        { key: "outwardValue", label: "Outward Value", width: 16 },
-        { key: "closingQty", label: "Closing Qty", width: 14 },
-        { key: "closingRate", label: "Closing Rate", width: 16 },
-        { key: "closingValue", label: "Closing Value", width: 16 },
+        { key: "inwardQty", label: NET_PURCHASE_QTY, width: 14 },
+        { key: "inwardRate", label: NET_PURCHASE_RATE, width: 16 },
+        { key: "inwardValue", label: NET_PURCHASE_VALUE, width: 16 },
+        { key: "outwardQty", label: NET_SALES_QTY, width: 14 },
+        { key: "outwardRate", label: NET_SALES_RATE, width: 16 },
+        { key: "outwardValue", label: NET_SALES_VALUE, width: 16 },
       ],
       rows: filteredRows.map((row) => ({
         name: row.name,
         context: row.secondaryLabel || groupName || "-",
-        openingQty: Number(row.metrics?.openingQty || 0),
-        openingRate: Number(row.metrics?.openingRate || 0),
-        openingValue: Number(row.metrics?.openingValue || 0),
         inwardQty: Number(row.metrics?.inwardQty || 0),
         inwardRate: Number(row.metrics?.inwardRate || 0),
         inwardValue: Number(row.metrics?.inwardValue || 0),
         outwardQty: Number(row.metrics?.outwardQty || 0),
         outwardRate: Number(row.metrics?.outwardRate || 0),
         outwardValue: Number(row.metrics?.outwardValue || 0),
-        closingQty: Number(row.metrics?.closingQty || 0),
-        closingRate: Number(row.metrics?.closingRate || 0),
-        closingValue: Number(row.metrics?.closingValue || 0),
       })),
     });
   }
@@ -367,26 +348,20 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
-            title="Opening Value"
-            value={formatCurrencyAmount(totals.openingValue, selectedCompany)}
-            icon={<TrendingUp className="h-5 w-5" />}
-            tone="text-slate-900"
-          />
-          <SummaryCard
-            title="Inward Value"
+            title={NET_PURCHASE_VALUE}
             value={formatCurrencyAmount(totals.inwardValue, selectedCompany)}
             icon={<TrendingUp className="h-5 w-5" />}
             tone="text-emerald-700"
           />
           <SummaryCard
-            title="Outward Value"
+            title={NET_SALES_VALUE}
             value={formatCurrencyAmount(totals.outwardValue, selectedCompany)}
             icon={<TrendingDown className="h-5 w-5" />}
             tone="text-rose-700"
           />
           <SummaryCard
-            title="Closing Value"
-            value={formatCurrencyAmount(totals.closingValue, selectedCompany)}
+            title="Net Movement"
+            value={formatCurrencyAmount(Number(totals.inwardValue || 0) - Number(totals.outwardValue || 0), selectedCompany)}
             icon={<BarChart3 className="h-5 w-5" />}
             tone="text-slate-900"
           />
@@ -407,18 +382,10 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
                   <th rowSpan={2} className="px-4 py-3 text-left font-medium">Particulars</th>
-                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Opening Balance</th>
-                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Inwards</th>
-                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Outwards</th>
-                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Closing Balance</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Net Purchase / Inwards</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Net Sales / Outwards</th>
                 </tr>
                 <tr>
-                  <th className="px-4 py-3 text-right font-medium">Quantity</th>
-                  <th className="px-4 py-3 text-right font-medium">Rate</th>
-                  <th className="px-4 py-3 text-right font-medium">Value</th>
-                  <th className="px-4 py-3 text-right font-medium">Quantity</th>
-                  <th className="px-4 py-3 text-right font-medium">Rate</th>
-                  <th className="px-4 py-3 text-right font-medium">Value</th>
                   <th className="px-4 py-3 text-right font-medium">Quantity</th>
                   <th className="px-4 py-3 text-right font-medium">Rate</th>
                   <th className="px-4 py-3 text-right font-medium">Value</th>
@@ -448,18 +415,12 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
                         </p>
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-right">{formatQty(row.metrics?.openingQty)}</td>
-                    <td className="px-4 py-3 text-right">{formatRate(row.metrics?.openingRate)}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.openingValue, selectedCompany)}</td>
                     <td className="px-4 py-3 text-right text-emerald-700">{formatQty(row.metrics?.inwardQty)}</td>
                     <td className="px-4 py-3 text-right">{formatRate(row.metrics?.inwardRate)}</td>
                     <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.inwardValue, selectedCompany)}</td>
                     <td className="px-4 py-3 text-right text-rose-700">{formatQty(row.metrics?.outwardQty)}</td>
                     <td className="px-4 py-3 text-right">{formatRate(row.metrics?.outwardRate)}</td>
                     <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.outwardValue, selectedCompany)}</td>
-                    <td className="px-4 py-3 text-right">{formatQty(row.metrics?.closingQty)}</td>
-                    <td className="px-4 py-3 text-right">{formatRate(row.metrics?.closingRate)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.metrics?.closingValue, selectedCompany)}</td>
                   </tr>
                 ))}
               </tbody>

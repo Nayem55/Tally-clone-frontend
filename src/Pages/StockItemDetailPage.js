@@ -20,6 +20,13 @@ function formatNumber(value) {
   });
 }
 
+const NET_PURCHASE_QTY = "Net Purchase / Inward Qty";
+const NET_PURCHASE_RATE = "Net Purchase / Inward Rate";
+const NET_PURCHASE_VALUE = "Net Purchase / Inward Value";
+const NET_SALES_QTY = "Net Sales / Outward Qty";
+const NET_SALES_RATE = "Net Sales / Outward Rate";
+const NET_SALES_VALUE = "Net Sales / Outward Value";
+
 export default function StockItemDetailPage({ partyMovementMode = false }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,15 +117,24 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
       }
       return true;
     });
-    if (!query) return scopedRows;
-    return scopedRows.filter(
+    const relevantRows = partyMovementMode
+      ? scopedRows.filter((row) => {
+          const inwardQty = Number(row.inwardQty || 0);
+          const inwardValue = Number(row.inwardValue || 0);
+          const outwardQty = Number(row.outwardQty || 0);
+          const outwardValue = Number(row.outwardValue || 0);
+          return inwardQty !== 0 || inwardValue !== 0 || outwardQty !== 0 || outwardValue !== 0;
+        })
+      : scopedRows;
+    if (!query) return relevantRows;
+    return relevantRows.filter(
       (row) =>
         row.itemName?.toLowerCase().includes(query) ||
         row.alias?.toLowerCase().includes(query) ||
         row.groupName?.toLowerCase().includes(query) ||
         row.stockCategoryName?.toLowerCase().includes(query)
     );
-  }, [report.rows, requestedCategory, requestedGroupId, requestedItemId, search]);
+  }, [partyMovementMode, report.rows, requestedCategory, requestedGroupId, requestedItemId, search]);
   const selectedItemRow = useMemo(
     () => (requestedItemId ? filteredRows.find((row) => String(row.itemId) === String(requestedItemId)) : null),
     [filteredRows, requestedItemId],
@@ -179,10 +195,14 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
       toDate,
       scope: scopeParts.join(" | "),
       summary: [
-        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
-        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+        { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        ...(partyMovementMode
+          ? []
+          : [{ label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) }]),
+        ...(partyMovementMode
+          ? []
+          : [{ label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) }]),
       ],
       columns: requestedItemId
         ? [
@@ -192,24 +212,30 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
             { key: "qty", label: "Qty", width: 12 },
             { key: "rate", label: "Rate", width: 14 },
             { key: "value", label: "Value", width: 16 },
-            { key: "closingQty", label: "Closing Qty", width: 14 },
-            { key: "closingValue", label: "Closing Value", width: 16 },
+            ...(partyMovementMode ? [] : [
+              { key: "closingQty", label: "Closing Qty", width: 14 },
+              { key: "closingValue", label: "Closing Value", width: 16 },
+            ]),
           ]
         : [
             { key: "item", label: "Item", width: 34 },
             { key: "group", label: "Group", width: 24 },
-            { key: "openingQty", label: "Opening Qty", width: 14 },
-            { key: "openingRate", label: "Opening Rate", width: 16 },
-            { key: "openingValue", label: "Opening Value", width: 16 },
-            { key: "inwardQty", label: "Inward Qty", width: 14 },
-            { key: "inwardRate", label: "Inward Rate", width: 16 },
-            { key: "inwardValue", label: "Inward Value", width: 16 },
-            { key: "outwardQty", label: "Outward Qty", width: 14 },
-            { key: "outwardRate", label: "Outward Rate", width: 16 },
-            { key: "outwardValue", label: "Outward Value", width: 16 },
-            { key: "closingQty", label: "Closing Qty", width: 14 },
-            { key: "closingRate", label: "Closing Rate", width: 16 },
-            { key: "closingValue", label: "Closing Value", width: 16 },
+            ...(partyMovementMode ? [] : [
+              { key: "openingQty", label: "Opening Qty", width: 14 },
+              { key: "openingRate", label: "Opening Rate", width: 16 },
+              { key: "openingValue", label: "Opening Value", width: 16 },
+            ]),
+            { key: "inwardQty", label: NET_PURCHASE_QTY, width: 14 },
+            { key: "inwardRate", label: NET_PURCHASE_RATE, width: 16 },
+            { key: "inwardValue", label: NET_PURCHASE_VALUE, width: 16 },
+            { key: "outwardQty", label: NET_SALES_QTY, width: 14 },
+            { key: "outwardRate", label: NET_SALES_RATE, width: 16 },
+            { key: "outwardValue", label: NET_SALES_VALUE, width: 16 },
+            ...(partyMovementMode ? [] : [
+              { key: "closingQty", label: "Closing Qty", width: 14 },
+              { key: "closingRate", label: "Closing Rate", width: 16 },
+              { key: "closingValue", label: "Closing Value", width: 16 },
+            ]),
           ],
       rows: requestedItemId
         ? (selectedItemRow?.history || []).map((entry) => ({
@@ -219,24 +245,36 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
             qty: formatNumber(entry.qty),
             rate: formatCurrencyAmount(entry.rate, selectedCompany),
             value: formatCurrencyAmount(entry.value, selectedCompany),
-            closingQty: formatNumber(entry.closingQty),
-            closingValue: formatCurrencyAmount(entry.closingValue, selectedCompany),
+            ...(partyMovementMode
+              ? {}
+              : {
+                  closingQty: formatNumber(entry.closingQty),
+                  closingValue: formatCurrencyAmount(entry.closingValue, selectedCompany),
+                }),
           }))
         : filteredRows.map((row) => ({
             item: row.itemName,
             group: row.groupName || "-",
-            openingQty: formatNumber(row.openingQty),
-            openingRate: formatCurrencyAmount(row.openingRate, selectedCompany),
-            openingValue: formatCurrencyAmount(row.openingValue, selectedCompany),
+            ...(partyMovementMode
+              ? {}
+              : {
+                  openingQty: formatNumber(row.openingQty),
+                  openingRate: formatCurrencyAmount(row.openingRate, selectedCompany),
+                  openingValue: formatCurrencyAmount(row.openingValue, selectedCompany),
+                }),
             inwardQty: formatNumber(row.inwardQty),
             inwardRate: formatCurrencyAmount(row.inwardRate, selectedCompany),
             inwardValue: formatCurrencyAmount(row.inwardValue, selectedCompany),
             outwardQty: formatNumber(row.outwardQty),
             outwardRate: formatCurrencyAmount(row.outwardRate, selectedCompany),
             outwardValue: formatCurrencyAmount(row.outwardValue, selectedCompany),
-            closingQty: formatNumber(row.closingQty),
-            closingRate: formatCurrencyAmount(row.closingRate, selectedCompany),
-            closingValue: formatCurrencyAmount(row.closingValue, selectedCompany),
+            ...(partyMovementMode
+              ? {}
+              : {
+                  closingQty: formatNumber(row.closingQty),
+                  closingRate: formatCurrencyAmount(row.closingRate, selectedCompany),
+                  closingValue: formatCurrencyAmount(row.closingValue, selectedCompany),
+                }),
           })),
     });
   }
@@ -257,10 +295,14 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
       toDate,
       scope: scopeParts.join(" | "),
       summary: [
-        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
-        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
+        { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        ...(partyMovementMode
+          ? []
+          : [{ label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) }]),
+        ...(partyMovementMode
+          ? []
+          : [{ label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) }]),
       ],
       columns: requestedItemId
         ? [
@@ -270,24 +312,30 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
             { key: "qty", label: "Qty", width: 12 },
             { key: "rate", label: "Rate", width: 14 },
             { key: "value", label: "Value", width: 16 },
-            { key: "closingQty", label: "Closing Qty", width: 14 },
-            { key: "closingValue", label: "Closing Value", width: 16 },
+            ...(partyMovementMode ? [] : [
+              { key: "closingQty", label: "Closing Qty", width: 14 },
+              { key: "closingValue", label: "Closing Value", width: 16 },
+            ]),
           ]
         : [
             { key: "item", label: "Item", width: 34 },
             { key: "group", label: "Group", width: 24 },
-            { key: "openingQty", label: "Opening Qty", width: 14 },
-            { key: "openingRate", label: "Opening Rate", width: 16 },
-            { key: "openingValue", label: "Opening Value", width: 16 },
-            { key: "inwardQty", label: "Inward Qty", width: 14 },
-            { key: "inwardRate", label: "Inward Rate", width: 16 },
-            { key: "inwardValue", label: "Inward Value", width: 16 },
-            { key: "outwardQty", label: "Outward Qty", width: 14 },
-            { key: "outwardRate", label: "Outward Rate", width: 16 },
-            { key: "outwardValue", label: "Outward Value", width: 16 },
-            { key: "closingQty", label: "Closing Qty", width: 14 },
-            { key: "closingRate", label: "Closing Rate", width: 16 },
-            { key: "closingValue", label: "Closing Value", width: 16 },
+            ...(partyMovementMode ? [] : [
+              { key: "openingQty", label: "Opening Qty", width: 14 },
+              { key: "openingRate", label: "Opening Rate", width: 16 },
+              { key: "openingValue", label: "Opening Value", width: 16 },
+            ]),
+            { key: "inwardQty", label: NET_PURCHASE_QTY, width: 14 },
+            { key: "inwardRate", label: NET_PURCHASE_RATE, width: 16 },
+            { key: "inwardValue", label: NET_PURCHASE_VALUE, width: 16 },
+            { key: "outwardQty", label: NET_SALES_QTY, width: 14 },
+            { key: "outwardRate", label: NET_SALES_RATE, width: 16 },
+            { key: "outwardValue", label: NET_SALES_VALUE, width: 16 },
+            ...(partyMovementMode ? [] : [
+              { key: "closingQty", label: "Closing Qty", width: 14 },
+              { key: "closingRate", label: "Closing Rate", width: 16 },
+              { key: "closingValue", label: "Closing Value", width: 16 },
+            ]),
           ],
       rows: requestedItemId
         ? (selectedItemRow?.history || []).map((entry) => ({
@@ -297,24 +345,36 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
             qty: Number(entry.qty || 0),
             rate: Number(entry.rate || 0),
             value: Number(entry.value || 0),
-            closingQty: Number(entry.closingQty || 0),
-            closingValue: Number(entry.closingValue || 0),
+            ...(partyMovementMode
+              ? {}
+              : {
+                  closingQty: Number(entry.closingQty || 0),
+                  closingValue: Number(entry.closingValue || 0),
+                }),
           }))
         : filteredRows.map((row) => ({
             item: row.itemName,
             group: row.groupName || "-",
-            openingQty: Number(row.openingQty || 0),
-            openingRate: Number(row.openingRate || 0),
-            openingValue: Number(row.openingValue || 0),
+            ...(partyMovementMode
+              ? {}
+              : {
+                  openingQty: Number(row.openingQty || 0),
+                  openingRate: Number(row.openingRate || 0),
+                  openingValue: Number(row.openingValue || 0),
+                }),
             inwardQty: Number(row.inwardQty || 0),
             inwardRate: Number(row.inwardRate || 0),
             inwardValue: Number(row.inwardValue || 0),
             outwardQty: Number(row.outwardQty || 0),
             outwardRate: Number(row.outwardRate || 0),
             outwardValue: Number(row.outwardValue || 0),
-            closingQty: Number(row.closingQty || 0),
-            closingRate: Number(row.closingRate || 0),
-            closingValue: Number(row.closingValue || 0),
+            ...(partyMovementMode
+              ? {}
+              : {
+                  closingQty: Number(row.closingQty || 0),
+                  closingRate: Number(row.closingRate || 0),
+                  closingValue: Number(row.closingValue || 0),
+                }),
           })),
     });
   }
@@ -421,31 +481,35 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className={`grid gap-4 md:grid-cols-2 ${partyMovementMode ? "xl:grid-cols-2" : "xl:grid-cols-4"}`}>
+          {!partyMovementMode ? (
+            <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <p className="text-sm font-medium text-slate-500">Opening Value</p>
+              <p className="mt-2 text-2xl font-bold text-slate-900">
+                {formatCurrencyAmount(totals.openingValue, selectedCompany)}
+              </p>
+            </article>
+          ) : null}
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Opening Value</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
-              {formatCurrencyAmount(totals.openingValue, selectedCompany)}
-            </p>
-          </article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Inward Value</p>
+            <p className="text-sm font-medium text-slate-500">{NET_PURCHASE_VALUE}</p>
             <p className="mt-2 text-2xl font-bold text-emerald-700">
               {formatCurrencyAmount(totals.inwardValue, selectedCompany)}
             </p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Outward Value</p>
+            <p className="text-sm font-medium text-slate-500">{NET_SALES_VALUE}</p>
             <p className="mt-2 text-2xl font-bold text-rose-700">
               {formatCurrencyAmount(totals.outwardValue, selectedCompany)}
             </p>
           </article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Closing Value</p>
-            <p className="mt-2 text-2xl font-bold text-blue-700">
-              {formatCurrencyAmount(totals.closingValue, selectedCompany)}
-            </p>
-          </article>
+          {!partyMovementMode ? (
+            <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <p className="text-sm font-medium text-slate-500">Closing Value</p>
+              <p className="mt-2 text-2xl font-bold text-blue-700">
+                {formatCurrencyAmount(totals.closingValue, selectedCompany)}
+              </p>
+            </article>
+          ) : null}
         </section>
 
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
@@ -457,29 +521,41 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
           <div className="overflow-x-auto">
             {!requestedItemId ? (
               <>
-                <table className="min-w-[1700px] text-sm">
+                <table className={`text-sm ${partyMovementMode ? "min-w-[1220px]" : "min-w-[1700px]"}`}>
                   <thead className="bg-slate-50 text-left text-slate-500">
                     <tr>
                       <th className="px-4 py-3 font-medium" rowSpan={2}>Item</th>
                       <th className="px-4 py-3 font-medium" rowSpan={2}>Group</th>
-                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Opening</th>
-                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Inwards</th>
-                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Outwards</th>
-                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Closing</th>
+                      {!partyMovementMode ? (
+                        <th className="px-4 py-3 text-center font-medium" colSpan={3}>Opening</th>
+                      ) : null}
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Net Purchase / Inwards</th>
+                      <th className="px-4 py-3 text-center font-medium" colSpan={3}>Net Sales / Outwards</th>
+                      {!partyMovementMode ? (
+                        <th className="px-4 py-3 text-center font-medium" colSpan={3}>Closing</th>
+                      ) : null}
                     </tr>
                     <tr>
+                      {!partyMovementMode ? (
+                        <>
+                          <th className="px-4 py-3 text-right font-medium">Qty</th>
+                          <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
+                          <th className="px-4 py-3 text-right font-medium">Amount</th>
+                        </>
+                      ) : null}
                       <th className="px-4 py-3 text-right font-medium">Qty</th>
                       <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
                       <th className="px-4 py-3 text-right font-medium">Amount</th>
                       <th className="px-4 py-3 text-right font-medium">Qty</th>
                       <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
                       <th className="px-4 py-3 text-right font-medium">Amount</th>
-                      <th className="px-4 py-3 text-right font-medium">Qty</th>
-                      <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
-                      <th className="px-4 py-3 text-right font-medium">Amount</th>
-                      <th className="px-4 py-3 text-right font-medium">Qty</th>
-                      <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
-                      <th className="px-4 py-3 text-right font-medium">Amount</th>
+                      {!partyMovementMode ? (
+                        <>
+                          <th className="px-4 py-3 text-right font-medium">Qty</th>
+                          <th className="px-4 py-3 text-right font-medium">Effective Rate</th>
+                          <th className="px-4 py-3 text-right font-medium">Amount</th>
+                        </>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -493,7 +569,7 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
                             className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                               onClick={() =>
                                 navigate(
-                                    `/reports/inventory-books/stock-item?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}${requestedSalesPersonId ? `&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}` : ""}${requestedGroupId ? `&groupId=${encodeURIComponent(requestedGroupId)}` : ""}${requestedCategory ? `&category=${encodeURIComponent(requestedCategory)}` : ""}&itemId=${encodeURIComponent(row.itemId)}`,
+                                    `${partyMovementMode ? "/reports/inventory-books/party-item-movement" : "/reports/inventory-books/stock-item"}?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}${requestedSalesPersonId ? `&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}` : ""}${requestedGroupId ? `&groupId=${encodeURIComponent(requestedGroupId)}` : ""}${requestedCategory ? `&category=${encodeURIComponent(requestedCategory)}` : ""}${requestedPartyGroupId ? `&partyGroupId=${encodeURIComponent(requestedPartyGroupId)}&partyGroupName=${encodeURIComponent(requestedPartyGroupName)}` : ""}${requestedPartyLedgerId ? `&partyLedgerId=${encodeURIComponent(requestedPartyLedgerId)}&partyLedgerName=${encodeURIComponent(requestedPartyLedgerName)}` : ""}&itemId=${encodeURIComponent(row.itemId)}`,
                                     {
                                       state: buildReportReturnState(location, `sid-item-${row.itemId}`),
                                     },
@@ -507,18 +583,26 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
                           </button>
                         </td>
                         <td className="px-4 py-3 text-slate-500">{row.groupName || "-"}</td>
-                        <td className="px-4 py-3 text-right">{formatNumber(row.openingQty)}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingRate, selectedCompany)}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingValue, selectedCompany)}</td>
+                        {!partyMovementMode ? (
+                          <>
+                            <td className="px-4 py-3 text-right">{formatNumber(row.openingQty)}</td>
+                            <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingRate, selectedCompany)}</td>
+                            <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.openingValue, selectedCompany)}</td>
+                          </>
+                        ) : null}
                         <td className="px-4 py-3 text-right text-emerald-700">{formatNumber(row.inwardQty)}</td>
                         <td className="px-4 py-3 text-right text-emerald-700">{formatCurrencyAmount(row.inwardRate, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right text-emerald-700">{formatCurrencyAmount(row.inwardValue, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right text-rose-700">{formatNumber(row.outwardQty)}</td>
                         <td className="px-4 py-3 text-right text-rose-700">{formatCurrencyAmount(row.outwardRate, selectedCompany)}</td>
                         <td className="px-4 py-3 text-right text-rose-700">{formatCurrencyAmount(row.outwardValue, selectedCompany)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatNumber(row.closingQty)}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingRate, selectedCompany)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.closingValue, selectedCompany)}</td>
+                        {!partyMovementMode ? (
+                          <>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatNumber(row.closingQty)}</td>
+                            <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.closingRate, selectedCompany)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.closingValue, selectedCompany)}</td>
+                          </>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -540,7 +624,7 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
                       </div>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="min-w-[980px] text-sm">
+                      <table className={`text-sm ${partyMovementMode ? "min-w-[760px]" : "min-w-[980px]"}`}>
                         <thead className="bg-slate-50 text-left text-slate-500">
                           <tr>
                             <th className="px-3 py-2 font-medium">Date</th>
@@ -549,8 +633,12 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
                             <th className="px-3 py-2 text-right font-medium">Qty</th>
                             <th className="px-3 py-2 text-right font-medium">Rate</th>
                             <th className="px-3 py-2 text-right font-medium">Value</th>
-                            <th className="px-3 py-2 text-right font-medium">Closing Qty</th>
-                            <th className="px-3 py-2 text-right font-medium">Closing Value</th>
+                            {!partyMovementMode ? (
+                              <>
+                                <th className="px-3 py-2 text-right font-medium">Closing Qty</th>
+                                <th className="px-3 py-2 text-right font-medium">Closing Value</th>
+                              </>
+                            ) : null}
                             <th className="px-3 py-2 text-right font-medium">Edit</th>
                           </tr>
                         </thead>
@@ -571,8 +659,12 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
                               <td className="px-3 py-2 text-right">{formatNumber(entry.qty)}</td>
                               <td className="px-3 py-2 text-right">{formatCurrencyAmount(entry.rate, selectedCompany)}</td>
                               <td className="px-3 py-2 text-right">{formatCurrencyAmount(entry.value, selectedCompany)}</td>
-                              <td className="px-3 py-2 text-right">{formatNumber(entry.closingQty)}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrencyAmount(entry.closingValue, selectedCompany)}</td>
+                              {!partyMovementMode ? (
+                                <>
+                                  <td className="px-3 py-2 text-right">{formatNumber(entry.closingQty)}</td>
+                                  <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrencyAmount(entry.closingValue, selectedCompany)}</td>
+                                </>
+                              ) : null}
                               <td className="px-3 py-2 text-right">
                                 <button
                                   type="button"

@@ -86,13 +86,20 @@ function SummaryCard({ title, value, tone = "text-slate-900", icon }) {
   );
 }
 
+const NET_PURCHASE_QTY = "Net Purchase / Qty";
+const NET_PURCHASE_RATE = "Net Purchase / Rate";
+const NET_PURCHASE_VALUE = "Net Purchase / Value";
+const NET_SALES_QTY = "Net Sales / Qty";
+const NET_SALES_RATE = "Net Sales / Rate";
+const NET_SALES_VALUE = "Net Sales / Value";
+
 export default function InventoryMovementAnalysisPage({ variant = "stock-group" }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const view = VARIANTS[variant] || VARIANTS["stock-group"];
-  const hideClosing = false;
+  const hideClosing = variant === "group" || variant === "ledger";
   const isSalesPersonView = variant === "sales-person";
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
@@ -291,8 +298,8 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
         { key: "department", label: "Department", width: 18 },
         { key: "invoices", label: "Invoices", width: 12 },
         { key: "customers", label: "Customers", width: 12 },
-        { key: "salesQty", label: "Sales Qty", width: 14 },
-        { key: "salesValue", label: "Sales Value", width: 16 },
+        { key: "salesQty", label: NET_SALES_QTY, width: 14 },
+        { key: "salesValue", label: NET_SALES_VALUE, width: 16 },
         { key: "avgInvoice", label: "Avg / Invoice", width: 16 },
         { key: "lastSale", label: "Last Sale", width: 16 },
       ];
@@ -306,12 +313,12 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
       );
     }
     columns.push(
-      { key: "inwardQty", label: hideClosing ? "Purchase Qty" : "Inward Qty", width: 14 },
-      { key: "inwardRate", label: hideClosing ? "Purchase Rate" : "Inward Rate", width: 16 },
-      { key: "inwardValue", label: hideClosing ? "Purchase Value" : "Inward Value", width: 16 },
-      { key: "outwardQty", label: hideClosing ? "Sales Qty" : "Outward Qty", width: 14 },
-      { key: "outwardRate", label: hideClosing ? "Sales Rate" : "Outward Rate", width: 16 },
-      { key: "outwardValue", label: hideClosing ? "Sales Value" : "Outward Value", width: 16 },
+      { key: "inwardQty", label: NET_PURCHASE_QTY, width: 14 },
+      { key: "inwardRate", label: NET_PURCHASE_RATE, width: 16 },
+      { key: "inwardValue", label: NET_PURCHASE_VALUE, width: 16 },
+      { key: "outwardQty", label: NET_SALES_QTY, width: 14 },
+      { key: "outwardRate", label: NET_SALES_RATE, width: 16 },
+      { key: "outwardValue", label: NET_SALES_VALUE, width: 16 },
     );
     if (!hideClosing) {
       columns.push(
@@ -376,22 +383,22 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
       scope,
       summary: isSalesPersonView
         ? [
-            { label: "Sales Qty", value: formatQty(totals.salesQty) },
-            { label: "Sales Value", value: formatCurrencyAmount(totals.salesValue, selectedCompany) },
+            { label: NET_SALES_QTY, value: formatQty(totals.salesQty) },
+            { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.salesValue, selectedCompany) },
             { label: "Invoices", value: formatQty(totals.invoiceCount) },
             { label: "Customers", value: formatQty(totals.customerCount) },
           ]
         : hideClosing
         ? [
-            { label: "Purchase Qty", value: formatQty(totals.inwardQty) },
-            { label: "Purchase Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-            { label: "Sales Qty", value: formatQty(totals.outwardQty) },
-            { label: "Sales Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+            { label: NET_PURCHASE_QTY, value: formatQty(totals.inwardQty) },
+            { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+            { label: NET_SALES_QTY, value: formatQty(totals.outwardQty) },
+            { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
           ]
         : [
             { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-            { label: "Inward Qty", value: formatQty(totals.inwardQty) },
-            { label: "Outward Qty", value: formatQty(totals.outwardQty) },
+            { label: NET_PURCHASE_QTY, value: formatQty(totals.inwardQty) },
+            { label: NET_SALES_QTY, value: formatQty(totals.outwardQty) },
             { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
           ],
       columns: buildExportColumns(),
@@ -415,22 +422,22 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
       scope,
       summary: isSalesPersonView
         ? [
-            { label: "Sales Qty", value: formatQty(totals.salesQty) },
-            { label: "Sales Value", value: formatCurrencyAmount(totals.salesValue, selectedCompany) },
+            { label: NET_SALES_QTY, value: formatQty(totals.salesQty) },
+            { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.salesValue, selectedCompany) },
             { label: "Invoices", value: formatQty(totals.invoiceCount) },
             { label: "Customers", value: formatQty(totals.customerCount) },
           ]
         : hideClosing
         ? [
-            { label: "Purchase Qty", value: formatQty(totals.inwardQty) },
-            { label: "Purchase Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-            { label: "Sales Qty", value: formatQty(totals.outwardQty) },
-            { label: "Sales Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+            { label: NET_PURCHASE_QTY, value: formatQty(totals.inwardQty) },
+            { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+            { label: NET_SALES_QTY, value: formatQty(totals.outwardQty) },
+            { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
           ]
         : [
             { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-            { label: "Inward Qty", value: formatQty(totals.inwardQty) },
-            { label: "Outward Qty", value: formatQty(totals.outwardQty) },
+            { label: NET_PURCHASE_QTY, value: formatQty(totals.inwardQty) },
+            { label: NET_SALES_QTY, value: formatQty(totals.outwardQty) },
             { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
           ],
       columns: buildExportColumns(),
@@ -453,8 +460,8 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 {requestedSalesPersonId
                   ? `Tracking item movement sold by ${requestedSalesPersonName || "the selected sales person"} through group, category, item, and voucher drilldown.`
                   : hideClosing
-                    ? "Review purchase and sales movement by account group or ledger with the same drill flow as the stock analysis screens."
-                    : "Review opening, inwards, outwards, and closing movement without leaving inventory books."}
+                      ? "Review net purchase and net sales movement by account group or ledger with the same drill flow as the stock analysis screens."
+                      : "Review opening, net purchase / inward, net sales / outward, and closing movement without leaving inventory books."}
               </p>
             </div>
 
@@ -545,13 +552,13 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
           {isSalesPersonView ? (
             <>
               <SummaryCard
-                title="Sales Qty"
+                title={NET_SALES_QTY}
                 value={formatQty(totals.salesQty)}
                 icon={<TrendingDown className="h-5 w-5" />}
                 tone="text-rose-700"
               />
               <SummaryCard
-                title="Sales Value"
+                title={NET_SALES_VALUE}
                 value={formatCurrencyAmount(totals.salesValue, selectedCompany)}
                 icon={<BarChart3 className="h-5 w-5" />}
                 tone="text-blue-700"
@@ -572,25 +579,25 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
           ) : hideClosing ? (
             <>
               <SummaryCard
-                title="Purchase Qty"
+                title={NET_PURCHASE_QTY}
                 value={formatQty(totals.inwardQty)}
                 icon={<TrendingUp className="h-5 w-5" />}
                 tone="text-emerald-700"
               />
               <SummaryCard
-                title="Purchase Value"
+                title={NET_PURCHASE_VALUE}
                 value={formatCurrencyAmount(totals.inwardValue, selectedCompany)}
                 icon={<TrendingUp className="h-5 w-5" />}
                 tone="text-emerald-700"
               />
               <SummaryCard
-                title="Sales Qty"
+                title={NET_SALES_QTY}
                 value={formatQty(totals.outwardQty)}
                 icon={<TrendingDown className="h-5 w-5" />}
                 tone="text-rose-700"
               />
               <SummaryCard
-                title="Sales Value"
+                title={NET_SALES_VALUE}
                 value={formatCurrencyAmount(totals.outwardValue, selectedCompany)}
                 icon={<TrendingDown className="h-5 w-5" />}
                 tone="text-rose-700"
@@ -604,13 +611,13 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 icon={<BarChart3 className="h-5 w-5" />}
               />
               <SummaryCard
-                title="Total Inward"
+                title="Total Net Purchase / Inward"
                 value={formatQty(totals.inwardQty)}
                 icon={<TrendingUp className="h-5 w-5" />}
                 tone="text-emerald-700"
               />
               <SummaryCard
-                title="Total Outward"
+                title="Total Net Sales / Outward"
                 value={formatQty(totals.outwardQty)}
                 icon={<TrendingDown className="h-5 w-5" />}
                 tone="text-rose-700"
@@ -632,8 +639,8 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
               {isSalesPersonView
                 ? "Track sales employee performance using saved salesperson selections from sales vouchers."
                 : hideClosing
-                ? "Purchase and sales movement for the selected analysis view."
-                : "Opening, inwards, outwards, and closing balance for the selected analysis view."}
+                  ? "Net purchase and net sales movement for the selected analysis view."
+                  : "Opening, net purchase / inward, net sales / outward, and closing balance for the selected analysis view."}
             </p>
           </div>
 
@@ -647,8 +654,8 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                     <th className="px-4 py-3 text-left font-medium">Department</th>
                     <th className="px-4 py-3 text-right font-medium">Invoices</th>
                     <th className="px-4 py-3 text-right font-medium">Customers</th>
-                    <th className="px-4 py-3 text-right font-medium">Sales Qty</th>
-                    <th className="px-4 py-3 text-right font-medium">Sales Value</th>
+                    <th className="px-4 py-3 text-right font-medium">{NET_SALES_QTY}</th>
+                    <th className="px-4 py-3 text-right font-medium">{NET_SALES_VALUE}</th>
                     <th className="px-4 py-3 text-right font-medium">Avg / Invoice</th>
                     <th className="px-4 py-3 text-right font-medium">Last Sale</th>
                   </tr>
@@ -710,10 +717,10 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                     </th>
                   ) : null}
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    {hideClosing ? "Purchase" : "Inwards"}
+                    {hideClosing ? "Net Purchase" : "Net Purchase / Inwards"}
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    {hideClosing ? "Sales" : "Outwards"}
+                    {hideClosing ? "Net Sales" : "Net Sales / Outwards"}
                   </th>
                   {!hideClosing ? (
                     <th colSpan="3" className="px-4 py-3 text-center font-medium">

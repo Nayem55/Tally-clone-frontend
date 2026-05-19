@@ -64,6 +64,10 @@ export default function StockSummary() {
 
   const totals = report.totals || {};
   const selectedCompany = companies.find((company) => company._id === companyId);
+  const INWARD_QTY_LABEL = "Net Purchase / Inward Quantity";
+  const OUTWARD_QTY_LABEL = "Net Sales / Outward Quantity";
+  const INWARD_QTY_SHORT = "Net Purchase / Inward Qty";
+  const OUTWARD_QTY_SHORT = "Net Sales / Outward Qty";
 
   function handleExportPdf() {
     exportInventoryReportPdf({
@@ -73,8 +77,8 @@ export default function StockSummary() {
       toDate: "",
       summary: [
         { label: "Opening Quantity", value: formatNumber(totals.openingQty) },
-        { label: "Inward Quantity", value: formatNumber(totals.inwardQty) },
-        { label: "Outward Quantity", value: formatNumber(totals.outwardQty) },
+        { label: INWARD_QTY_LABEL, value: formatNumber(totals.inwardQty) },
+        { label: OUTWARD_QTY_LABEL, value: formatNumber(totals.outwardQty) },
         { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
       columns: [
@@ -82,8 +86,8 @@ export default function StockSummary() {
         { key: "alias", label: "Alias", width: 22 },
         { key: "groupName", label: "Group", width: 24 },
         { key: "openingQty", label: "Opening Qty", width: 16 },
-        { key: "inwardQty", label: "Inward Qty", width: 16 },
-        { key: "outwardQty", label: "Outward Qty", width: 16 },
+        { key: "inwardQty", label: INWARD_QTY_SHORT, width: 16 },
+        { key: "outwardQty", label: OUTWARD_QTY_SHORT, width: 16 },
         { key: "closingQty", label: "Closing Qty", width: 16 },
         { key: "closingRate", label: "Closing Rate", width: 18 },
         { key: "closingValue", label: "Closing Value", width: 18 },
@@ -110,8 +114,8 @@ export default function StockSummary() {
       toDate: "",
       summary: [
         { label: "Opening Quantity", value: formatNumber(totals.openingQty) },
-        { label: "Inward Quantity", value: formatNumber(totals.inwardQty) },
-        { label: "Outward Quantity", value: formatNumber(totals.outwardQty) },
+        { label: INWARD_QTY_LABEL, value: formatNumber(totals.inwardQty) },
+        { label: OUTWARD_QTY_LABEL, value: formatNumber(totals.outwardQty) },
         { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
       columns: [
@@ -119,8 +123,8 @@ export default function StockSummary() {
         { key: "alias", label: "Alias", width: 22 },
         { key: "groupName", label: "Group", width: 24 },
         { key: "openingQty", label: "Opening Qty", width: 16 },
-        { key: "inwardQty", label: "Inward Qty", width: 16 },
-        { key: "outwardQty", label: "Outward Qty", width: 16 },
+        { key: "inwardQty", label: INWARD_QTY_SHORT, width: 16 },
+        { key: "outwardQty", label: OUTWARD_QTY_SHORT, width: 16 },
         { key: "closingQty", label: "Closing Qty", width: 16 },
         { key: "closingRate", label: "Closing Rate", width: 18 },
         { key: "closingValue", label: "Closing Value", width: 18 },
@@ -202,11 +206,11 @@ export default function StockSummary() {
             <p className="mt-2 text-3xl font-bold text-slate-900">{formatNumber(totals.openingQty)}</p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Inward Quantity</p>
+            <p className="text-sm font-medium text-slate-500">{INWARD_QTY_LABEL}</p>
             <p className="mt-2 text-3xl font-bold text-emerald-700">{formatNumber(totals.inwardQty)}</p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Outward Quantity</p>
+            <p className="text-sm font-medium text-slate-500">{OUTWARD_QTY_LABEL}</p>
             <p className="mt-2 text-3xl font-bold text-rose-700">{formatNumber(totals.outwardQty)}</p>
           </article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -226,8 +230,8 @@ export default function StockSummary() {
                   <th className="px-4 py-3 font-medium">Item</th>
                   <th className="px-4 py-3 font-medium">Group</th>
                   <th className="px-4 py-3 text-right font-medium">Opening Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Inward Qty</th>
-                  <th className="px-4 py-3 text-right font-medium">Outward Qty</th>
+                  <th className="px-4 py-3 text-right font-medium">{INWARD_QTY_SHORT}</th>
+                  <th className="px-4 py-3 text-right font-medium">{OUTWARD_QTY_SHORT}</th>
                   <th className="px-4 py-3 text-right font-medium">Closing Qty</th>
                   <th className="px-4 py-3 text-right font-medium">Closing Rate</th>
                   <th className="px-4 py-3 text-right font-medium">Closing Value</th>

@@ -35,6 +35,13 @@ function formatRate(value) {
   });
 }
 
+const NET_PURCHASE_QTY = "Net Purchase / Inward Qty";
+const NET_PURCHASE_RATE = "Net Purchase / Inward Rate";
+const NET_PURCHASE_VALUE = "Net Purchase / Inward Value";
+const NET_SALES_QTY = "Net Sales / Outward Qty";
+const NET_SALES_RATE = "Net Sales / Outward Rate";
+const NET_SALES_VALUE = "Net Sales / Outward Value";
+
 function startOfMonth() {
   const now = new Date();
   const year = now.getFullYear();
@@ -219,12 +226,12 @@ export default function StockGroupSummaryPage() {
       { key: "openingQty", label: "Opening Qty", width: 14 },
       { key: "openingRate", label: "Opening Rate", width: 16 },
       { key: "openingValue", label: "Opening Value", width: 16 },
-      { key: "inwardQty", label: "Inward Qty", width: 14 },
-      { key: "inwardRate", label: "Inward Rate", width: 16 },
-      { key: "inwardValue", label: "Inward Value", width: 16 },
-      { key: "outwardQty", label: "Outward Qty", width: 14 },
-      { key: "outwardRate", label: "Outward Rate", width: 16 },
-      { key: "outwardValue", label: "Outward Value", width: 16 },
+      { key: "inwardQty", label: NET_PURCHASE_QTY, width: 14 },
+      { key: "inwardRate", label: NET_PURCHASE_RATE, width: 16 },
+      { key: "inwardValue", label: NET_PURCHASE_VALUE, width: 16 },
+      { key: "outwardQty", label: NET_SALES_QTY, width: 14 },
+      { key: "outwardRate", label: NET_SALES_RATE, width: 16 },
+      { key: "outwardValue", label: NET_SALES_VALUE, width: 16 },
       { key: "closingQty", label: "Closing Qty", width: 14 },
       { key: "closingRate", label: "Closing Rate", width: 16 },
       { key: "closingValue", label: "Closing Value", width: 16 },
@@ -261,8 +268,8 @@ export default function StockGroupSummaryPage() {
       scope: buildScopeLabel(),
       summary: [
         { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
         { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
       columns: buildExportColumns(),
@@ -279,8 +286,8 @@ export default function StockGroupSummaryPage() {
       scope: buildScopeLabel(),
       summary: [
         { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
-        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
-        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: NET_PURCHASE_VALUE, value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: NET_SALES_VALUE, value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
         { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
       columns: buildExportColumns(),
@@ -306,7 +313,7 @@ export default function StockGroupSummaryPage() {
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
                 {activeGroup
                   ? "Drill into the selected stock group without loading nested rows inside the same table."
-                  : "Review stock groups with opening, inwards, outwards, and closing balances."}
+                  : "Review stock groups with opening, net purchase / inward, net sales / outward, and closing balances."}
               </p>
               {activeGroup ? (
                 <button
@@ -387,14 +394,14 @@ export default function StockGroupSummaryPage() {
 
           <SummaryCard
             icon={<TrendingUp className="h-5 w-5" />}
-            title="Total Inwards"
+            title="Total Net Purchase / Inwards"
             value={formatCurrencyAmount(totals.inwardValue, selectedCompany)}
             qty={`${formatQty(totals.inwardQty)} pcs`}
           />
 
           <SummaryCard
             icon={<TrendingDown className="h-5 w-5" />}
-            title="Total Outwards"
+            title="Total Net Sales / Outwards"
             value={formatCurrencyAmount(totals.outwardValue, selectedCompany)}
             qty={`${formatQty(totals.outwardQty)} pcs`}
           />
@@ -440,10 +447,10 @@ export default function StockGroupSummaryPage() {
                     Opening Balance
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    Inwards
+                    Net Purchase / Inwards
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
-                    Outwards
+                    Net Sales / Outwards
                   </th>
                   <th colSpan="3" className="px-4 py-3 text-center font-medium">
                     Closing Balance

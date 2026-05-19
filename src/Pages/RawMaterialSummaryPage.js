@@ -66,6 +66,8 @@ export default function RawMaterialSummaryPage() {
     () => (requestedItemId ? filteredRows.find((row) => String(row.itemId) === String(requestedItemId)) : null),
     [filteredRows, requestedItemId],
   );
+  const INWARD_VALUE_LABEL = "Net Purchase / Inward Value";
+  const INWARD_QTY_LABEL = "Net Purchase / Inward Qty";
 
   useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, requestedItemId]);
   useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, requestedItemId], {
@@ -81,7 +83,7 @@ export default function RawMaterialSummaryPage() {
       scope: requestedItemId && selectedItem ? `Raw Material: ${selectedItem.itemName}` : "",
       summary: [
         { label: "Opening Value", value: formatNumber(report.totals?.openingValue) },
-        { label: "Inward Value", value: formatNumber(report.totals?.inwardValue) },
+        { label: INWARD_VALUE_LABEL, value: formatNumber(report.totals?.inwardValue) },
         { label: "Consumed Value", value: formatNumber(report.totals?.outwardValue) },
         { label: "Closing Value", value: formatNumber(report.totals?.closingValue) },
       ],
@@ -100,7 +102,7 @@ export default function RawMaterialSummaryPage() {
             { key: "itemName", label: "Raw Material", width: 34 },
             { key: "groupName", label: "Group", width: 24 },
             { key: "openingQty", label: "Opening Qty", width: 14 },
-            { key: "inwardQty", label: "Inward Qty", width: 14 },
+            { key: "inwardQty", label: INWARD_QTY_LABEL, width: 14 },
             { key: "consumedQty", label: "Consumed Qty", width: 14 },
             { key: "closingQty", label: "Closing Qty", width: 14 },
             { key: "closingRate", label: "Closing Rate", width: 14 },
@@ -139,7 +141,7 @@ export default function RawMaterialSummaryPage() {
       scope: requestedItemId && selectedItem ? `Raw Material: ${selectedItem.itemName}` : "",
       summary: [
         { label: "Opening Value", value: formatNumber(report.totals?.openingValue) },
-        { label: "Inward Value", value: formatNumber(report.totals?.inwardValue) },
+        { label: INWARD_VALUE_LABEL, value: formatNumber(report.totals?.inwardValue) },
         { label: "Consumed Value", value: formatNumber(report.totals?.outwardValue) },
         { label: "Closing Value", value: formatNumber(report.totals?.closingValue) },
       ],
@@ -158,7 +160,7 @@ export default function RawMaterialSummaryPage() {
             { key: "itemName", label: "Raw Material", width: 34 },
             { key: "groupName", label: "Group", width: 24 },
             { key: "openingQty", label: "Opening Qty", width: 14 },
-            { key: "inwardQty", label: "Inward Qty", width: 14 },
+            { key: "inwardQty", label: INWARD_QTY_LABEL, width: 14 },
             { key: "consumedQty", label: "Consumed Qty", width: 14 },
             { key: "closingQty", label: "Closing Qty", width: 14 },
             { key: "closingRate", label: "Closing Rate", width: 14 },
@@ -255,7 +257,7 @@ export default function RawMaterialSummaryPage() {
 
         <section className="grid gap-4 md:grid-cols-4">
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><p className="text-sm text-slate-500">Opening Value</p><p className="mt-2 text-2xl font-bold text-slate-900">{Number(report.totals?.openingValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></article>
-          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><p className="text-sm text-slate-500">Inward Value</p><p className="mt-2 text-2xl font-bold text-emerald-700">{Number(report.totals?.inwardValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></article>
+          <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><p className="text-sm text-slate-500">{INWARD_VALUE_LABEL}</p><p className="mt-2 text-2xl font-bold text-emerald-700">{Number(report.totals?.inwardValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><p className="text-sm text-slate-500">Consumed Value</p><p className="mt-2 text-2xl font-bold text-rose-700">{Number(report.totals?.outwardValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></article>
           <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><p className="text-sm text-slate-500">Closing Value</p><p className="mt-2 text-2xl font-bold text-blue-700">{Number(report.totals?.closingValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></article>
         </section>
@@ -272,7 +274,7 @@ export default function RawMaterialSummaryPage() {
                     <th className="px-4 py-3 font-medium">Raw Material</th>
                     <th className="px-4 py-3 font-medium">Group</th>
                     <th className="px-4 py-3 text-right font-medium">Opening Qty</th>
-                    <th className="px-4 py-3 text-right font-medium">Inward Qty</th>
+                    <th className="px-4 py-3 text-right font-medium">{INWARD_QTY_LABEL}</th>
                     <th className="px-4 py-3 text-right font-medium">Consumed Qty</th>
                     <th className="px-4 py-3 text-right font-medium">Closing Qty</th>
                     <th className="px-4 py-3 text-right font-medium">Closing Rate</th>
