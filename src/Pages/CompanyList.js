@@ -39,6 +39,10 @@ const defaultForm = {
   enableBillWiseDetails: false,
   enableCostCentres: false,
   enableMultiCurrency: false,
+  requireCompanyLogin: false,
+  masterUsername: "",
+  masterPassword: "",
+  confirmMasterPassword: "",
 };
 
 function toDateInput(value) {
@@ -103,12 +107,27 @@ export default function CompanyList() {
       alert("Company name is required");
       return;
     }
+    if (form.requireCompanyLogin) {
+      if (!form.masterUsername.trim()) {
+        alert("Master username is required when company login is enabled");
+        return;
+      }
+      if (!form.id && !form.masterPassword) {
+        alert("Master password is required when company login is enabled");
+        return;
+      }
+      if (form.masterPassword !== form.confirmMasterPassword) {
+        alert("Master password and confirm password must match");
+        return;
+      }
+    }
 
     setSaving(true);
     try {
       const payload = {
         ...form,
         name: form.name.trim(),
+        masterUsername: form.masterUsername.trim(),
       };
 
       if (form.id) {
@@ -153,6 +172,10 @@ export default function CompanyList() {
       enableBillWiseDetails: Boolean(company.options?.enableBillWiseDetails),
       enableCostCentres: Boolean(company.options?.enableCostCentres),
       enableMultiCurrency: Boolean(company.options?.enableMultiCurrency),
+      requireCompanyLogin: Boolean(company.requiresCompanyLogin),
+      masterUsername: company.masterUsername || "",
+      masterPassword: "",
+      confirmMasterPassword: "",
     });
   }
 
@@ -444,6 +467,77 @@ export default function CompanyList() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm ring-1 ring-amber-100">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Company Login Security</h2>
+                  <p className="mt-1 text-sm text-amber-900/80">
+                    Enable this if the company should always require master credentials before entry.
+                  </p>
+                </div>
+                <span className="inline-flex w-fit rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                  Important
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <label className="flex items-center gap-3 rounded-2xl border border-amber-300 bg-white px-4 py-3 text-sm font-medium text-slate-800 cursor-pointer shadow-sm transition hover:bg-amber-50">
+                  <input
+                    type="checkbox"
+                    checked={form.requireCompanyLogin}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        requireCompanyLogin: event.target.checked,
+                        masterPassword: event.target.checked ? current.masterPassword : "",
+                        confirmMasterPassword: event.target.checked
+                          ? current.confirmMasterPassword
+                          : "",
+                      }))
+                    }
+                  />
+                  Require master username and password for company entry
+                </label>
+              </div>
+
+              {form.requireCompanyLogin ? (
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Master Username
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      placeholder="Master Username"
+                      {...field("masterUsername", form.masterUsername)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      {form.id ? "New Master Password" : "Master Password"}
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      placeholder={form.id ? "Leave blank to keep current password" : "Master Password"}
+                      {...field("masterPassword", form.masterPassword)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Confirm Password
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      placeholder="Confirm Password"
+                      {...field("confirmMasterPassword", form.confirmMasterPassword)}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* More Options */}

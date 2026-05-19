@@ -92,8 +92,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
   const view = VARIANTS[variant] || VARIANTS["stock-group"];
-  const hideClosing =
-    variant === "group" || variant === "ledger";
+  const hideClosing = false;
   const isSalesPersonView = variant === "sales-person";
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
@@ -265,7 +264,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     }
 
     if (variant === "ledger") {
-      return `/reports/inventory-books/party-details/voucher?${shared}&ledgerId=${encodeURIComponent(row.id)}&ledgerName=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-item-movement?${shared}&partyLedgerId=${encodeURIComponent(row.id)}&partyLedgerName=${encodeURIComponent(row.name)}`;
     }
 
     if (variant === "sales-person") {
@@ -275,14 +274,14 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
     return "";
   }
 
-  // const links = [
-  //   { key: "stock-group", label: "Stock Group Analysis" },
-  //   { key: "stock-category", label: "Stock Category Analysis" },
-  //   { key: "stock-item", label: "Stock Item Analysis" },
-  //   { key: "group", label: "Group Analysis" },
-  //   { key: "ledger", label: "Ledger Analysis" },
-  //   { key: "sales-person", label: "Sales Person Analysis" },
-  // ];
+  const links = [
+    { key: "stock-group", label: "Stock Group Analysis" },
+    { key: "stock-category", label: "Stock Category Analysis" },
+    { key: "stock-item", label: "Stock Item Analysis" },
+    { key: "group", label: "Group Analysis" },
+    { key: "ledger", label: "Ledger Analysis" },
+    { key: "sales-person", label: "Sales Person Analysis" },
+  ];
 
   function buildExportColumns() {
     if (isSalesPersonView) {
@@ -449,11 +448,13 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 <BarChart3 className="h-3.5 w-3.5" />
                 Reports
               </div>
-              <h1 className="mt-3 text-3xl font-bold text-slate-900">Report Analysis</h1>
+              <h1 className="mt-3 text-3xl font-bold text-slate-900">{view.title}</h1>
               <p className="mt-2 text-sm text-slate-500">
                 {requestedSalesPersonId
                   ? `Tracking item movement sold by ${requestedSalesPersonName || "the selected sales person"} through group, category, item, and voucher drilldown.`
-                  : "Switch between stock, category, party-group, and ledger movement views without leaving inventory books."}
+                  : hideClosing
+                    ? "Review purchase and sales movement by account group or ledger with the same drill flow as the stock analysis screens."
+                    : "Review opening, inwards, outwards, and closing movement without leaving inventory books."}
               </p>
             </div>
 
@@ -499,6 +500,28 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
+              {links.map((link) => (
+                <button
+                  key={link.key}
+                  type="button"
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                    link.key === variant
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                  }`}
+                  onClick={() =>
+                    navigate(
+                      `/reports/inventory-books/movement-analysis/${link.key}${
+                        requestedSalesPersonId
+                          ? `?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}`
+                          : ""
+                      }`,
+                    )
+                  }
+                >
+                  {link.label}
+                </button>
+              ))}
               <button
                 type="button"
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
@@ -515,23 +538,6 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 <Download className="h-4 w-4" />
                 Export Excel
               </button>
-              {/* {links.map((link) => (
-                <Link
-                  key={link.key}
-                  to={`/reports/inventory-books/movement-analysis/${link.key}${
-                    requestedSalesPersonId
-                      ? `?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&salesPersonId=${encodeURIComponent(requestedSalesPersonId)}&salesPersonName=${encodeURIComponent(requestedSalesPersonName)}`
-                      : ""
-                  }`}
-                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                    link.key === variant
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              ))} */}
           </div>
         </section>
 

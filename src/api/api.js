@@ -13,7 +13,7 @@ api.interceptors.request.use((config) => {
   const activeCompanyId = window.localStorage.getItem(STORAGE_KEY);
   const url = config.url || "";
 
-  if (!activeCompanyId || !url.startsWith("/companies/")) {
+  if (config.preserveCompanyId || !activeCompanyId || !url.startsWith("/companies/")) {
     return config;
   }
 

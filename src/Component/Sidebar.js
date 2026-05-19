@@ -141,7 +141,7 @@ export default function Sidebar() {
   const [openKeys, setOpenKeys] = useState({});
   const [shortcutScope, setShortcutScope] = useState(null);
   const [activeShortcutTarget, setActiveShortcutTarget] = useState("");
-  const { companies, companyId, setCompanyId, loading } = useActiveCompany();
+  const { companies, companyId, requestCompanyChange, loading } = useActiveCompany();
   const nodeRefs = useRef({});
 
   const treeWithIcons = useMemo(
@@ -259,12 +259,13 @@ export default function Sidebar() {
           <select
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500"
             value={companyId}
-            onChange={(event) => setCompanyId(event.target.value)}
+            onChange={(event) => requestCompanyChange(event.target.value)}
             disabled={loading}
           >
             {companies.map((company) => (
               <option key={company._id} value={company._id}>
                 {company.name}
+                {company.requiresCompanyLogin ? " (Protected)" : ""}
               </option>
             ))}
           </select>

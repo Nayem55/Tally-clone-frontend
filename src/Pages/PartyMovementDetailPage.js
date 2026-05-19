@@ -5,7 +5,6 @@ import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import { formatCurrencyAmount } from "../utils/currency";
 import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
-import { buildAlterVoucherPath } from "../utils/voucherRoutes";
 import { buildReportReturnState, navigateBackFromReport } from "../utils/reportNavigation";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import useReportFocusRestore from "../hooks/useReportFocusRestore";
@@ -138,6 +137,34 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [report.rows, search]);
+  const totals = useMemo(
+    () =>
+      filteredRows.reduce(
+        (sum, row) => {
+          const metrics = row.metrics || row;
+          sum.openingQty += Number(metrics.openingQty || 0);
+          sum.openingValue += Number(metrics.openingValue || 0);
+          sum.inwardQty += Number(metrics.inwardQty || 0);
+          sum.inwardValue += Number(metrics.inwardValue || 0);
+          sum.outwardQty += Number(metrics.outwardQty || 0);
+          sum.outwardValue += Number(metrics.outwardValue || 0);
+          sum.closingQty += Number(metrics.closingQty || 0);
+          sum.closingValue += Number(metrics.closingValue || 0);
+          return sum;
+        },
+        {
+          openingQty: 0,
+          openingValue: 0,
+          inwardQty: 0,
+          inwardValue: 0,
+          outwardQty: 0,
+          outwardValue: 0,
+          closingQty: 0,
+          closingValue: 0,
+        },
+      ),
+    [filteredRows],
+  );
 
   useReportFocusRestore(containerRef, [filteredRows, companyId, fromDate, toDate, level, groupId, ledgerId, groupName, ledgerName]);
   useReportKeyboardNav(containerRef, [filteredRows, companyId, fromDate, toDate, level, groupId, ledgerId, groupName, ledgerName], {
@@ -152,55 +179,43 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
       toDate,
       scope: [groupName, ledgerName].filter(Boolean).join(" | "),
       summary: [
-        { label: "Purchase Qty", value: formatQty(report.totals?.purchaseQty) },
-        { label: "Purchase Value", value: formatCurrencyAmount(report.totals?.purchaseValue, selectedCompany) },
-        { label: "Sales Qty", value: formatQty(report.totals?.salesQty) },
-        { label: "Sales Value", value: formatCurrencyAmount(report.totals?.salesValue, selectedCompany) },
+        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
-      columns: level === "voucher"
-        ? [
-            { key: "date", label: "Date", width: 16 },
-            { key: "voucher", label: "Voucher", width: 18 },
-            { key: "item", label: "Item", width: 28 },
-            { key: "direction", label: "Direction", width: 14 },
-            { key: "qty", label: "Qty", width: 12 },
-            { key: "rate", label: "Rate", width: 14 },
-            { key: "value", label: "Value", width: 16 },
-          ]
-        : [
-            { key: "name", label: level === "group" ? "Particulars" : "Ledger", width: 28 },
-            { key: "context", label: level === "group" ? "Hierarchy" : "Group", width: 24 },
-            { key: "invoices", label: "Invoices", width: 12 },
-            { key: "purchaseQty", label: "Purchase Qty", width: 14 },
-            { key: "purchaseRate", label: "Avg Purchase Rate", width: 16 },
-            { key: "purchaseValue", label: "Purchase Value", width: 16 },
-            { key: "salesQty", label: "Sales Qty", width: 14 },
-            { key: "salesRate", label: "Avg Sale Rate", width: 16 },
-            { key: "salesValue", label: "Sales Value", width: 16 },
-            { key: "lastVoucher", label: "Last Voucher", width: 16 },
-          ],
-      rows: level === "voucher"
-        ? filteredRows.map((row) => ({
-            date: row.dateLabel || "-",
-            voucher: row.voucherName,
-            item: row.itemName,
-            direction: row.direction,
-            qty: formatQty(row.qty),
-            rate: formatRate(row.rate),
-            value: formatCurrencyAmount(row.value, selectedCompany),
-          }))
-        : filteredRows.map((row) => ({
-            name: row.name,
-            context: row.secondaryLabel || groupName || "-",
-            invoices: formatQty(row.metrics?.invoiceCount),
-            purchaseQty: formatQty(row.metrics?.purchaseQty),
-            purchaseRate: formatRate(row.metrics?.averagePurchaseRate),
-            purchaseValue: formatCurrencyAmount(row.metrics?.purchaseValue, selectedCompany),
-            salesQty: formatQty(row.metrics?.salesQty),
-            salesRate: formatRate(row.metrics?.averageSaleRate),
-            salesValue: formatCurrencyAmount(row.metrics?.salesValue, selectedCompany),
-            lastVoucher: row.metrics?.lastVoucherOn ? new Date(row.metrics.lastVoucherOn).toLocaleDateString("en-GB") : "-",
-          })),
+      columns: [
+        { key: "name", label: "Particulars", width: 28 },
+        { key: "context", label: "Context", width: 22 },
+        { key: "openingQty", label: "Opening Qty", width: 14 },
+        { key: "openingRate", label: "Opening Rate", width: 16 },
+        { key: "openingValue", label: "Opening Value", width: 16 },
+        { key: "inwardQty", label: "Inward Qty", width: 14 },
+        { key: "inwardRate", label: "Inward Rate", width: 16 },
+        { key: "inwardValue", label: "Inward Value", width: 16 },
+        { key: "outwardQty", label: "Outward Qty", width: 14 },
+        { key: "outwardRate", label: "Outward Rate", width: 16 },
+        { key: "outwardValue", label: "Outward Value", width: 16 },
+        { key: "closingQty", label: "Closing Qty", width: 14 },
+        { key: "closingRate", label: "Closing Rate", width: 16 },
+        { key: "closingValue", label: "Closing Value", width: 16 },
+      ],
+      rows: filteredRows.map((row) => ({
+        name: row.name,
+        context: row.secondaryLabel || groupName || "-",
+        openingQty: formatQty(row.metrics?.openingQty),
+        openingRate: formatRate(row.metrics?.openingRate),
+        openingValue: formatCurrencyAmount(row.metrics?.openingValue, selectedCompany),
+        inwardQty: formatQty(row.metrics?.inwardQty),
+        inwardRate: formatRate(row.metrics?.inwardRate),
+        inwardValue: formatCurrencyAmount(row.metrics?.inwardValue, selectedCompany),
+        outwardQty: formatQty(row.metrics?.outwardQty),
+        outwardRate: formatRate(row.metrics?.outwardRate),
+        outwardValue: formatCurrencyAmount(row.metrics?.outwardValue, selectedCompany),
+        closingQty: formatQty(row.metrics?.closingQty),
+        closingRate: formatRate(row.metrics?.closingRate),
+        closingValue: formatCurrencyAmount(row.metrics?.closingValue, selectedCompany),
+      })),
     });
   }
 
@@ -212,55 +227,43 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
       toDate,
       scope: [groupName, ledgerName].filter(Boolean).join(" | "),
       summary: [
-        { label: "Purchase Qty", value: formatQty(report.totals?.purchaseQty) },
-        { label: "Purchase Value", value: formatCurrencyAmount(report.totals?.purchaseValue, selectedCompany) },
-        { label: "Sales Qty", value: formatQty(report.totals?.salesQty) },
-        { label: "Sales Value", value: formatCurrencyAmount(report.totals?.salesValue, selectedCompany) },
+        { label: "Opening Value", value: formatCurrencyAmount(totals.openingValue, selectedCompany) },
+        { label: "Inward Value", value: formatCurrencyAmount(totals.inwardValue, selectedCompany) },
+        { label: "Outward Value", value: formatCurrencyAmount(totals.outwardValue, selectedCompany) },
+        { label: "Closing Value", value: formatCurrencyAmount(totals.closingValue, selectedCompany) },
       ],
-      columns: level === "voucher"
-        ? [
-            { key: "date", label: "Date", width: 16 },
-            { key: "voucher", label: "Voucher", width: 18 },
-            { key: "item", label: "Item", width: 28 },
-            { key: "direction", label: "Direction", width: 14 },
-            { key: "qty", label: "Qty", width: 12 },
-            { key: "rate", label: "Rate", width: 14 },
-            { key: "value", label: "Value", width: 16 },
-          ]
-        : [
-            { key: "name", label: level === "group" ? "Particulars" : "Ledger", width: 28 },
-            { key: "context", label: level === "group" ? "Hierarchy" : "Group", width: 24 },
-            { key: "invoices", label: "Invoices", width: 12 },
-            { key: "purchaseQty", label: "Purchase Qty", width: 14 },
-            { key: "purchaseRate", label: "Avg Purchase Rate", width: 16 },
-            { key: "purchaseValue", label: "Purchase Value", width: 16 },
-            { key: "salesQty", label: "Sales Qty", width: 14 },
-            { key: "salesRate", label: "Avg Sale Rate", width: 16 },
-            { key: "salesValue", label: "Sales Value", width: 16 },
-            { key: "lastVoucher", label: "Last Voucher", width: 16 },
-          ],
-      rows: level === "voucher"
-        ? filteredRows.map((row) => ({
-            date: row.dateLabel || "-",
-            voucher: row.voucherName,
-            item: row.itemName,
-            direction: row.direction,
-            qty: Number(row.qty || 0),
-            rate: Number(row.rate || 0),
-            value: Number(row.value || 0),
-          }))
-        : filteredRows.map((row) => ({
-            name: row.name,
-            context: row.secondaryLabel || groupName || "-",
-            invoices: Number(row.metrics?.invoiceCount || 0),
-            purchaseQty: Number(row.metrics?.purchaseQty || 0),
-            purchaseRate: Number(row.metrics?.averagePurchaseRate || 0),
-            purchaseValue: Number(row.metrics?.purchaseValue || 0),
-            salesQty: Number(row.metrics?.salesQty || 0),
-            salesRate: Number(row.metrics?.averageSaleRate || 0),
-            salesValue: Number(row.metrics?.salesValue || 0),
-            lastVoucher: row.metrics?.lastVoucherOn ? new Date(row.metrics.lastVoucherOn).toLocaleDateString("en-GB") : "-",
-          })),
+      columns: [
+        { key: "name", label: "Particulars", width: 28 },
+        { key: "context", label: "Context", width: 22 },
+        { key: "openingQty", label: "Opening Qty", width: 14 },
+        { key: "openingRate", label: "Opening Rate", width: 16 },
+        { key: "openingValue", label: "Opening Value", width: 16 },
+        { key: "inwardQty", label: "Inward Qty", width: 14 },
+        { key: "inwardRate", label: "Inward Rate", width: 16 },
+        { key: "inwardValue", label: "Inward Value", width: 16 },
+        { key: "outwardQty", label: "Outward Qty", width: 14 },
+        { key: "outwardRate", label: "Outward Rate", width: 16 },
+        { key: "outwardValue", label: "Outward Value", width: 16 },
+        { key: "closingQty", label: "Closing Qty", width: 14 },
+        { key: "closingRate", label: "Closing Rate", width: 16 },
+        { key: "closingValue", label: "Closing Value", width: 16 },
+      ],
+      rows: filteredRows.map((row) => ({
+        name: row.name,
+        context: row.secondaryLabel || groupName || "-",
+        openingQty: Number(row.metrics?.openingQty || 0),
+        openingRate: Number(row.metrics?.openingRate || 0),
+        openingValue: Number(row.metrics?.openingValue || 0),
+        inwardQty: Number(row.metrics?.inwardQty || 0),
+        inwardRate: Number(row.metrics?.inwardRate || 0),
+        inwardValue: Number(row.metrics?.inwardValue || 0),
+        outwardQty: Number(row.metrics?.outwardQty || 0),
+        outwardRate: Number(row.metrics?.outwardRate || 0),
+        outwardValue: Number(row.metrics?.outwardValue || 0),
+        closingQty: Number(row.metrics?.closingQty || 0),
+        closingRate: Number(row.metrics?.closingRate || 0),
+        closingValue: Number(row.metrics?.closingValue || 0),
+      })),
     });
   }
 
@@ -270,13 +273,10 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
       if (row.rowType === "group") {
         return `/reports/inventory-books/party-details/group?${shared}&groupId=${encodeURIComponent(row.id)}&groupName=${encodeURIComponent(row.name)}`;
       }
-      return `/reports/inventory-books/party-details/voucher?${shared}${groupId ? `&groupId=${encodeURIComponent(groupId)}` : ""}&ledgerId=${encodeURIComponent(row.id)}&ledgerName=${encodeURIComponent(row.name)}`;
+      return `/reports/inventory-books/party-item-movement?${shared}${groupId ? `&partyGroupId=${encodeURIComponent(groupId)}&partyGroupName=${encodeURIComponent(groupName)}` : ""}&partyLedgerId=${encodeURIComponent(row.id)}&partyLedgerName=${encodeURIComponent(row.name)}`;
     }
     if (level === "ledger") {
-      return `/reports/inventory-books/party-details/voucher?${shared}${groupId ? `&groupId=${encodeURIComponent(groupId)}` : ""}&ledgerId=${encodeURIComponent(row.id)}&ledgerName=${encodeURIComponent(row.name)}`;
-    }
-    if (level === "voucher") {
-      return buildAlterVoucherPath(companyId, row.voucherId);
+      return `/reports/inventory-books/party-item-movement?${shared}${groupId ? `&partyGroupId=${encodeURIComponent(groupId)}&partyGroupName=${encodeURIComponent(groupName)}` : ""}&partyLedgerId=${encodeURIComponent(row.id)}&partyLedgerName=${encodeURIComponent(row.name)}`;
     }
     return "";
   }
@@ -293,7 +293,7 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
               </div>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">{view.title}</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Purchase and sales only. Opening and closing stock are intentionally excluded in this party drill view.
+                Review item-wise stock movement through accounting groups and ledgers without expanding nested rows inline.
               </p>
               <button
                 type="button"
@@ -367,28 +367,28 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
-            title="Purchase Qty"
-            value={formatQty(report.totals?.purchaseQty)}
+            title="Opening Value"
+            value={formatCurrencyAmount(totals.openingValue, selectedCompany)}
+            icon={<TrendingUp className="h-5 w-5" />}
+            tone="text-slate-900"
+          />
+          <SummaryCard
+            title="Inward Value"
+            value={formatCurrencyAmount(totals.inwardValue, selectedCompany)}
             icon={<TrendingUp className="h-5 w-5" />}
             tone="text-emerald-700"
           />
           <SummaryCard
-            title="Purchase Value"
-            value={formatCurrencyAmount(report.totals?.purchaseValue, selectedCompany)}
-            icon={<TrendingUp className="h-5 w-5" />}
-            tone="text-emerald-700"
-          />
-          <SummaryCard
-            title="Sales Qty"
-            value={formatQty(report.totals?.salesQty)}
+            title="Outward Value"
+            value={formatCurrencyAmount(totals.outwardValue, selectedCompany)}
             icon={<TrendingDown className="h-5 w-5" />}
             tone="text-rose-700"
           />
           <SummaryCard
-            title="Sales Value"
-            value={formatCurrencyAmount(report.totals?.salesValue, selectedCompany)}
-            icon={<TrendingDown className="h-5 w-5" />}
-            tone="text-rose-700"
+            title="Closing Value"
+            value={formatCurrencyAmount(totals.closingValue, selectedCompany)}
+            icon={<BarChart3 className="h-5 w-5" />}
+            tone="text-slate-900"
           />
         </section>
 
@@ -396,115 +396,74 @@ export default function PartyMovementDetailPage({ level = "ledger" }) {
           <div className="border-b border-slate-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-slate-900">{view.title}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {level === "voucher"
-                ? "Voucher-wise purchase and sale lines for the selected ledger."
-                : level === "group"
-                  ? "Drill from primary group to child groups and direct ledgers using purchase and sale activity only."
-                  : "Click a ledger to drill to its voucher-wise purchase and sale activity."}
+              {level === "group"
+                ? "Drill from accounting groups to ledgers, then open item-wise stock movement for the selected ledger."
+                : "Open a ledger to review its item-wise opening, inward, outward, and closing movement."}
             </p>
           </div>
 
           <div className="overflow-x-auto">
-            {level === "voucher" ? (
-              <table className="min-w-[1080px] w-full text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">Date</th>
-                    <th className="px-4 py-3 text-left font-medium">Voucher</th>
-                    <th className="px-4 py-3 text-left font-medium">Item</th>
-                    <th className="px-4 py-3 text-left font-medium">Direction</th>
-                    <th className="px-4 py-3 text-right font-medium">Qty</th>
-                    <th className="px-4 py-3 text-right font-medium">Rate</th>
-                    <th className="px-4 py-3 text-right font-medium">Value</th>
-                    <th className="px-4 py-3 text-right font-medium">Action</th>
+            <table className="min-w-[1280px] w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500">
+                <tr>
+                  <th rowSpan={2} className="px-4 py-3 text-left font-medium">Particulars</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Opening Balance</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Inwards</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Outwards</th>
+                  <th colSpan={3} className="px-4 py-3 text-center font-medium">Closing Balance</th>
+                </tr>
+                <tr>
+                  <th className="px-4 py-3 text-right font-medium">Quantity</th>
+                  <th className="px-4 py-3 text-right font-medium">Rate</th>
+                  <th className="px-4 py-3 text-right font-medium">Value</th>
+                  <th className="px-4 py-3 text-right font-medium">Quantity</th>
+                  <th className="px-4 py-3 text-right font-medium">Rate</th>
+                  <th className="px-4 py-3 text-right font-medium">Value</th>
+                  <th className="px-4 py-3 text-right font-medium">Quantity</th>
+                  <th className="px-4 py-3 text-right font-medium">Rate</th>
+                  <th className="px-4 py-3 text-right font-medium">Value</th>
+                  <th className="px-4 py-3 text-right font-medium">Quantity</th>
+                  <th className="px-4 py-3 text-right font-medium">Rate</th>
+                  <th className="px-4 py-3 text-right font-medium">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row, index) => (
+                  <tr key={`${row.id}-${index}`} className="border-t border-slate-100">
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        data-report-nav="true"
+                        data-focus-key={`pmd-${level}-${row.id}`}
+                        className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                        onClick={() =>
+                          navigate(buildNextPath(row), {
+                            state: buildReportReturnState(location, `pmd-${level}-${row.id}`),
+                          })
+                        }
+                      >
+                        <p className="font-medium text-slate-900">{row.name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {row.secondaryLabel || (row.rowType === "group" ? "Child group" : "Ledger")}
+                        </p>
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-right">{formatQty(row.metrics?.openingQty)}</td>
+                    <td className="px-4 py-3 text-right">{formatRate(row.metrics?.openingRate)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.openingValue, selectedCompany)}</td>
+                    <td className="px-4 py-3 text-right text-emerald-700">{formatQty(row.metrics?.inwardQty)}</td>
+                    <td className="px-4 py-3 text-right">{formatRate(row.metrics?.inwardRate)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.inwardValue, selectedCompany)}</td>
+                    <td className="px-4 py-3 text-right text-rose-700">{formatQty(row.metrics?.outwardQty)}</td>
+                    <td className="px-4 py-3 text-right">{formatRate(row.metrics?.outwardRate)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.outwardValue, selectedCompany)}</td>
+                    <td className="px-4 py-3 text-right">{formatQty(row.metrics?.closingQty)}</td>
+                    <td className="px-4 py-3 text-right">{formatRate(row.metrics?.closingRate)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.metrics?.closingValue, selectedCompany)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row, index) => (
-                    <tr key={`${row.id}-${index}`} className="border-t border-slate-100">
-                      <td className="px-4 py-3">{row.dateLabel || "-"}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{row.voucherName}</td>
-                      <td className="px-4 py-3 text-slate-700">{row.itemName}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.direction}</td>
-                      <td className={`px-4 py-3 text-right ${row.direction === "Purchase" ? "text-emerald-700" : "text-rose-700"}`}>
-                        {formatQty(row.qty)}
-                      </td>
-                      <td className="px-4 py-3 text-right">{formatRate(row.rate)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                        {formatCurrencyAmount(row.value, selectedCompany)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          data-report-nav="true"
-                          data-focus-key={`pmd-${level}-${row.id}`}
-                          className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
-                          onClick={() =>
-                            navigate(buildNextPath(row), {
-                              state: buildReportReturnState(location, `pmd-${level}-${row.id}`),
-                            })
-                          }
-                        >
-                          Alter
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <table className="min-w-full w-full text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">{level === "group" ? "Particulars" : "Ledger"}</th>
-                    <th className="px-4 py-3 text-left font-medium">{level === "group" ? "Hierarchy" : "Group"}</th>
-                    <th className="px-4 py-3 text-right font-medium">Invoices</th>
-                    <th className="px-4 py-3 text-right font-medium">Purchase Qty</th>
-                    <th className="px-4 py-3 text-right font-medium">Avg Purchase Rate</th>
-                    <th className="px-4 py-3 text-right font-medium">Purchase Value</th>
-                    <th className="px-4 py-3 text-right font-medium">Sales Qty</th>
-                    <th className="px-4 py-3 text-right font-medium">Avg Sale Rate</th>
-                    <th className="px-4 py-3 text-right font-medium">Sales Value</th>
-                    <th className="px-4 py-3 text-right font-medium">Last Voucher</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row, index) => (
-                    <tr key={`${row.id}-${index}`} className="border-t border-slate-100">
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          data-report-nav="true"
-                          data-focus-key={`pmd-${level}-${row.id}`}
-                          className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
-                          onClick={() =>
-                            navigate(buildNextPath(row), {
-                              state: buildReportReturnState(location, `pmd-${level}-${row.id}`),
-                            })
-                          }
-                        >
-                          <p className="font-medium text-slate-900">{row.name}</p>
-                          {level === "group" && row.rowType ? (
-                            <p className="mt-0.5 text-xs uppercase tracking-wide text-slate-400">{row.rowType}</p>
-                          ) : null}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{row.secondaryLabel || groupName || "-"}</td>
-                      <td className="px-4 py-3 text-right">{formatQty(row.metrics?.invoiceCount)}</td>
-                      <td className="px-4 py-3 text-right text-emerald-700">{formatQty(row.metrics?.purchaseQty)}</td>
-                      <td className="px-4 py-3 text-right">{formatRate(row.metrics?.averagePurchaseRate)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrencyAmount(row.metrics?.purchaseValue, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right text-rose-700">{formatQty(row.metrics?.salesQty)}</td>
-                      <td className="px-4 py-3 text-right">{formatRate(row.metrics?.averageSaleRate)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrencyAmount(row.metrics?.salesValue, selectedCompany)}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">
-                        {row.metrics?.lastVoucherOn ? new Date(row.metrics.lastVoucherOn).toLocaleDateString("en-GB") : "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {loading ? (

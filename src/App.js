@@ -33,6 +33,7 @@ import CustomerBehaviourOverviewPage from "./Pages/CustomerBehaviourOverviewPage
 import ProductCustomerReportPage from "./Pages/ProductCustomerReportPage";
 import CustomerDimensionReportPage from "./Pages/CustomerDimensionReportPage";
 import StockItemDetailPage from "./Pages/StockItemDetailPage";
+import PartyItemMovementDetailPage from "./Pages/PartyItemMovementDetailPage";
 import InventoryMovementAnalysisPage from "./Pages/InventoryMovementAnalysisPage";
 import ShortcutReferencePage from "./Pages/ShortcutReferencePage";
 import CommandSearchModal from "./Component/CommandSearchModal";
@@ -477,6 +478,7 @@ function AppShell() {
             />
 
             <Route path="/reports/inventory-books/stock-item" element={<StockItemDetailPage />} />
+            <Route path="/reports/inventory-books/party-item-movement" element={<PartyItemMovementDetailPage />} />
             <Route path="/reports/inventory-books/stock-group-summary" element={<StockGroupSummaryPage />} />
             <Route path="/reports/inventory-books/raw-material-summary" element={<Navigate to="/reports/inventory-books/stock-group-summary" replace />} />
             <Route path="/reports/inventory-books/bom-register" element={<ManufacturingBomRegisterPage />} />

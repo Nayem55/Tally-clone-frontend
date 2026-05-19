@@ -143,6 +143,8 @@ export const sidebarChildShortcuts = {
     { key: "p", label: "Production Register", route: "/reports/inventory-books/production-register" },
     { key: "c", label: "Component Consumption", route: "/reports/inventory-books/component-consumption" },
     { key: "m", label: "Stock Group Analysis", route: "/reports/inventory-books/movement-analysis/stock-group" },
+    { key: "a", label: "Group Analysis", route: "/reports/inventory-books/movement-analysis/group" },
+    { key: "l", label: "Ledger Analysis", route: "/reports/inventory-books/movement-analysis/ledger" },
     { key: "x", label: "Sales Person Analysis", route: "/reports/inventory-books/movement-analysis/sales-person" },
     { key: "d", label: "Godown Summary", route: "/reports/inventory-books/godown-summary" },
     { key: "b", label: "Batch Summary", route: "/reports/inventory-books/batch-summary" },

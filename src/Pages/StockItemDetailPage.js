@@ -20,7 +20,7 @@ function formatNumber(value) {
   });
 }
 
-export default function StockItemDetailPage() {
+export default function StockItemDetailPage({ partyMovementMode = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -41,6 +41,10 @@ export default function StockItemDetailPage() {
   const requestedCategory = searchParams.get("category") || "";
   const requestedSalesPersonId = searchParams.get("salesPersonId") || "";
   const requestedSalesPersonName = searchParams.get("salesPersonName") || "";
+  const requestedPartyGroupId = searchParams.get("partyGroupId") || "";
+  const requestedPartyGroupName = searchParams.get("partyGroupName") || "";
+  const requestedPartyLedgerId = searchParams.get("partyLedgerId") || "";
+  const requestedPartyLedgerName = searchParams.get("partyLedgerName") || "";
   const requestedCompanyId = searchParams.get("companyId") || "";
 
   useEffect(() => {
@@ -68,6 +72,8 @@ export default function StockItemDetailPage() {
             groupId: requestedGroupId,
             category: requestedCategory,
             itemId: requestedItemId,
+            partyGroupId: requestedPartyGroupId,
+            partyLedgerId: requestedPartyLedgerId,
           },
         }
       );
@@ -83,6 +89,8 @@ export default function StockItemDetailPage() {
     requestedGroupId,
     requestedCategory,
     requestedItemId,
+    requestedPartyGroupId,
+    requestedPartyLedgerId,
   ]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
@@ -161,6 +169,8 @@ export default function StockItemDetailPage() {
     if (requestedSalesPersonName) scopeParts.push(`Sales Person: ${requestedSalesPersonName}`);
     if (requestedGroupId) scopeParts.push(`Group filtered`);
     if (requestedCategory) scopeParts.push(`Category: ${requestedCategory}`);
+    if (requestedPartyGroupName) scopeParts.push(`Party Group: ${requestedPartyGroupName}`);
+    if (requestedPartyLedgerName) scopeParts.push(`Ledger: ${requestedPartyLedgerName}`);
     if (requestedItemId && selectedItemRow?.itemName) scopeParts.push(`Item: ${selectedItemRow.itemName}`);
     exportInventoryReportPdf({
       title,
@@ -237,6 +247,8 @@ export default function StockItemDetailPage() {
     if (requestedSalesPersonName) scopeParts.push(`Sales Person: ${requestedSalesPersonName}`);
     if (requestedGroupId) scopeParts.push(`Group filtered`);
     if (requestedCategory) scopeParts.push(`Category: ${requestedCategory}`);
+    if (requestedPartyGroupName) scopeParts.push(`Party Group: ${requestedPartyGroupName}`);
+    if (requestedPartyLedgerName) scopeParts.push(`Ledger: ${requestedPartyLedgerName}`);
     if (requestedItemId && selectedItemRow?.itemName) scopeParts.push(`Item: ${selectedItemRow.itemName}`);
     exportInventoryReportExcel({
       title,
@@ -315,12 +327,22 @@ export default function StockItemDetailPage() {
             <div>
               <h1 className="text-3xl font-bold text-slate-900">Stock Item Details</h1>
               <p className="mt-2 text-sm text-slate-500">
-                {requestedItemId
+                {partyMovementMode
+                  ? requestedItemId
+                    ? `Voucher-wise movement for the selected item under ${requestedPartyLedgerName || requestedPartyGroupName || "the selected ledger"}. Press Esc to step back.`
+                    : `Review only the items moved under ${requestedPartyLedgerName || requestedPartyGroupName || "the selected ledger or group"}.`
+                  : requestedItemId
                   ? requestedSalesPersonId
                     ? `Voucher-wise sales register for ${requestedSalesPersonName || "the selected sales person"} and the selected item. Press Esc to step back.`
+                    : requestedPartyLedgerName
+                    ? `Voucher-wise item movement for ${requestedPartyLedgerName}. Press Esc to step back.`
                     : "Voucher-wise movement register for the selected stock item. Press Esc to step back."
                   : requestedSalesPersonId
                   ? `Review item-wise sales for ${requestedSalesPersonName || "the selected sales person"} without expanding rows inline.`
+                  : requestedPartyLedgerName
+                  ? `Review item-wise stock movement for ${requestedPartyLedgerName}.`
+                  : requestedPartyGroupName
+                  ? `Review item-wise stock movement for ${requestedPartyGroupName}.`
                   : "Review item-wise opening, inward, outward, and closing stock without expanding rows inline."}
               </p>
               {requestedItemId ? (
