@@ -15,7 +15,7 @@ export const menuTree = [
     icon: Home,
     children: [
       { label: "Dashboard", to: "/" },
-      // { label: "Manufacturing Dashboard", to: "/dashboard/manufacturing" },
+      { label: "Manufacturing Dashboard", to: "/dashboard/manufacturing" },
     ],
   },
   { label: "All Short Keys", to: "/shortcuts", icon: ScrollText },
@@ -86,7 +86,7 @@ export const menuTree = [
               { label: "Stock Category", to: "/masters/alter/stock-category" },
               { label: "Stock Item", to: "/masters/alter/stock-item" },
               { label: "Unit", to: "/masters/alter/unit" },
-              { label: "Location", to: "/masters/alter/godown" },
+              // { label: "Location", to: "/masters/alter/godown" },
               { label: "Price List", to: "/masters/alter/price-list" },
               { label: "BoM", to: "/masters/alter/bom" },
             ],
