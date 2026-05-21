@@ -163,6 +163,7 @@ export const sidebarChildShortcuts = {
     { key: "c", label: "Category-wise", route: "/reports/customer-behaviour/category-wise" },
   ],
   Utilities: [
+    { key: "a", label: "Audit Log", route: "/utilities/audit-log" },
     { key: "i", label: "Import Data", route: "/utilities/import-data" },
     { key: "e", label: "Export Data", route: "/utilities/export-data" },
     { key: "b", label: "Banking Utilities", route: "/utilities/banking-utilities" },

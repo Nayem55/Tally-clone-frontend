@@ -10,6 +10,7 @@ const ACCESS_RULES = {
     { prefix: "/chart-of-accounts" },
     { prefix: "/transactions" },
     { prefix: "/reports" },
+    { prefix: "/utilities" },
   ],
   accountant: [
     { exact: "/" },
@@ -24,6 +25,7 @@ const ACCESS_RULES = {
     { prefix: "/transactions/accounting" },
     { prefix: "/reports" },
     { prefix: "/chart-of-accounts" },
+    { prefix: "/utilities/audit-log" },
   ],
   cashier: [
     { exact: "/" },

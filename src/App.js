@@ -54,6 +54,7 @@ import { useActiveCompany } from "./Contexts/ActiveCompanyContext";
 import AccessDeniedPage from "./Pages/AccessDeniedPage";
 import { canAccessPath, readStoredUser } from "./utils/accessControl";
 import api from "./api/api";
+import AuditLogPage from "./Pages/AuditLogPage";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
@@ -661,6 +662,7 @@ function AppShell() {
             <Route path="/utilities/export-data" element={Placeholder("Export Data", "Export utilities can be added here for reports and master data extraction.")} />
             <Route path="/utilities/banking-utilities" element={Placeholder("Banking Utilities", "Banking support utilities will be grouped here as that module expands.")} />
             <Route path="/utilities/data-verification" element={Placeholder("Data Verification", "Data verification utilities are scaffolded under the Tally-style utility area.")} />
+            <Route path="/utilities/audit-log" element={<AuditLogPage />} />
             <Route path="/utilities/rewrite-data" element={Placeholder("Rewrite Data", "Rewrite data is reserved for maintenance and consistency operations.")} />
             <Route path="/utilities/split-company-data" element={Placeholder("Split Company Data", "Company data splitting can be introduced later as an administrative utility.")} />
 
