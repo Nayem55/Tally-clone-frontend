@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Sidebar from "./Component/Sidebar";
 import Navbar from "./Component/Navbar";
 import DashboardPage from "./Pages/DashboardPage";
@@ -48,9 +49,94 @@ import ComponentConsumptionPage from "./Pages/ComponentConsumptionPage";
 import SalesPersonDetailPage from "./Pages/SalesPersonDetailPage";
 import PartyMovementDetailPage from "./Pages/PartyMovementDetailPage";
 import AccountBooksSummaryPage from "./Pages/AccountBooksSummaryPage";
+import EmployeeLoginPage from "./Pages/EmployeeLoginPage";
+import { useActiveCompany } from "./Contexts/ActiveCompanyContext";
+import AccessDeniedPage from "./Pages/AccessDeniedPage";
+import { canAccessPath, readStoredUser } from "./utils/accessControl";
+import api from "./api/api";
 
 function Placeholder(title, subtitle) {
   return <NotImplementedPage title={title} subtitle={subtitle} />;
+}
+
+function RequireEmployeeSession({ children }) {
+  const { companyId, loading } = useActiveCompany();
+  const location = useLocation();
+  const [employeeGateLoading, setEmployeeGateLoading] = useState(true);
+  const [hasEmployees, setHasEmployees] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkEmployees() {
+      if (loading) return;
+      if (!companyId) {
+        if (!cancelled) {
+          setHasEmployees(false);
+          setEmployeeGateLoading(false);
+        }
+        return;
+      }
+
+      setEmployeeGateLoading(true);
+      try {
+        const response = await api.get(`/companies/${companyId}/employees`);
+        const rows = response.data || [];
+        if (!cancelled) {
+          setHasEmployees(rows.length > 0);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setHasEmployees(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setEmployeeGateLoading(false);
+        }
+      }
+    }
+
+    checkEmployees();
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, loading]);
+
+  if (loading || employeeGateLoading) {
+    return null;
+  }
+
+  if (!hasEmployees) {
+    return children;
+  }
+
+  const user = readStoredUser();
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (!companyId || String(user.companyId || "") !== String(companyId)) {
+    window.localStorage.removeItem("pos-user");
+    window.localStorage.removeItem("attendance-user");
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return children;
+}
+
+function RequireRoleAccess({ children }) {
+  const location = useLocation();
+  const user = readStoredUser();
+
+  if (!user) {
+    return children;
+  }
+
+  if (!canAccessPath(user.role, location.pathname)) {
+    return <AccessDeniedPage />;
+  }
+
+  return children;
 }
 
 function AppShell() {
@@ -596,7 +682,19 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppShell />
+      <Routes>
+        <Route path="/login" element={<EmployeeLoginPage />} />
+        <Route
+          path="/*"
+          element={
+            <RequireEmployeeSession>
+              <RequireRoleAccess>
+                <AppShell />
+              </RequireRoleAccess>
+            </RequireEmployeeSession>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }

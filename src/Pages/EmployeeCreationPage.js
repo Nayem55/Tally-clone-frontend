@@ -74,6 +74,16 @@ const TAX_CATEGORIES = ["Individual", "Corporate", "N/A"];
 const INCOME_TAX_REGIMES = ["Old Regime", "New Regime"];
 const MARITAL_OPTIONS = ["Single", "Married", "Divorced"];
 const RELIGION_OPTIONS = ["Islam", "Hinduism", "Christianity", "Buddhism", "Other"];
+const ACCESS_ROLE_OPTIONS = [
+  "Viewer",
+  "Cashier",
+  "Sales Operator",
+  "Store Operator",
+  "Accountant",
+  "Supervisor",
+  "Admin",
+];
+const ACCESS_STATUS_OPTIONS = ["Active", "Inactive"];
 
 function createPayHead(head, rate = 0) {
   return {
@@ -224,6 +234,15 @@ function createEmptyEmployee() {
         hobbies: "",
       },
     },
+    accessControl: {
+      loginEnabled: false,
+      username: "",
+      role: ACCESS_ROLE_OPTIONS[0],
+      status: ACCESS_STATUS_OPTIONS[0],
+      hasPassword: false,
+      password: "",
+      confirmPassword: "",
+    },
   };
 }
 
@@ -327,6 +346,12 @@ function hydrateEmployeeRecord(row = {}) {
         ...base.additionalInformation.otherInformation,
         ...(row.additionalInformation?.otherInformation || {}),
       },
+    },
+    accessControl: {
+      ...base.accessControl,
+      ...(row.accessControl || {}),
+      password: "",
+      confirmPassword: "",
     },
   };
 }
@@ -769,6 +794,35 @@ function EmployeeCreationPage({ mode = "create" }) {
 
   async function persistEmployee({ resetAfterSave = false } = {}) {
     if (!companyId) return;
+
+    if (employee.accessControl?.loginEnabled) {
+      const username = String(employee.accessControl.username || "").trim();
+      const password = String(employee.accessControl.password || "");
+      const confirmPassword = String(employee.accessControl.confirmPassword || "");
+
+      if (!username) {
+        setNotice("Login username is required when employee login is enabled.");
+        return;
+      }
+      if (!employee.accessControl.role) {
+        setNotice("Access role is required when employee login is enabled.");
+        return;
+      }
+      if (!isAlterMode && !password) {
+        setNotice("Login password is required when employee login is enabled.");
+        return;
+      }
+      if (password || confirmPassword) {
+        if (password.length < 4) {
+          setNotice("Login password must be at least 4 characters long.");
+          return;
+        }
+        if (password !== confirmPassword) {
+          setNotice("Password and confirm password must match.");
+          return;
+        }
+      }
+    }
 
     setSaving(true);
     try {
@@ -2039,6 +2093,88 @@ function EmployeeCreationPage({ mode = "create" }) {
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-6">
         <div className="grid gap-5 xl:grid-cols-3">
+          <section className="rounded-2xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm xl:col-span-3">
+            <CardTitle
+              title="Access Control"
+              subtitle="Enable employee login now and assign a baseline role for the larger role-based access batch."
+            />
+            <div className="grid gap-4 xl:grid-cols-4">
+              <Field label="Enable Login">
+                <TogglePills
+                  value={employee.accessControl.loginEnabled}
+                  onChange={(value) => updateNested("accessControl", "loginEnabled", value)}
+                  trueLabel="Enabled"
+                  falseLabel="Disabled"
+                />
+              </Field>
+              <Field label="Access Role" required={employee.accessControl.loginEnabled}>
+                <Select
+                  value={employee.accessControl.role}
+                  onChange={(event) =>
+                    updateNested("accessControl", "role", event.target.value)
+                  }
+                  options={ACCESS_ROLE_OPTIONS}
+                />
+              </Field>
+              <Field label="Login Status">
+                <Select
+                  value={employee.accessControl.status}
+                  onChange={(event) =>
+                    updateNested("accessControl", "status", event.target.value)
+                  }
+                  options={ACCESS_STATUS_OPTIONS}
+                />
+              </Field>
+              <div className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-slate-600">
+                <div className="font-semibold text-slate-800">Password State</div>
+                <div className="mt-1">
+                  {employee.accessControl.hasPassword
+                    ? "Password already set. Leave it blank during alter to keep the current password."
+                    : "No password saved yet. Set one if login is enabled."}
+                </div>
+              </div>
+              <Field label="Login Username" required={employee.accessControl.loginEnabled}>
+                <Input
+                  value={employee.accessControl.username}
+                  onChange={(event) =>
+                    updateNested("accessControl", "username", event.target.value)
+                  }
+                  placeholder="Enter employee login username"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="Password" required={employee.accessControl.loginEnabled && !isAlterMode}>
+                <Input
+                  type="password"
+                  value={employee.accessControl.password}
+                  onChange={(event) =>
+                    updateNested("accessControl", "password", event.target.value)
+                  }
+                  placeholder={
+                    isAlterMode
+                      ? "Leave blank to keep current password"
+                      : "Enter login password"
+                  }
+                  autoComplete="new-password"
+                />
+              </Field>
+              <Field
+                label="Confirm Password"
+                required={employee.accessControl.loginEnabled && Boolean(employee.accessControl.password)}
+              >
+                <Input
+                  type="password"
+                  value={employee.accessControl.confirmPassword}
+                  onChange={(event) =>
+                    updateNested("accessControl", "confirmPassword", event.target.value)
+                  }
+                  placeholder="Re-enter login password"
+                  autoComplete="new-password"
+                />
+              </Field>
+            </div>
+          </section>
+
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <CardTitle title="Employment Details" />
             <div className="grid gap-4">

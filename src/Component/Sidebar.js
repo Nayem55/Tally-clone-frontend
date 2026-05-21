@@ -10,6 +10,7 @@ import {
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { sidebarChildShortcuts, sidebarParentShortcuts } from "../utils/shortcuts";
 import { hasActiveNode, menuTree } from "../utils/navigationTree";
+import { filterNavigationByRole, readStoredUser } from "../utils/accessControl";
 
 function openTreePath(nodeKey, setOpenKeys) {
   if (!nodeKey) return;
@@ -143,14 +144,15 @@ export default function Sidebar() {
   const [activeShortcutTarget, setActiveShortcutTarget] = useState("");
   const { companies, companyId, requestCompanyChange, loading } = useActiveCompany();
   const nodeRefs = useRef({});
+  const activeUser = useMemo(() => readStoredUser(), []);
 
   const treeWithIcons = useMemo(
     () =>
-      menuTree.map((section) => ({
+      filterNavigationByRole(menuTree, activeUser?.role).map((section) => ({
         ...section,
         icon: section.icon || ScrollText,
       })),
-    [],
+    [activeUser?.role],
   );
 
   const shortcutBadges = useMemo(() => {
@@ -265,7 +267,6 @@ export default function Sidebar() {
             {companies.map((company) => (
               <option key={company._id} value={company._id}>
                 {company.name}
-                {company.requiresCompanyLogin ? " (Protected)" : ""}
               </option>
             ))}
           </select>

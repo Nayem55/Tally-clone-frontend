@@ -3,6 +3,10 @@ import axios from "axios";
 import { toast } from "react-hot-toast"; // Import react-hot-toast
 import { useNavigate } from "react-router-dom";
 
+const authUrl =
+  process.env.REACT_APP_AUTH_URL ||
+  `${window.location.protocol}//${window.location.hostname}:15001/login`;
+
 const LoginForm = () => {
   const [formData, setFormData] = useState({
     number: "",
@@ -24,10 +28,7 @@ const LoginForm = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(
-        "http://175.29.181.245:15001/login",
-        formData,
-      );
+      const response = await axios.post(authUrl, formData);
 
       // Save user information in localStorage
       const user = response.data.user;
