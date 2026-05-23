@@ -1,4 +1,5 @@
 export const ROLE_ADMIN = "admin";
+export const EMPLOYEE_SESSION_TOKEN_KEY = "accubooks-employee-session-token";
 
 const ACCESS_RULES = {
   admin: [{ prefix: "/" }],
@@ -83,6 +84,14 @@ export function readStoredUser() {
     return raw ? JSON.parse(raw) : null;
   } catch (error) {
     return null;
+  }
+}
+
+export function readStoredSessionToken() {
+  try {
+    return window.localStorage.getItem(EMPLOYEE_SESSION_TOKEN_KEY) || "";
+  } catch (error) {
+    return "";
   }
 }
 

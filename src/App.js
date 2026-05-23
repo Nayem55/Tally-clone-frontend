@@ -52,7 +52,11 @@ import AccountBooksSummaryPage from "./Pages/AccountBooksSummaryPage";
 import EmployeeLoginPage from "./Pages/EmployeeLoginPage";
 import { useActiveCompany } from "./Contexts/ActiveCompanyContext";
 import AccessDeniedPage from "./Pages/AccessDeniedPage";
-import { canAccessPath, readStoredUser } from "./utils/accessControl";
+import {
+  canAccessPath,
+  readStoredSessionToken,
+  readStoredUser,
+} from "./utils/accessControl";
 import api from "./api/api";
 import AuditLogPage from "./Pages/AuditLogPage";
 
@@ -112,7 +116,13 @@ function RequireEmployeeSession({ children }) {
   }
 
   const user = readStoredUser();
-  if (!user) {
+  const token = readStoredSessionToken();
+  if (!user || !token) {
+    if (user || token) {
+      window.localStorage.removeItem("pos-user");
+      window.localStorage.removeItem("attendance-user");
+      window.localStorage.removeItem("accubooks-employee-session-token");
+    }
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

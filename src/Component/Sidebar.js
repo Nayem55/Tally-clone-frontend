@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   ChevronRight,
+  LogOut,
   ScrollText,
   ShieldCheck,
   Wallet,
@@ -10,7 +11,11 @@ import {
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { sidebarChildShortcuts, sidebarParentShortcuts } from "../utils/shortcuts";
 import { hasActiveNode, menuTree } from "../utils/navigationTree";
-import { filterNavigationByRole, readStoredUser } from "../utils/accessControl";
+import {
+  EMPLOYEE_SESSION_TOKEN_KEY,
+  filterNavigationByRole,
+  readStoredUser,
+} from "../utils/accessControl";
 
 function openTreePath(nodeKey, setOpenKeys) {
   if (!nodeKey) return;
@@ -142,7 +147,7 @@ export default function Sidebar() {
   const [openKeys, setOpenKeys] = useState({});
   const [shortcutScope, setShortcutScope] = useState(null);
   const [activeShortcutTarget, setActiveShortcutTarget] = useState("");
-  const { companies, companyId, requestCompanyChange, loading } = useActiveCompany();
+  const { companyId, selectedCompany } = useActiveCompany();
   const nodeRefs = useRef({});
   const activeUser = useMemo(() => readStoredUser(), []);
 
@@ -240,6 +245,13 @@ export default function Sidebar() {
     return () => window.removeEventListener("keydown", handleSidebarShortcuts);
   }, [navigate, shortcutScope]);
 
+  function handleLogout() {
+    window.localStorage.removeItem("pos-user");
+    window.localStorage.removeItem("attendance-user");
+    window.localStorage.removeItem(EMPLOYEE_SESSION_TOKEN_KEY);
+    navigate("/login", { replace: true });
+  }
+
   return (
     <aside className="sticky top-0 flex h-screen w-[23rem] flex-col border-r border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-6 py-5">
@@ -258,18 +270,17 @@ export default function Sidebar() {
           <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
             Active Company
           </label>
-          <select
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-500"
-            value={companyId}
-            onChange={(event) => requestCompanyChange(event.target.value)}
-            disabled={loading}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+            {selectedCompany?.name || companyId || "No company selected"}
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            {companies.map((company) => (
-              <option key={company._id} value={company._id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
         </div>
       </div>
 

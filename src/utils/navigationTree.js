@@ -23,7 +23,7 @@ export const menuTree = [
     label: "Company",
     icon: Building2,
     children: [
-      { label: "Create Company", to: "/company/create" },
+      // { label: "Create Company", to: "/company/create" },
       { label: "Alter Company", to: "/company/alter" },
       // { label: "Select Company", to: "/company/select" },
       // { label: "Shut Company", to: "/company/shut" },

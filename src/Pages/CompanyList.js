@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Building2, CalendarDays, PencilLine, Upload } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import api from "../api/api";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 
 const defaultCurrencies = [
   { code: "BDT", symbol: "TK", name: "Bangladeshi Taka", decimalPlaces: 2 },
@@ -50,19 +52,35 @@ function toDateInput(value) {
 }
 
 export default function CompanyList() {
+  const location = useLocation();
+  const { companyId } = useActiveCompany();
   const [companies, setCompanies] = useState([]);
   const [currencies, setCurrencies] = useState(defaultCurrencies);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const isAlterMode = useMemo(
+    () => location.pathname.includes("/company/alter"),
+    [location.pathname],
+  );
 
   async function loadCompanies() {
     const response = await api.get("/companies");
     setCompanies(response.data);
+    return response.data || [];
   }
 
   useEffect(() => {
-    loadCompanies();
-  }, []);
+    async function loadInitialCompanies() {
+      const rows = await loadCompanies();
+      if (!isAlterMode || !companyId) return;
+      const currentCompany =
+        rows.find((company) => String(company._id) === String(companyId)) || null;
+      if (currentCompany) {
+        applyCompany(currentCompany);
+      }
+    }
+    loadInitialCompanies();
+  }, [companyId, isAlterMode]);
 
   useEffect(() => {
     async function loadReferenceCurrencies() {
@@ -136,8 +154,16 @@ export default function CompanyList() {
         await api.post("/companies", payload);
       }
 
+      const rows = await loadCompanies();
+      if (isAlterMode && companyId) {
+        const currentCompany =
+          rows.find((company) => String(company._id) === String(companyId)) || null;
+        if (currentCompany) {
+          applyCompany(currentCompany);
+          return;
+        }
+      }
       setForm(defaultForm);
-      await loadCompanies();
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save company");
     } finally {
@@ -209,20 +235,24 @@ export default function CompanyList() {
                 Company master
               </div>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">
-                {form.id ? "Alter Company" : "Create Company"}
+                {isAlterMode ? "Alter Company" : "Create Company"}
               </h1>
               <p className="mt-2 text-sm text-slate-500">
-                Only company name is mandatory. Everything else can be completed later.
+                {isAlterMode
+                  ? "You are updating the currently opened company. Other companies are not listed here."
+                  : "Only company name is mandatory. Everything else can be completed later."}
               </p>
             </div>
 
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              <Upload className="h-4 w-4" />
-              Import Company
-            </button>
+            {!isAlterMode ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <Upload className="h-4 w-4" />
+                Import Company
+              </button>
+            ) : null}
           </div>
         </section>
 
@@ -468,7 +498,7 @@ export default function CompanyList() {
                 </div>
               </div>
             </div>
-
+{/* 
             <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm ring-1 ring-amber-100">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -538,10 +568,10 @@ export default function CompanyList() {
                   </div>
                 </div>
               ) : null}
-            </div>
+            </div> */}
 
             {/* More Options */}
-            <div>
+            {/* <div>
               <h2 className="text-lg font-semibold text-slate-900">More Options</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
@@ -562,7 +592,7 @@ export default function CompanyList() {
                   </label>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-6">
               <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -585,13 +615,14 @@ export default function CompanyList() {
                   onClick={saveCompany}
                   disabled={saving}
                 >
-                  {form.id ? "Update Company" : "Create Company"}
+                  {isAlterMode ? "Update Company" : "Create Company"}
                 </button>
               </div>
             </div>
           </div>
         </section>
 
+        {false && (
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
           <div className="border-b border-slate-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-slate-900">Existing Companies</h2>
@@ -634,6 +665,7 @@ export default function CompanyList() {
             </table>
           </div>
         </section>
+        )}
       </div>
     </div>
   );

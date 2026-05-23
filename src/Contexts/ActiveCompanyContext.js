@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import api from "../api/api";
+import { EMPLOYEE_SESSION_TOKEN_KEY } from "../utils/accessControl";
 
 export const STORAGE_KEY = "accubooks-active-company";
 const ActiveCompanyContext = createContext(null);
@@ -14,6 +15,7 @@ const ActiveCompanyContext = createContext(null);
 function clearEmployeeSession() {
   window.localStorage.removeItem("pos-user");
   window.localStorage.removeItem("attendance-user");
+  window.localStorage.removeItem(EMPLOYEE_SESSION_TOKEN_KEY);
 }
 
 export function ActiveCompanyProvider({ children }) {
