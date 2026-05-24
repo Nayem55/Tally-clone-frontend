@@ -36,6 +36,7 @@ const emptyRow = {
   rate: "",
   discountPercent: "",
   billedManuallyEdited: false,
+  persistedFromVoucher: false,
 };
 
 const SALES_TEMPLATE_SHEET = "Sales Voucher";
@@ -160,6 +161,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             billedManuallyEdited:
               String(line.billedQty || line.qty || 1) !==
               String(line.qty || line.billedQty || 1),
+            persistedFromVoucher: true,
           })) || [emptyRow],
       });
     }
@@ -262,7 +264,9 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
-        rows[index] = recalculateRow(rows[index], prev.date, activePriceLevelId);
+        if (!isEditMode || !rows[index].persistedFromVoucher) {
+          rows[index] = recalculateRow(rows[index], prev.date, activePriceLevelId);
+        }
       }
       if (key === "billedQty") {
         rows[index].billedManuallyEdited = true;
@@ -289,6 +293,13 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   };
 
   const updateDate = (value) => {
+    if (isEditMode) {
+      setForm((prev) => ({
+        ...prev,
+        date: value,
+      }));
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       date: value,
@@ -297,6 +308,13 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   };
 
   const updatePriceLevel = (value) => {
+    if (isEditMode) {
+      setForm((prev) => ({
+        ...prev,
+        priceLevelId: value,
+      }));
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       priceLevelId: value,

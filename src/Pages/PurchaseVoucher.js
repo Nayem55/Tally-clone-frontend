@@ -27,6 +27,7 @@ const emptyRow = {
   billedQty: "1",
   rate: "",
   billedManuallyEdited: false,
+  persistedFromVoucher: false,
 };
 
 const PURCHASE_TEMPLATE_SHEET = "Purchase Voucher";
@@ -244,6 +245,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             billedManuallyEdited:
               String(line.billedQty || line.qty || 1) !==
               String(line.qty || line.billedQty || 1),
+            persistedFromVoucher: true,
           })) || [createEmptyRow()],
       });
     }
@@ -319,7 +321,9 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
-        rows[index] = recalculateRow(rows[index], prev.date);
+        if (!isEditMode || !rows[index].persistedFromVoucher) {
+          rows[index] = recalculateRow(rows[index], prev.date);
+        }
       }
       if (key === "billedQty") {
         rows[index].billedManuallyEdited = true;
@@ -339,12 +343,20 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
 
-  const updateDate = (value) =>
+  const updateDate = (value) => {
+    if (isEditMode) {
+      setForm((prev) => ({
+        ...prev,
+        date: value,
+      }));
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       date: value,
       rows: prev.rows.map((row) => recalculateRow(row, value)),
     }));
+  };
 
   const validRows = form.rows.filter(
     (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,

@@ -29,7 +29,7 @@ import {
   parseWorksheetRows,
 } from "../utils/voucherExcel";
 
-const emptyRow = { itemId: "", qty: "1", rate: "" };
+const emptyRow = { itemId: "", qty: "1", rate: "", persistedFromVoucher: false };
 const DEBIT_TEMPLATE_SHEET = "Debit Note Voucher";
 const DEBIT_NOTE_RETURN_STORAGE_KEY = "debit-note-voucher-return-draft";
 
@@ -126,6 +126,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
           itemId: String(line.itemId || ""),
           qty: String(line.qty || 1),
           rate: Number(line.rate || 0),
+          persistedFromVoucher: true,
         })) || [emptyRow],
       });
     }
@@ -265,11 +266,13 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
-        rows[index].rate = resolveItemRateByDate(
-          itemMap.get(value),
-          null,
-          prev.date,
-        );
+        if (!isEditMode || !rows[index].persistedFromVoucher) {
+          rows[index].rate = resolveItemRateByDate(
+            itemMap.get(value),
+            null,
+            prev.date,
+          );
+        }
       }
       return { ...prev, rows };
     });
@@ -287,6 +290,13 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
   }
 
   function updateDate(value) {
+    if (isEditMode) {
+      setForm((prev) => ({
+        ...prev,
+        date: value,
+      }));
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       date: value,

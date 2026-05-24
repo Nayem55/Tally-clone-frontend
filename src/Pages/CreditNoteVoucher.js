@@ -29,7 +29,7 @@ import {
   parseWorksheetRows,
 } from "../utils/voucherExcel";
 
-const emptyRow = { itemId: "", qty: "1", rate: "" };
+const emptyRow = { itemId: "", qty: "1", rate: "", persistedFromVoucher: false };
 const CREDIT_TEMPLATE_SHEET = "Credit Note Voucher";
 const CREDIT_NOTE_RETURN_STORAGE_KEY = "credit-note-voucher-return-draft";
 
@@ -126,6 +126,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
           itemId: String(line.itemId || ""),
           qty: String(line.qty || 1),
           rate: Number(line.rate || 0),
+          persistedFromVoucher: true,
         })) || [emptyRow],
       });
     }
@@ -265,11 +266,13 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
-        rows[index].rate = resolveItemRateByDate(
-          itemMap.get(value),
-          null,
-          prev.date,
-        );
+        if (!isEditMode || !rows[index].persistedFromVoucher) {
+          rows[index].rate = resolveItemRateByDate(
+            itemMap.get(value),
+            null,
+            prev.date,
+          );
+        }
       }
       return { ...prev, rows };
     });
@@ -287,6 +290,13 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
   }
 
   function updateDate(value) {
+    if (isEditMode) {
+      setForm((prev) => ({
+        ...prev,
+        date: value,
+      }));
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       date: value,
