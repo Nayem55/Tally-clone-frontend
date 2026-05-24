@@ -384,6 +384,15 @@ export default function ContraVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Contra Voucher",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

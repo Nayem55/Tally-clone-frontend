@@ -5,6 +5,8 @@ import { voucherShortcuts } from "../utils/shortcuts";
 import useVoucherShortcuts from "../hooks/useVoucherShortcuts";
 import SaveVoucherModal from "./SaveVoucherModal";
 import { previewVoucherNode, printVoucherNode } from "../utils/printVoucher";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
+import VoucherEditLogButton from "./VoucherEditLogButton";
 
 export function formatVoucherMoney(value, symbol = "") {
   const amount = Number(value || 0).toLocaleString("en-IN", {
@@ -44,12 +46,31 @@ export default function VoucherWorkspace({
   onPreviewPrint,
   onPrintAfterSave,
   extraActions = null,
+  auditLogProps = null,
   children,
 }) {
   const Icon = icon;
   const containerRef = useRef(null);
   const location = useLocation();
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const currentUser = useMemo(readStoredUser, []);
+  const canManageVoucher = useMemo(() => {
+    const normalizedPath = String(location.pathname || "").toLowerCase();
+    const normalizedTitle = String(title || "").toLowerCase();
+    const inventoryVoucherTitles = [
+      "receipt note",
+      "delivery note",
+      "stock journal",
+      "manufacturing",
+    ];
+    const inventoryPath =
+      normalizedPath.includes("/transactions/inventory/") ||
+      inventoryVoucherTitles.includes(normalizedTitle);
+    return canPerformAction(
+      currentUser?.role,
+      inventoryPath ? "vouchers.inventory.manage" : "vouchers.accounting.manage",
+    );
+  }, [currentUser, location.pathname, title]);
 
   const mergedShortcuts = useMemo(() => {
     const incomingByLabel = new Map(shortcuts.map((item) => [item.label, item]));
@@ -83,6 +104,7 @@ export default function VoucherWorkspace({
   }, []);
 
   async function handleSave(mode = "save") {
+    if (!canManageVoucher) return;
     setShowSaveConfirm(false);
     await onSave?.({
       printAfterSave: mode === "print",
@@ -149,6 +171,13 @@ export default function VoucherWorkspace({
             </div>
 
             <div data-print-hide="true" className="flex flex-wrap gap-3">
+              {auditLogProps?.companyId && auditLogProps?.voucherId ? (
+                <VoucherEditLogButton
+                  companyId={auditLogProps.companyId}
+                  voucherId={auditLogProps.voucherId}
+                  voucherTitle={auditLogProps.voucherTitle || title}
+                />
+              ) : null}
               {extraActions}
               <button
                 type="button"
@@ -172,6 +201,7 @@ export default function VoucherWorkspace({
                 type="button"
                 className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
                 onClick={onSaveDraft}
+                disabled={!canManageVoucher}
               >
                 <Save className="h-4 w-4" />
                 Save Draft
@@ -179,7 +209,8 @@ export default function VoucherWorkspace({
               <button
                 type="button"
                 className="inline-flex items-center gap-2 bg-[#1463ff] px-6 py-2.5 text-[14px] font-semibold text-white"
-                onClick={() => setShowSaveConfirm(true)}
+                onClick={() => canManageVoucher && setShowSaveConfirm(true)}
+                disabled={!canManageVoucher}
               >
                 <Check className="h-4 w-4" />
                 Save Voucher
@@ -190,7 +221,14 @@ export default function VoucherWorkspace({
         </section>
 
         <div data-print-layout="true" className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_250px]">
-          <div data-print-main="true" className="space-y-4 bg-[#f8f8f8] p-3">{children}</div>
+          <div data-print-main="true" className="space-y-4 bg-[#f8f8f8] p-3">
+            {!canManageVoucher ? (
+              <div data-print-hide="true" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                You can review this voucher screen, but save actions are limited for your role.
+              </div>
+            ) : null}
+            {children}
+          </div>
 
           <aside data-print-sidebar="true" className="border-l border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3">
             <InfoCard title="Voucher Summary">

@@ -3,6 +3,7 @@ import { Building2, CalendarDays, PencilLine, Upload } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 
 const defaultCurrencies = [
   { code: "BDT", symbol: "TK", name: "Bangladeshi Taka", decimalPlaces: 2 },
@@ -61,6 +62,11 @@ export default function CompanyList() {
   const isAlterMode = useMemo(
     () => location.pathname.includes("/company/alter"),
     [location.pathname],
+  );
+  const currentUser = useMemo(readStoredUser, []);
+  const canManageCompany = useMemo(
+    () => canPerformAction(currentUser?.role, "company.manage"),
+    [currentUser],
   );
 
   async function loadCompanies() {
@@ -121,6 +127,10 @@ export default function CompanyList() {
   }, [form.financialYearFrom, form.financialYearTo]);
 
   async function saveCompany() {
+    if (!canManageCompany) {
+      alert("You do not have permission to update company details.");
+      return;
+    }
     if (!form.name.trim()) {
       alert("Company name is required");
       return;
@@ -242,6 +252,12 @@ export default function CompanyList() {
                   ? "You are updating the currently opened company. Other companies are not listed here."
                   : "Only company name is mandatory. Everything else can be completed later."}
               </p>
+              {!canManageCompany ? (
+                <p className="mt-2 text-sm font-medium text-amber-700">
+                  You can review company information here, but company changes are limited to admin
+                  or supervisor roles.
+                </p>
+              ) : null}
             </div>
 
             {!isAlterMode ? (
@@ -613,7 +629,7 @@ export default function CompanyList() {
                   type="button"
                   className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
                   onClick={saveCompany}
-                  disabled={saving}
+                  disabled={saving || !canManageCompany}
                 >
                   {isAlterMode ? "Update Company" : "Create Company"}
                 </button>

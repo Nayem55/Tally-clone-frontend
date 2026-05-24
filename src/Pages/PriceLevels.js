@@ -3,6 +3,7 @@ import { Download, PencilLine, Plus, Search, Tag, Trash2, Upload } from "lucide-
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   exportMasterWorkbook,
   readWorkbookFromFile,
@@ -26,6 +27,8 @@ export default function PriceLevels() {
   const [status, setStatus] = useState("");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  const currentUser = readStoredUser();
+  const canManagePriceLevels = canPerformAction(currentUser?.role, "masters.price.manage");
 
   useEffect(() => {
     api.get("/companies").then((res) => {
@@ -75,6 +78,10 @@ export default function PriceLevels() {
   }, [levels, search]);
 
   const save = async () => {
+    if (!canManagePriceLevels) {
+      alert("You do not have permission to manage price lists.");
+      return;
+    }
     try {
       if (form.id) {
         await api.put(`/companies/${companyId}/price-levels/${form.id}`, form);
@@ -95,6 +102,10 @@ export default function PriceLevels() {
   };
 
   const deleteLevel = async (id) => {
+    if (!canManagePriceLevels) {
+      alert("You do not have permission to delete price lists.");
+      return;
+    }
     if (!window.confirm("Delete this price level?")) return;
     await api.delete(`/companies/${companyId}/price-levels/${id}`);
     loadLevels();
@@ -172,6 +183,11 @@ export default function PriceLevels() {
                 {status}
               </div>
             ) : null}
+            {!canManagePriceLevels ? (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                This page is in read-only mode for your role. Create, update, delete, and import actions are limited.
+              </div>
+            ) : null}
             <h2 className="text-lg font-semibold text-slate-900">
               {form.id ? "Alter Price List" : "Create Price List"}
             </h2>
@@ -188,12 +204,13 @@ export default function PriceLevels() {
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
+                disabled={importing || !canManagePriceLevels}
               >
                 <Upload className="h-4 w-4" />
                 {importing ? "Importing..." : "Import Excel"}
               </button>
               <input
+                disabled={!canManagePriceLevels}
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls"
@@ -207,17 +224,20 @@ export default function PriceLevels() {
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
                 placeholder="Price level code"
                 value={form.code}
+                disabled={!canManagePriceLevels}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
               />
               <input
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
                 placeholder="Display name"
                 value={form.name}
+                disabled={!canManagePriceLevels}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
               <button
                 className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white"
                 onClick={save}
+                disabled={!canManagePriceLevels}
               >
                 <Plus className="h-4 w-4" />
                 {form.id ? "Update Price List" : "Create Price List"}
@@ -257,12 +277,14 @@ export default function PriceLevels() {
                         <div className="flex justify-end gap-2">
                           <button
                             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                            disabled={!canManagePriceLevels}
                             onClick={() => setForm({ id: level._id, code: level.code, name: level.name })}
                           >
                             <PencilLine className="h-4 w-4" />
                           </button>
                           <button
                             className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                            disabled={!canManagePriceLevels}
                             onClick={() => deleteLevel(level._id)}
                           >
                             <Trash2 className="h-4 w-4" />

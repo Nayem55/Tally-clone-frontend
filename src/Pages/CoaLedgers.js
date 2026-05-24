@@ -4,12 +4,16 @@ export default function CoaLedgers() {
   return (
     <ChartTreeReportPage
       title="Ledgers"
-      subtitle="Inspect ledger hierarchy only. Group rows are kept on the Groups chart page."
+      subtitle="Review ledgers under their accounting groups in a tree-style chart view."
       endpoint="chart-of-accounts/ledgers"
-      searchPlaceholder="Search ledger..."
-      summaryLabel="Total Ledgers"
+      searchPlaceholder="Search group or ledger..."
+      summaryLabel="Total Groups"
       rowTypeLabel="Visible Ledgers"
-      summaryValueMode="ledgers"
+      summaryValueMode="groups"
+      getRowNavigation={(row, companyId) => ({
+        to: row.type === "group" ? "/masters/alter/group" : "/masters/alter/ledger",
+        state: { companyId, editId: row.id || row._id },
+      })}
     />
   );
 }

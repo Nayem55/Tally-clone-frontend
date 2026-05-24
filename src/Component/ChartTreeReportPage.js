@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Building2, Search, Shapes } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "./CompanyPicker";
 
@@ -53,7 +54,9 @@ export default function ChartTreeReportPage({
   renderMeta,
   rowTypeLabel,
   summaryValueMode = "groups",
+  getRowNavigation,
 }) {
+  const navigate = useNavigate();
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [rows, setRows] = useState([]);
@@ -101,6 +104,15 @@ export default function ChartTreeReportPage({
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
+    });
+  };
+
+  const openRow = (row) => {
+    if (!getRowNavigation || !companyId) return;
+    const destination = getRowNavigation(row, companyId);
+    if (!destination?.to) return;
+    navigate(destination.to, {
+      state: destination.state || {},
     });
   };
 
@@ -199,14 +211,33 @@ export default function ChartTreeReportPage({
                     ) : (
                       <span className="w-5" />
                     )}
-                    <div>
-                      <p className={`${isGroup ? "font-semibold text-slate-900" : "text-slate-700"}`}>
-                        {row.name}
-                      </p>
-                      {renderMeta ? renderMeta(row) : row.groupPath ? (
-                        <p className="mt-0.5 text-xs text-slate-400">{row.groupPath}</p>
-                      ) : null}
-                    </div>
+                    {getRowNavigation ? (
+                      <button
+                        type="button"
+                        className="text-left"
+                        onClick={() => openRow(row)}
+                      >
+                        <p
+                          className={`${
+                            isGroup ? "font-semibold text-slate-900" : "text-slate-700"
+                          } hover:text-blue-700`}
+                        >
+                          {row.name}
+                        </p>
+                        {renderMeta ? renderMeta(row) : row.groupPath ? (
+                          <p className="mt-0.5 text-xs text-slate-400">{row.groupPath}</p>
+                        ) : null}
+                      </button>
+                    ) : (
+                      <div>
+                        <p className={`${isGroup ? "font-semibold text-slate-900" : "text-slate-700"}`}>
+                          {row.name}
+                        </p>
+                        {renderMeta ? renderMeta(row) : row.groupPath ? (
+                          <p className="mt-0.5 text-xs text-slate-400">{row.groupPath}</p>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right text-xs text-slate-400">
                     {isGroup ? "Group" : row.type === "item" ? "Item" : row.type || "Row"}

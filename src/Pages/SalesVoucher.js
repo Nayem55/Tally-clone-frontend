@@ -45,6 +45,7 @@ const SALES_VOUCHER_RETURN_STORAGE_KEY = "sales-voucher-return-draft";
 
 export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
+  const hasHydratedEditVoucherRef = useRef(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -139,6 +140,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       const creditLine = (voucher.lines || []).find((line) => Number(line.credit || 0) > 0);
 
       if (!alive) return;
+      hasHydratedEditVoucherRef.current = true;
       setForm({
         number: voucher.number || "",
         date: voucher.date ? String(voucher.date).slice(0, 10) : formatDateForInput(new Date()),
@@ -169,11 +171,15 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   }, [companyId, editVoucherId, items.length, salesLedgerId]);
 
   useEffect(() => {
+    if (isEditMode && hasHydratedEditVoucherRef.current) {
+      hasHydratedEditVoucherRef.current = false;
+      return;
+    }
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.map((row) => recalculateRow(row, prev.date, activePriceLevelId)),
+      rows: prev.rows.map((row) => recalculateRow(row, prev.date, prev.priceLevelId)),
     }));
-  }, [form.partyLedger, form.priceLevelId, items.length]);
+  }, [form.partyLedger, form.priceLevelId, items.length, isEditMode]);
 
   useEffect(() => {
     if (!suggestedNumber || isEditMode) return;
@@ -227,13 +233,14 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     [items]
   );
   useEffect(() => {
+    if (isEditMode) return;
     if (!partyLedger?.priceLevelId) return;
     setForm((prev) =>
       prev.priceLevelId === partyLedger.priceLevelId
         ? prev
         : { ...prev, priceLevelId: partyLedger.priceLevelId }
     );
-  }, [partyLedger?.priceLevelId]);
+  }, [partyLedger?.priceLevelId, isEditMode]);
 
   const lineAmount = (row) => {
     const qty = Number(row.billedQty || row.actualQty || 0);
@@ -677,6 +684,15 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       ]}
       onPreviewPrint={() => previewVoucherDocument(printData)}
       onPrintAfterSave={() => printVoucherDocument(printData)}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Sales Voucher",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

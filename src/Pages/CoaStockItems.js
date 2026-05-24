@@ -9,6 +9,10 @@ export default function CoaStockItems() {
       searchPlaceholder="Search stock group, item, or barcode..."
       summaryLabel="Total Stock Groups"
       rowTypeLabel="Total Stock Items"
+      getRowNavigation={(row, companyId) => ({
+        to: row.type === "group" ? "/masters/alter/stock-group" : "/masters/alter/stock-item",
+        state: { companyId, editId: row.id || row._id },
+      })}
       renderMeta={(row) =>
         row.type === "item" && row.barcode ? (
           <p className="text-xs text-slate-400">{row.barcode}</p>

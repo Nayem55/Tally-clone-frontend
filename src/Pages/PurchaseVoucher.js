@@ -664,6 +664,15 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Purchase Voucher",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

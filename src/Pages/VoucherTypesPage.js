@@ -8,6 +8,7 @@ import {
   readWorkbookFromFile,
   worksheetToObjects,
 } from "../utils/masterExcel";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 
 const defaultForm = {
   id: "",
@@ -27,6 +28,11 @@ export default function VoucherTypesPage({
   const [status, setStatus] = useState("");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  const currentUser = useMemo(() => readStoredUser(), []);
+  const canManageVoucherTypes = canPerformAction(
+    currentUser?.role,
+    "masters.accounting.manage",
+  );
 
   useEffect(() => {
     async function loadCompanies() {
@@ -50,6 +56,10 @@ export default function VoucherTypesPage({
   }, [companyId]);
 
   async function saveVoucherType() {
+    if (!canManageVoucherTypes) {
+      setStatus("This page is in read-only mode for your role.");
+      return;
+    }
     if (!companyId || !form.name.trim()) {
       alert("Voucher type name is required");
       return;
@@ -75,6 +85,10 @@ export default function VoucherTypesPage({
   }
 
   async function deleteVoucherType(id) {
+    if (!canManageVoucherTypes) {
+      setStatus("This page is in read-only mode for your role.");
+      return;
+    }
     if (!window.confirm("Delete this voucher type?")) return;
     try {
       await api.delete(`/companies/${companyId}/voucher-types/${id}`);
@@ -116,6 +130,10 @@ export default function VoucherTypesPage({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !companyId) return;
+    if (!canManageVoucherTypes) {
+      setStatus("This page is in read-only mode for your role.");
+      return;
+    }
 
     setImporting(true);
     setStatus("");
@@ -169,6 +187,11 @@ export default function VoucherTypesPage({
                 {status}
               </div>
             ) : null}
+            {!canManageVoucherTypes ? (
+              <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                This page is in read-only mode for your role. Create, update, delete, and import actions are limited.
+              </div>
+            ) : null}
             <h2 className="text-lg font-semibold text-slate-900">
               {form.id ? "Alter Voucher Type" : "Create Voucher Type"}
             </h2>
@@ -186,7 +209,7 @@ export default function VoucherTypesPage({
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
+                disabled={importing || !canManageVoucherTypes}
               >
                 <Upload className="h-4 w-4" />
                 {importing ? "Importing..." : "Import Excel"}
@@ -226,6 +249,7 @@ export default function VoucherTypesPage({
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
                 onClick={saveVoucherType}
+                disabled={!canManageVoucherTypes}
               >
                 <Plus className="h-4 w-4" />
                 {form.id ? "Update Voucher Type" : "Create Voucher Type"}
@@ -273,6 +297,7 @@ export default function VoucherTypesPage({
                                 category: voucherType.category || "ACCOUNTING",
                               })
                             }
+                            disabled={!canManageVoucherTypes}
                           >
                             <PencilLine className="h-4 w-4" />
                           </button>
@@ -280,6 +305,7 @@ export default function VoucherTypesPage({
                             type="button"
                             className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-600"
                             onClick={() => deleteVoucherType(voucherType._id)}
+                            disabled={!canManageVoucherTypes}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

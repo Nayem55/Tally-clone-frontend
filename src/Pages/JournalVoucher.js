@@ -364,6 +364,15 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Journal Voucher",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

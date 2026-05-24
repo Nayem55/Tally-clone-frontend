@@ -9,6 +9,10 @@ export default function CoaStockGroups() {
       searchPlaceholder="Search stock group..."
       summaryLabel="Total Stock Groups"
       rowTypeLabel="Leaf Groups"
+      getRowNavigation={(row, companyId) => ({
+        to: "/masters/alter/stock-group",
+        state: { companyId, editId: row.id || row._id },
+      })}
     />
   );
 }

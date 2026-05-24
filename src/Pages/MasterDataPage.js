@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -39,6 +40,21 @@ export default function MasterDataPage({
   const [status, setStatus] = useState("");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  const currentUser = useMemo(readStoredUser, []);
+  const actionScope = useMemo(() => {
+    const normalizedEndpoint = String(endpoint || "").toLowerCase();
+    if (["groups", "ledgers", "voucher-types", "currencies"].includes(normalizedEndpoint)) {
+      return "masters.accounting.manage";
+    }
+    if (["price-levels", "alter-price-levels", "price-list", "price-lists"].includes(normalizedEndpoint)) {
+      return "masters.price.manage";
+    }
+    return "masters.inventory.manage";
+  }, [endpoint]);
+  const canManageMasters = useMemo(
+    () => canPerformAction(currentUser?.role, actionScope),
+    [actionScope, currentUser],
+  );
 
   useEffect(() => {
     async function loadCompanies() {
@@ -87,6 +103,10 @@ export default function MasterDataPage({
   }, [location.state, navigate]);
 
   async function save() {
+    if (!canManageMasters) {
+      alert(`You do not have permission to change ${title.toLowerCase()}.`);
+      return;
+    }
     if (!companyId) return;
     const payload = fields.reduce((accumulator, field) => {
       accumulator[field.name] = form[field.name];
@@ -115,6 +135,10 @@ export default function MasterDataPage({
   }
 
   async function remove(id) {
+    if (!canManageMasters) {
+      alert(`You do not have permission to delete ${title.toLowerCase()}.`);
+      return;
+    }
     if (!window.confirm(`Delete this ${title.toLowerCase()}?`)) return;
     try {
       await api.delete(`/companies/${companyId}/${endpoint}/${id}`);
@@ -168,6 +192,11 @@ export default function MasterDataPage({
   }
 
   async function importExcelFile(event) {
+    if (!canManageMasters) {
+      setStatus(`You do not have permission to import ${title.toLowerCase()}.`);
+      event.target.value = "";
+      return;
+    }
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !companyId) return;
@@ -253,6 +282,12 @@ export default function MasterDataPage({
             <h2 className="text-lg font-semibold text-slate-900">
               {form.id ? `Alter ${title}` : `Create ${title}`}
             </h2>
+            {!canManageMasters ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                This page is in read-only mode for your role. You can review records here, but
+                create, update, delete, and import actions are limited.
+              </div>
+            ) : null}
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
@@ -266,7 +301,7 @@ export default function MasterDataPage({
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
+                disabled={importing || !canManageMasters}
               >
                 <Upload className="h-4 w-4" />
                 {importing ? "Importing..." : "Import Excel"}
@@ -319,6 +354,7 @@ export default function MasterDataPage({
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white"
                 onClick={save}
+                disabled={!canManageMasters}
               >
                 <Plus className="h-4 w-4" />
                 {form.id ? `Update ${title}` : `Create ${title}`}
@@ -367,6 +403,7 @@ export default function MasterDataPage({
                           <button
                             type="button"
                             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                            disabled={!canManageMasters}
                             onClick={() =>
                               setForm(
                                 fields.reduce(
@@ -388,6 +425,7 @@ export default function MasterDataPage({
                           <button
                             type="button"
                             className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                            disabled={!canManageMasters}
                             onClick={() => remove(row._id)}
                           >
                             <Trash2 className="h-4 w-4" />

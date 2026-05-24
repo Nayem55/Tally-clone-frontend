@@ -530,6 +530,15 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       ]}
       onPreviewPrint={() => previewVoucherDocument(printData)}
       onPrintAfterSave={() => printVoucherDocument(printData)}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Debit Note",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

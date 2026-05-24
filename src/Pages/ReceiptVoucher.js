@@ -351,6 +351,15 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Receipt Voucher",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

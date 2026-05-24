@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -50,18 +51,21 @@ export default function Ledgers() {
   const [status, setStatus] = useState("");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  const hasAppliedExternalEditRef = useRef(false);
+  const currentUser = readStoredUser();
+  const canManageLedgers = canPerformAction(currentUser?.role, "masters.accounting.manage");
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
       if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
+        setCompanyId((current) => current || location.state?.companyId || response.data[0]._id);
       }
     }
 
     loadCompanies();
-  }, []);
+  }, [location.state?.companyId]);
 
   async function loadMasters(selectedCompanyId = companyId) {
     if (!selectedCompanyId) return;
@@ -78,6 +82,26 @@ export default function Ledgers() {
   useEffect(() => {
     loadMasters();
   }, [companyId]);
+
+  useEffect(() => {
+    const targetId = String(location.state?.editId || "");
+    if (!targetId || !companyId || hasAppliedExternalEditRef.current) return;
+    const match = ledgers.find((ledger) => String(ledger._id) === targetId);
+    if (!match) return;
+    hasAppliedExternalEditRef.current = true;
+    setForm({
+      id: match._id,
+      name: match.name,
+      groupId: match.groupId,
+      openingBalance: match.openingBalance,
+      openingDrCr: match.openingDrCr,
+      priceLevelId: match.priceLevelId || "",
+      bankDetails: {
+        ...defaultForm.bankDetails,
+        ...(match.bankDetails || {}),
+      },
+    });
+  }, [companyId, ledgers, location.state?.editId]);
 
   useEffect(() => {
     function handleReturnShortcut(event) {
@@ -161,6 +185,10 @@ export default function Ledgers() {
 
   async function saveLedger() {
     if (!companyId) return;
+    if (!canManageLedgers) {
+      alert("You do not have permission to manage ledgers.");
+      return;
+    }
     try {
       const payload = {
         name: form.name,
@@ -201,6 +229,10 @@ export default function Ledgers() {
   );
 
   async function deleteLedger(ledgerId) {
+    if (!canManageLedgers) {
+      alert("You do not have permission to delete ledgers.");
+      return;
+    }
     if (!window.confirm("Delete this ledger?")) return;
     try {
       await api.delete(`/companies/${companyId}/ledgers/${ledgerId}`);
@@ -338,6 +370,11 @@ export default function Ledgers() {
                 </button>
               )}
             </div>
+            {!canManageLedgers ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                This page is in read-only mode for your role. Create, update, delete, and import actions are limited.
+              </div>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-3">
               <button
@@ -352,12 +389,13 @@ export default function Ledgers() {
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
+                disabled={importing || !canManageLedgers}
               >
                 <Upload className="h-4 w-4" />
                 {importing ? "Importing..." : "Import Excel"}
               </button>
               <input
+                disabled={!canManageLedgers}
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls"
@@ -371,6 +409,7 @@ export default function Ledgers() {
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 placeholder="Ledger name"
                 value={form.name}
+                disabled={!canManageLedgers}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               />
 
@@ -379,6 +418,7 @@ export default function Ledgers() {
                 inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 value={form.groupId}
                 onChange={(newValue) => setForm((current) => ({ ...current, groupId: newValue }))}
+                disabled={!canManageLedgers}
                 placeholder="Search group"
                 options={[
                   ...sortedGroups.map((group) => ({
@@ -395,6 +435,7 @@ export default function Ledgers() {
                 onChange={(newValue) =>
                   setForm((current) => ({ ...current, priceLevelId: newValue }))
                 }
+                disabled={!canManageLedgers}
                 placeholder="Search price level"
                 emptyOptionLabel="No price level mapping"
                 treatEmptyValueAsUnselected
@@ -419,42 +460,49 @@ export default function Ledgers() {
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="A/c Holder's Name"
                         value={form.bankDetails.accountHolderName}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("accountHolderName", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="A/c No."
                         value={form.bankDetails.accountNumber}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("accountNumber", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Bank Code"
                         value={form.bankDetails.bankCode}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("bankCode", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="SWIFT Code"
                         value={form.bankDetails.swiftCode}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("swiftCode", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Bank Name"
                         value={form.bankDetails.bankName}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("bankName", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Branch"
                         value={form.bankDetails.branchName}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("branchName", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Branch Code"
                         value={form.bankDetails.branchCode}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("branchCode", event.target.value)}
                       />
                       <SearchableSelect
@@ -462,6 +510,7 @@ export default function Ledgers() {
                         inputClassName="rounded-xl border-slate-200 bg-white px-4 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         value={form.bankDetails.bankConfigurationEnabled ? "yes" : "no"}
                         onChange={(newValue) => updateBankDetail("bankConfigurationEnabled", newValue === "yes")}
+                        disabled={!canManageLedgers}
                         placeholder="Search bank configuration"
                         options={[
                           { value: "no", label: "Set/Alter Bank configuration: No" },
@@ -475,30 +524,35 @@ export default function Ledgers() {
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Mailing Name"
                         value={form.bankDetails.mailingName}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("mailingName", event.target.value)}
                       />
                       <textarea
                         className="min-h-[96px] w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Address"
                         value={form.bankDetails.mailingAddress}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("mailingAddress", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Division"
                         value={form.bankDetails.division}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("division", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Country"
                         value={form.bankDetails.country}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("country", event.target.value)}
                       />
                       <input
                         className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         placeholder="Postal Code"
                         value={form.bankDetails.postalCode}
+                        disabled={!canManageLedgers}
                         onChange={(event) => updateBankDetail("postalCode", event.target.value)}
                       />
                     </div>
@@ -512,6 +566,7 @@ export default function Ledgers() {
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   placeholder="Opening balance"
                   value={form.openingBalance}
+                  disabled={!canManageLedgers}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -527,6 +582,7 @@ export default function Ledgers() {
                   onChange={(newValue) =>
                     setForm((current) => ({ ...current, openingDrCr: newValue }))
                   }
+                  disabled={!canManageLedgers}
                   placeholder="Search opening type"
                   options={[
                     { value: "DR", label: "Debit" },
@@ -539,6 +595,7 @@ export default function Ledgers() {
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-700"
                 onClick={saveLedger}
+                disabled={!canManageLedgers}
               >
                 <Plus className="h-4 w-4" />
                 {form.id ? "Update Ledger" : "Create Ledger"}
@@ -592,6 +649,7 @@ export default function Ledgers() {
                           <button
                             type="button"
                             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            disabled={!canManageLedgers}
                             onClick={() =>
                               setForm({
                                 id: ledger._id,
@@ -612,6 +670,7 @@ export default function Ledgers() {
                           <button
                             type="button"
                             className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                            disabled={!canManageLedgers}
                             onClick={() => deleteLedger(ledger._id)}
                           >
                             <Trash2 className="h-4 w-4" />

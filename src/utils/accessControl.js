@@ -74,6 +74,29 @@ const ACCESS_RULES = {
   ],
 };
 
+const ACTION_RULES = {
+  "company.manage": ["admin", "supervisor"],
+  "masters.accounting.manage": ["admin", "supervisor", "accountant"],
+  "masters.inventory.manage": ["admin", "supervisor", "store operator"],
+  "masters.price.manage": [
+    "admin",
+    "supervisor",
+    "accountant",
+    "store operator",
+  ],
+  "masters.payroll.manage": ["admin", "supervisor"],
+  "audit.view": ["admin", "supervisor", "accountant"],
+  "vouchers.accounting.manage": [
+    "admin",
+    "supervisor",
+    "accountant",
+    "cashier",
+    "sales operator",
+    "store operator",
+  ],
+  "vouchers.inventory.manage": ["admin", "supervisor", "store operator"],
+};
+
 export function normalizeUserRole(role = "") {
   return String(role || "").trim().toLowerCase();
 }
@@ -111,6 +134,19 @@ export function canAccessPath(role, path = "/") {
     if (rule.prefix === "/") return true;
     return path === rule.prefix || path.startsWith(`${rule.prefix}/`);
   });
+}
+
+export function canPerformAction(role, actionKey = "") {
+  const normalizedRole = normalizeUserRole(role);
+  if (!normalizedRole) {
+    return true;
+  }
+  if (normalizedRole === ROLE_ADMIN) {
+    return true;
+  }
+
+  const rules = ACTION_RULES[actionKey] || [];
+  return rules.includes(normalizedRole);
 }
 
 export function filterNavigationByRole(nodes = [], role = "") {

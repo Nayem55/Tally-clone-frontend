@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -41,18 +42,24 @@ export default function Groups({
   const [status, setStatus] = useState("");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  const hasAppliedExternalEditRef = useRef(false);
+  const currentUser = readStoredUser();
+  const canManageGroups = canPerformAction(
+    currentUser?.role,
+    stockOnly ? "masters.inventory.manage" : "masters.accounting.manage",
+  );
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
       if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
+        setCompanyId((current) => current || location.state?.companyId || response.data[0]._id);
       }
     }
 
     loadCompanies();
-  }, []);
+  }, [location.state?.companyId]);
 
   async function loadGroups(selectedCompanyId = companyId) {
     if (!selectedCompanyId) return;
@@ -64,6 +71,21 @@ export default function Groups({
   useEffect(() => {
     loadGroups();
   }, [companyId]);
+
+  useEffect(() => {
+    const targetId = String(location.state?.editId || "");
+    if (!targetId || !companyId || hasAppliedExternalEditRef.current) return;
+    const match = groups.find((group) => String(group._id) === targetId);
+    if (!match) return;
+    hasAppliedExternalEditRef.current = true;
+    setForm({
+      id: match._id,
+      name: match.name,
+      parentId: match.parentId || "",
+      nature: match.nature,
+      affectsGrossProfit: Boolean(match.affectsGrossProfit),
+    });
+  }, [companyId, groups, location.state?.editId]);
 
   useEffect(() => {
     function handleReturnShortcut(event) {
@@ -154,6 +176,10 @@ export default function Groups({
 
   async function saveGroup() {
     if (!companyId) return;
+    if (!canManageGroups) {
+      alert(`You do not have permission to ${stockOnly ? "manage stock groups" : "manage groups"}.`);
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -188,6 +214,10 @@ export default function Groups({
   }
 
   async function deleteGroup(groupId) {
+    if (!canManageGroups) {
+      alert(`You do not have permission to delete ${stockOnly ? "stock groups" : "groups"}.`);
+      return;
+    }
     if (!window.confirm("Delete this group?")) return;
     try {
       await api.delete(`/companies/${companyId}/groups/${groupId}`);
@@ -341,6 +371,11 @@ export default function Groups({
                 </button>
               )}
             </div>
+            {!canManageGroups ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                This page is in read-only mode for your role. Create, update, delete, and import actions are limited.
+              </div>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-3">
               <button
@@ -355,12 +390,13 @@ export default function Groups({
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
+                disabled={importing || !canManageGroups}
               >
                 <Upload className="h-4 w-4" />
                 {importing ? "Importing..." : "Import Excel"}
               </button>
               <input
+                disabled={!canManageGroups}
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls"
@@ -374,6 +410,7 @@ export default function Groups({
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                 placeholder="Group name"
                 value={form.name}
+                disabled={!canManageGroups}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               />
 
@@ -384,6 +421,7 @@ export default function Groups({
                 onChange={(newValue) =>
                   setForm((current) => ({ ...current, parentId: newValue }))
                 }
+                disabled={!canManageGroups}
                 placeholder={stockOnly ? "Search stock parent group" : "Search parent group"}
                 emptyOptionLabel={stockOnly ? rootParentOption?.name || "Stock-in-Trade" : "Primary group"}
                 treatEmptyValueAsUnselected
@@ -421,7 +459,7 @@ export default function Groups({
                         { value: "EXPENSE", label: "Expense" },
                       ]}
                       dataNav={isNatureEditable}
-                      disabled={!isNatureEditable}
+                      disabled={!isNatureEditable || !canManageGroups}
                     />
                     <p className="text-xs text-slate-500">
                       {isNatureEditable
@@ -436,7 +474,7 @@ export default function Groups({
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={saveGroup}
-                disabled={saving}
+                disabled={saving || !canManageGroups}
               >
                 <Plus className="h-4 w-4" />
                 {form.id ? `Update ${stockOnly ? "Stock Group" : "Group"}` : `Create ${stockOnly ? "Stock Group" : "Group"}`}
@@ -488,6 +526,7 @@ export default function Groups({
                             <button
                               type="button"
                               className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                              disabled={!canManageGroups}
                               onClick={() =>
                                 setForm({
                                   id: group._id,
@@ -503,6 +542,7 @@ export default function Groups({
                             <button
                               type="button"
                               className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                              disabled={!canManageGroups}
                               onClick={() => deleteGroup(group._id)}
                             >
                               <Trash2 className="h-4 w-4" />

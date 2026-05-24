@@ -530,6 +530,15 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
       ]}
       onPreviewPrint={() => previewVoucherDocument(printData)}
       onPrintAfterSave={() => printVoucherDocument(printData)}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Credit Note",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

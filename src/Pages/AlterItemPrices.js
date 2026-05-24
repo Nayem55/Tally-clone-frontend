@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   exportWorkbookToFile,
   normalizeExcelNameKey,
@@ -98,6 +99,8 @@ export default function AlterItemPrices() {
   const [importBusy, setImportBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const fileInputRef = useRef(null);
+  const currentUser = readStoredUser();
+  const canManagePrices = canPerformAction(currentUser?.role, "masters.price.manage");
 
   const today = new Date().toISOString().slice(0, 10);
   const [bulkGroupId, setBulkGroupId] = useState("");
@@ -139,6 +142,10 @@ export default function AlterItemPrices() {
   }, [companyId]);
 
   async function bulkUpdate() {
+    if (!canManagePrices) {
+      alert("You do not have permission to update price lists.");
+      return;
+    }
     if (!bulkPriceLevelId || !bulkRate || !effectiveFrom) {
       alert("Fill price level, rate, and applicable from date");
       return;
@@ -172,6 +179,10 @@ export default function AlterItemPrices() {
   }
 
   async function updateSingleItem(itemId) {
+    if (!canManagePrices) {
+      alert("You do not have permission to update item prices.");
+      return;
+    }
     const rate = rowRates[itemId];
     if (!bulkPriceLevelId || rate === "" || rate === undefined || !effectiveFrom) {
       alert("Select price level, applied from date, and enter a row rate");
@@ -323,6 +334,10 @@ export default function AlterItemPrices() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!canManagePrices) {
+      alert("You do not have permission to import price updates.");
+      return;
+    }
     if (!bulkGroupId || !bulkPriceLevelId) {
       alert("Select group and price level before importing price updates.");
       return;
@@ -430,12 +445,13 @@ export default function AlterItemPrices() {
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
               onClick={() => fileInputRef.current?.click()}
-              disabled={importBusy}
+              disabled={importBusy || !canManagePrices}
             >
               <Upload className="h-4 w-4" />
               {importBusy ? "Importing..." : "Import Excel"}
             </button>
             <input
+              disabled={!canManagePrices}
               ref={fileInputRef}
               type="file"
               accept=".xlsx,.xls"
@@ -457,6 +473,11 @@ export default function AlterItemPrices() {
             <p className="mt-1">{statusMessage.description}</p>
           </section>
         ) : null}
+        {!canManagePrices ? (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 shadow-sm">
+            This page is in read-only mode for your role. Group updates, item updates, and import actions are limited.
+          </section>
+        ) : null}
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">Bulk Update</h2>
@@ -475,6 +496,7 @@ export default function AlterItemPrices() {
                   setBulkGroupId(newValue);
                   setSearch("");
                 }}
+                disabled={!canManagePrices}
                 placeholder="Search group"
                 options={groups.map((group) => ({
                   value: String(group.id || group._id),
@@ -514,6 +536,7 @@ export default function AlterItemPrices() {
                 className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 placeholder="Enter rate"
                 value={bulkRate}
+                disabled={!canManagePrices}
                 onChange={(e) => setBulkRate(e.target.value)}
               />
             </div>
@@ -531,6 +554,7 @@ export default function AlterItemPrices() {
                   type="date"
                   className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   value={effectiveFrom}
+                  disabled={!canManagePrices}
                   onChange={(e) => setEffectiveFrom(e.target.value)}
                 />
               </div>
@@ -542,7 +566,7 @@ export default function AlterItemPrices() {
                 type="button"
                 className="h-12 w-full rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60"
                 onClick={bulkUpdate}
-                disabled={loading}
+                disabled={loading || !canManagePrices}
               >
                 Update Group
               </button>
@@ -714,6 +738,7 @@ export default function AlterItemPrices() {
                             className="h-10 w-28 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                             placeholder="Rate"
                             value={rowRateInput}
+                            disabled={!canManagePrices}
                             onChange={(event) =>
                               setRowRates((current) => ({
                                 ...current,
@@ -725,7 +750,7 @@ export default function AlterItemPrices() {
                             type="button"
                             className="h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             onClick={() => updateSingleItem(item._id)}
-                            disabled={rowLoadingId === String(item._id)}
+                            disabled={rowLoadingId === String(item._id) || !canManagePrices}
                           >
                             {rowLoadingId === String(item._id)
                               ? "Updating..."

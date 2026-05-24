@@ -4,6 +4,7 @@ import { ArrowLeft, Boxes, Plus, Save, Trash2 } from "lucide-react";
 import api from "../api/api";
 import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import useEnterFieldNavigation from "../hooks/useEnterFieldNavigation";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 
 const blankComponent = {
   itemId: "",
@@ -55,6 +56,8 @@ export default function ManufacturingBomPage({ mode = "create" }) {
   const [form, setForm] = useState(blankForm);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const currentUser = readStoredUser();
+  const canManageBom = canPerformAction(currentUser?.role, "masters.inventory.manage");
 
   useEnterFieldNavigation(containerRef, [form.id, companyId, form.components.length]);
 
@@ -162,6 +165,10 @@ export default function ManufacturingBomPage({ mode = "create" }) {
 
   async function saveBom() {
     if (!companyId) return;
+    if (!canManageBom) {
+      setStatus("You do not have permission to manage BoM.");
+      return;
+    }
     setSaving(true);
     setStatus("");
     try {
@@ -201,6 +208,10 @@ export default function ManufacturingBomPage({ mode = "create" }) {
 
   async function deleteBom(id) {
     if (!id) return;
+    if (!canManageBom) {
+      setStatus("You do not have permission to delete BoM.");
+      return;
+    }
     if (!window.confirm("Delete this BoM?")) return;
     try {
       await api.delete(`/companies/${companyId}/manufacturing/boms/${id}`);
@@ -244,6 +255,11 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                   {status}
                 </div>
               ) : null}
+              {!canManageBom ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  This page is in read-only mode for your role. Create, update, and delete actions are limited.
+                </div>
+              ) : null}
             </div>
 
             <div className="flex gap-3">
@@ -251,6 +267,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                 type="button"
                 className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700"
                 onClick={() => setForm(blankForm)}
+                disabled={!canManageBom}
               >
                 Cancel
               </button>
@@ -258,6 +275,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
                 onClick={saveBom}
+                disabled={!canManageBom}
               >
                 <Save className="h-4 w-4" />
                 {saving ? "Saving..." : "Save BoM"}
@@ -276,6 +294,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                     data-enter-nav="true"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                     value={form.name}
+                    disabled={!canManageBom}
                     onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                   />
                 </div>
@@ -285,6 +304,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                     data-enter-nav="true"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                     value={form.finishedItemId}
+                    disabled={!canManageBom}
                     onChange={(event) => {
                       const selected = finishedGoods.find((row) => row._id === event.target.value);
                       setForm((current) => ({
@@ -314,6 +334,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                     step="0.01"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                     value={form.outputQty}
+                    disabled={!canManageBom}
                     onChange={(event) => setForm((current) => ({ ...current, outputQty: event.target.value }))}
                   />
                 </div>
@@ -323,6 +344,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                     data-enter-nav="true"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                     value={form.status}
+                    disabled={!canManageBom}
                     onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
                   >
                     <option value="active">Active</option>
@@ -338,6 +360,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                     data-enter-nav="true"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                     value={form.unitId}
+                    disabled={!canManageBom}
                     onChange={(event) => {
                       const selected = units.find((row) => row._id === event.target.value);
                       setForm((current) => ({
@@ -361,6 +384,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                     data-enter-nav="true"
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                     value={form.description}
+                    disabled={!canManageBom}
                     onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
                   />
                 </div>
@@ -384,6 +408,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                       components: [...current.components, { ...blankComponent }],
                     }))
                   }
+                  disabled={!canManageBom}
                 >
                   <Plus className="h-4 w-4" />
                   Add Component
@@ -415,6 +440,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                               data-enter-nav="true"
                               className="w-full rounded-xl border border-slate-200 px-3 py-2"
                               value={row.itemId}
+                              disabled={!canManageBom}
                               onChange={(event) => {
                                 const selected = rawMaterials.find((item) => item._id === event.target.value);
                                 patchComponent(index, {
@@ -443,6 +469,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                               step="0.01"
                               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-right"
                               value={row.qty}
+                              disabled={!canManageBom}
                               onChange={(event) => patchComponent(index, { qty: event.target.value })}
                             />
                           </td>
@@ -464,6 +491,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                             <button
                               type="button"
                               className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                              disabled={!canManageBom}
                               onClick={() =>
                                 setForm((current) => ({
                                   ...current,
@@ -498,6 +526,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                         additionalCosts: [...current.additionalCosts, { ...blankCost }],
                       }))
                     }
+                    disabled={!canManageBom}
                   >
                     <Plus className="h-4 w-4" />
                     Add
@@ -514,6 +543,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                         className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         placeholder="Cost label"
                         value={row.label}
+                        disabled={!canManageBom}
                         onChange={(event) => patchCost(index, { label: event.target.value })}
                       />
                       <input
@@ -524,11 +554,13 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                         className="rounded-xl border border-slate-200 px-3 py-2 text-right text-sm"
                         placeholder="Amount"
                         value={row.amount}
+                        disabled={!canManageBom}
                         onChange={(event) => patchCost(index, { amount: event.target.value })}
                       />
                       <button
                         type="button"
                         className="rounded-xl border border-rose-200 text-rose-500"
+                        disabled={!canManageBom}
                         onClick={() =>
                           setForm((current) => ({
                             ...current,
@@ -550,6 +582,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                   className="mt-4 min-h-[170px] w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
                   placeholder="Type remarks here..."
                   value={form.notes}
+                  disabled={!canManageBom}
                   onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
                 />
               </div>
@@ -609,8 +642,8 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                         ? "border-blue-300 bg-blue-50"
                         : "border-slate-200 bg-white hover:bg-slate-50"
                     }`}
-                    onClick={() => hydrateForm(row)}
-                  >
+                  onClick={() => hydrateForm(row)}
+                >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{row.name}</p>
@@ -637,6 +670,7 @@ export default function ManufacturingBomPage({ mode = "create" }) {
                   type="button"
                   className="mt-4 w-full rounded-xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-600"
                   onClick={() => deleteBom(form.id)}
+                  disabled={!canManageBom}
                 >
                   Delete Selected BoM
                 </button>

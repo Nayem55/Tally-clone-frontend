@@ -9,6 +9,10 @@ export default function CoaGroups() {
       searchPlaceholder="Search group..."
       summaryLabel="Total Groups"
       rowTypeLabel="Leaf Groups"
+      getRowNavigation={(row, companyId) => ({
+        to: "/masters/alter/group",
+        state: { companyId, editId: row.id || row._id },
+      })}
     />
   );
 }

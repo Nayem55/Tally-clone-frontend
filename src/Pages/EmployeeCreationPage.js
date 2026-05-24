@@ -25,6 +25,7 @@ import {
   toInputDate,
   worksheetToObjects,
 } from "../utils/masterExcel";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 
 const COMMON_PAY_HEADS = [
   { name: "Basic Salary", section: "Earning" },
@@ -611,6 +612,11 @@ function EmployeeCreationPage({ mode = "create" }) {
 
   const currency = getCompanyCurrency(selectedCompany);
   const summary = useMemo(() => calculateSalarySummary(employee), [employee]);
+  const currentUser = useMemo(() => readStoredUser(), []);
+  const canManageEmployees = canPerformAction(
+    currentUser?.role,
+    "masters.payroll.manage",
+  );
   const returnTo = location.state?.returnTo || "";
   const returnState = useMemo(() => {
     if (!location.state) return undefined;
@@ -793,6 +799,10 @@ function EmployeeCreationPage({ mode = "create" }) {
   }
 
   async function persistEmployee({ resetAfterSave = false } = {}) {
+    if (!canManageEmployees) {
+      setNotice("This page is in read-only mode for your role.");
+      return;
+    }
     if (!companyId) return;
 
     if (employee.accessControl?.loginEnabled) {
@@ -961,6 +971,10 @@ function EmployeeCreationPage({ mode = "create" }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !companyId) return;
+    if (!canManageEmployees) {
+      setNotice("This page is in read-only mode for your role.");
+      return;
+    }
 
     setImportingMaster(true);
     setNotice("");
@@ -2654,7 +2668,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                     type="button"
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
                     onClick={() => masterFileInputRef.current?.click()}
-                    disabled={importingMaster}
+                    disabled={importingMaster || !canManageEmployees}
                   >
                     <Upload className="h-4 w-4" />
                     {importingMaster ? "Importing..." : "Import Excel"}
@@ -2689,7 +2703,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                   type="button"
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
                   onClick={() => persistEmployee({ resetAfterSave: true })}
-                  disabled={saving}
+                  disabled={saving || !canManageEmployees}
                 >
                   <FilePlus2 className="h-4 w-4" />
                   Save & New
@@ -2699,7 +2713,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                 type="button"
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
                 onClick={() => persistEmployee()}
-                disabled={saving}
+                disabled={saving || !canManageEmployees}
               >
                 <Check className="h-4 w-4" />
                 {saving ? "Saving..." : isAlterMode ? "Update Employee" : "Save Employee"}
@@ -2710,6 +2724,11 @@ function EmployeeCreationPage({ mode = "create" }) {
           {notice ? (
             <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {notice}
+            </div>
+          ) : null}
+          {!canManageEmployees ? (
+            <div className="mb-5 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              This page is in read-only mode for your role. Create, update, and import actions are limited.
             </div>
           ) : null}
 
@@ -2825,6 +2844,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                       setShowEditModal(true);
                       setNotice("");
                     }}
+                    disabled={!canManageEmployees}
                   >
                     <Edit3 className="h-4 w-4" />
                     Edit

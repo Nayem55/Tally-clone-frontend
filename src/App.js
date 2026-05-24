@@ -129,6 +129,7 @@ function RequireEmployeeSession({ children }) {
   if (!companyId || String(user.companyId || "") !== String(companyId)) {
     window.localStorage.removeItem("pos-user");
     window.localStorage.removeItem("attendance-user");
+    window.localStorage.removeItem("accubooks-employee-session-token");
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

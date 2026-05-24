@@ -367,6 +367,15 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
           emphasis: true,
         },
       ]}
+      auditLogProps={
+        isEditMode
+          ? {
+              companyId,
+              voucherId: editVoucherId,
+              voucherTitle: "Payment Voucher",
+            }
+          : null
+      }
       extraActions={
         !isEditMode ? (
           <>

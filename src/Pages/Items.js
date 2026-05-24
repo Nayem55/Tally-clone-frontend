@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
+import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   buildNameMap,
   exportMasterWorkbook,
@@ -61,17 +62,20 @@ export default function Items() {
   const [search, setSearch] = useState("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const hasAppliedExternalEditRef = useRef(false);
+  const currentUser = readStoredUser();
+  const canManageItems = canPerformAction(currentUser?.role, "masters.inventory.manage");
 
   useEffect(() => {
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
       if (response.data.length > 0) {
-        setCompanyId((current) => current || response.data[0]._id);
+        setCompanyId((current) => current || location.state?.companyId || response.data[0]._id);
       }
     }
     loadCompanies();
-  }, []);
+  }, [location.state?.companyId]);
 
   async function loadData(selectedCompanyId = companyId) {
     if (!selectedCompanyId) return;
@@ -94,6 +98,15 @@ export default function Items() {
   useEffect(() => {
     loadData();
   }, [companyId]);
+
+  useEffect(() => {
+    const targetId = String(location.state?.editId || "");
+    if (!targetId || !companyId || hasAppliedExternalEditRef.current) return;
+    const match = items.find((item) => String(item._id) === targetId);
+    if (!match) return;
+    hasAppliedExternalEditRef.current = true;
+    openEditModal(match);
+  }, [companyId, items, location.state?.editId]);
 
   useEffect(() => {
     if (!companyId || !location.state?.restoreStockItemDraft) return;
@@ -147,6 +160,10 @@ export default function Items() {
   const unitOptions = useMemo(() => units, [units]);
 
   async function saveItem() {
+    if (!canManageItems) {
+      alert("You do not have permission to manage stock items.");
+      return;
+    }
     const secondaryAliases = String(form.secondaryAliases || "")
       .split(/\r?\n|,/)
       .map((value) => value.trim())
@@ -233,6 +250,10 @@ export default function Items() {
   }
 
   async function deleteItem(itemId) {
+    if (!canManageItems) {
+      alert("You do not have permission to delete stock items.");
+      return;
+    }
     if (!window.confirm("Delete this stock item?")) return;
     try {
       await api.delete(`/companies/${companyId}/items/${itemId}`);
@@ -655,6 +676,11 @@ export default function Items() {
               {status}
             </div>
           ) : null}
+          {!canManageItems ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              This page is in read-only mode for your role. Create, update, delete, and import actions are limited.
+            </div>
+          ) : null}
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <button className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
@@ -683,12 +709,13 @@ export default function Items() {
                     type="button"
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={importing}
+                    disabled={importing || !canManageItems}
                   >
                     <Upload className="h-4 w-4" />
                     {importing ? "Importing..." : "Import Excel"}
                   </button>
                   <input
+                    disabled={!canManageItems}
                     ref={fileInputRef}
                     type="file"
                     accept=".xlsx,.xls"
@@ -757,6 +784,7 @@ export default function Items() {
                         <button
                           type="button"
                           className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                          disabled={!canManageItems}
                           onClick={() => openEditModal(item)}
                         >
                           <PencilLine className="h-4 w-4" />
