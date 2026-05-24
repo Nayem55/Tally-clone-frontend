@@ -49,15 +49,15 @@ function findBalanceGroupById(rows = [], targetId) {
 
 function GroupListColumn({ title, rows, company, onOpenGroup }) {
   return (
-    <div className="border-r border-slate-200 last:border-r-0">
-      <div className="px-6 py-5">
+    <div className="border-b border-slate-200 last:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0">
+      <div className="px-4 py-4 sm:px-6 sm:py-5">
         <h2 className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
           {title}
         </h2>
       </div>
       <div className="border-t border-slate-100">
         {(rows || []).map((row) => (
-          <div key={`${title}-${row.id || row.groupName}`} className="border-b border-slate-100 px-6 py-4">
+          <div key={`${title}-${row.id || row.groupName}`} className="border-b border-slate-100 px-4 py-4 sm:px-6">
             <button
               type="button"
               data-report-nav="true"
@@ -91,7 +91,7 @@ function GroupListColumn({ title, rows, company, onOpenGroup }) {
 function LedgerListPanel({ title, groupName, rows, company, onBack, onOpenLedger }) {
   return (
     <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
         <div>
           <h2 className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
             {title}
@@ -108,7 +108,7 @@ function LedgerListPanel({ title, groupName, rows, company, onBack, onOpenLedger
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-4 py-3 font-medium">Ledger</th>
@@ -148,7 +148,7 @@ function LedgerListPanel({ title, groupName, rows, company, onBack, onOpenLedger
 function ChildGroupPanel({ title, group, company, onBack, onOpenGroup }) {
   return (
     <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
         <div>
           <h2 className="text-[14px] font-semibold uppercase tracking-wide text-[#1d62d6]">
             {title}
@@ -166,7 +166,7 @@ function ChildGroupPanel({ title, group, company, onBack, onOpenGroup }) {
       </div>
       <div className="border-t border-slate-100">
         {(group.children || []).map((row) => (
-          <div key={`detail-${row.id || row.groupName}`} className="border-b border-slate-100 px-6 py-4">
+          <div key={`detail-${row.id || row.groupName}`} className="border-b border-slate-100 px-4 py-4 sm:px-6">
             <button
               type="button"
               data-report-nav="true"
@@ -318,7 +318,7 @@ export default function BalanceSheetPage() {
   }
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-4 py-5 text-slate-900 sm:px-6 sm:py-6">
       <div className="mx-auto max-w-[1380px]">
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -342,8 +342,8 @@ export default function BalanceSheetPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-11 min-w-[180px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm sm:min-w-[180px] sm:w-auto">
               <CalendarDays className="h-4 w-4 text-slate-500" />
               <input
                 type="date"
@@ -352,12 +352,12 @@ export default function BalanceSheetPage() {
                 onChange={(event) => setToDate(event.target.value)}
               />
             </div>
-            <div className="flex h-11 min-w-[180px] items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm">
+            <div className="flex h-11 w-full items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm sm:min-w-[180px] sm:w-auto">
               {selectedCompany?.name || "No company selected"}
             </div>
             <button
               type="button"
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
               onClick={() => setShowFilters((current) => !current)}
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -365,7 +365,7 @@ export default function BalanceSheetPage() {
             </button>
             <button
               type="button"
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm sm:w-auto"
               onClick={handleExportPdf}
             >
               <Download className="h-4 w-4" />
@@ -373,7 +373,7 @@ export default function BalanceSheetPage() {
             </button>
             <button
               type="button"
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
               onClick={handleExportExcel}
             >
               <Download className="h-4 w-4" />
@@ -382,7 +382,7 @@ export default function BalanceSheetPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm sm:w-11"
             >
               <Printer className="h-4 w-4" />
             </button>
@@ -390,7 +390,7 @@ export default function BalanceSheetPage() {
         </section>
 
         {showFilters ? (
-          <section className="mt-5 rounded-[22px] border border-slate-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+          <section className="mt-5 rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:p-5">
             <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <label className="mb-2 block text-[13px] font-medium text-slate-600">From</label>
@@ -463,7 +463,7 @@ export default function BalanceSheetPage() {
           </section>
         )}
 
-        <section className="mt-6 rounded-[18px] border border-slate-200 bg-white px-6 py-4 shadow-sm">
+        <section className="mt-6 rounded-[18px] border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-6">
           <div className="grid gap-4 text-[14px] md:grid-cols-3">
             <div>
               Company : <span className="font-medium text-slate-700">{selectedCompany?.name || "-"}</span>

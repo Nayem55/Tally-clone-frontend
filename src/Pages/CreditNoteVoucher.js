@@ -667,8 +667,8 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
       </VoucherPanel>
 
       <VoucherPanel title="Item Details">
-        <div className="overflow-hidden border border-[#bccfe3]">
-          <table className="min-w-full text-sm">
+        <div className="overflow-x-auto overflow-y-visible border border-[#bccfe3]">
+          <table className="min-w-[660px] text-sm">
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>

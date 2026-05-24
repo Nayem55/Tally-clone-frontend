@@ -3,7 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   LogOut,
+  Search,
   PanelLeftClose,
   ScrollText,
   ShieldCheck,
@@ -40,6 +42,27 @@ function ShortcutBadge({ children, tone = "slate" }) {
       {children}
     </span>
   );
+}
+
+function flattenNavigationEntries(nodes, trail = []) {
+  return nodes.flatMap((node) => {
+    const nextTrail = [...trail, node.label];
+    const current = node.to
+      ? [
+          {
+            label: node.label,
+            to: node.to,
+            trail: nextTrail,
+          },
+        ]
+      : [];
+
+    if (!Array.isArray(node.children) || node.children.length === 0) {
+      return current;
+    }
+
+    return [...current, ...flattenNavigationEntries(node.children, nextTrail)];
+  });
 }
 
 function TreeNode({
@@ -148,8 +171,13 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
   const [openKeys, setOpenKeys] = useState({});
   const [shortcutScope, setShortcutScope] = useState(null);
   const [activeShortcutTarget, setActiveShortcutTarget] = useState("");
+  const [mobileMenuSearch, setMobileMenuSearch] = useState("");
+  const [showMobileSearchResults, setShowMobileSearchResults] = useState(false);
+  const [mobileHeaderExpanded, setMobileHeaderExpanded] = useState(false);
   const { companyId, selectedCompany } = useActiveCompany();
   const nodeRefs = useRef({});
+  const searchInputRef = useRef(null);
+  const mobileSearchRef = useRef(null);
   const activeUser = useMemo(() => readStoredUser(), []);
 
   const treeWithIcons = useMemo(
@@ -177,6 +205,29 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
     return badges;
   }, []);
 
+  const mobileSearchEntries = useMemo(
+    () =>
+      flattenNavigationEntries(treeWithIcons)
+        .filter((entry) => entry.to)
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [treeWithIcons],
+  );
+
+  const mobileSearchResults = useMemo(() => {
+    const query = mobileMenuSearch.trim().toLowerCase();
+    if (!query) return mobileSearchEntries.slice(0, 12);
+    return mobileSearchEntries
+      .filter((entry) => {
+        const breadcrumb = entry.trail.join(" ");
+        return (
+          entry.label.toLowerCase().includes(query) ||
+          entry.to.toLowerCase().includes(query) ||
+          breadcrumb.toLowerCase().includes(query)
+        );
+      })
+      .slice(0, 12);
+  }, [mobileMenuSearch, mobileSearchEntries]);
+
   function registerNodeRef(key, element) {
     if (!key) return;
     if (element) {
@@ -202,7 +253,27 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
 
   useEffect(() => {
     onCloseMobile();
+    setMobileMenuSearch("");
+    setShowMobileSearchResults(false);
+    setMobileHeaderExpanded(false);
   }, [location.pathname, onCloseMobile]);
+
+  useEffect(() => {
+    if (!mobileOpen) {
+      setShowMobileSearchResults(false);
+    }
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (!mobileSearchRef.current?.contains(event.target)) {
+        setShowMobileSearchResults(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     function handleSidebarShortcuts(event) {
@@ -258,6 +329,14 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
     navigate("/login", { replace: true });
   }
 
+  function handleMobileSearchNavigate(route) {
+    setActiveShortcutTarget(route);
+    setShowMobileSearchResults(false);
+    setMobileMenuSearch("");
+    onCloseMobile();
+    navigate(route);
+  }
+
   return (
     <>
       {mobileOpen ? (
@@ -273,27 +352,35 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-      <div className="border-b border-slate-200 px-5 py-4 lg:px-6 lg:py-5">
+      <div className="border-b border-slate-200 px-4 py-4 lg:px-6 lg:py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 shadow-sm">
             <Wallet className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">AccuBooks</h1>
+            <h1 className="text-lg font-bold text-slate-900 lg:text-xl">AccuBooks</h1>
             <p className="text-xs text-slate-500">
               Tally-style Accounting System
             </p>
           </div>
           <button
             type="button"
-            onClick={onCloseMobile}
+            onClick={() => setMobileHeaderExpanded((current) => !current)}
             className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 lg:hidden"
+            aria-label="Toggle mobile quick tools"
+          >
+            <ChevronsUpDown className="h-4.5 w-4.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 lg:hidden"
             aria-label="Close navigation"
           >
             <PanelLeftClose className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-4">
+        <div className={`${mobileHeaderExpanded ? "mt-4 block" : "mt-0 hidden"} lg:mt-4 lg:block`}>
           <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
             Active Company
           </label>
@@ -308,6 +395,52 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
             <LogOut className="h-4 w-4" />
             Logout
           </button>
+        </div>
+        <div className={`mt-4 ${mobileHeaderExpanded ? "block" : "hidden"} lg:hidden`}>
+          <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            Menu Search
+          </label>
+          <div ref={mobileSearchRef} className="relative">
+            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={mobileMenuSearch}
+              onFocus={() => setShowMobileSearchResults(true)}
+              onChange={(event) => {
+                setMobileMenuSearch(event.target.value);
+                setShowMobileSearchResults(true);
+              }}
+              placeholder="Search page, report, or voucher..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {showMobileSearchResults ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                {mobileSearchResults.length ? (
+                  <div className="space-y-1">
+                    {mobileSearchResults.map((entry) => (
+                      <button
+                        key={`${entry.to}-${entry.trail.join("/")}`}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handleMobileSearchNavigate(entry.to)}
+                        className="block w-full rounded-xl px-3 py-2 text-left transition hover:bg-slate-50"
+                      >
+                        <p className="text-sm font-medium text-slate-900">{entry.label}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {entry.trail.join(" / ")}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500">
+                    No matching pages found.
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -387,7 +520,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
         </nav>
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 text-xs text-slate-500 lg:px-5">
+      {/* <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 text-xs text-slate-500 lg:px-5">
         <div className="flex items-center gap-2 font-semibold text-slate-700">
           <ShieldCheck className="h-4 w-4 text-emerald-600" />
           Accounting workspace
@@ -400,7 +533,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
             Active shortcut scope: <span className="font-semibold">{shortcutScope.label}</span>
           </div>
         ) : null}
-      </div>
+      </div> */}
       </aside>
     </>
   );

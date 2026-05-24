@@ -224,7 +224,7 @@ export default function TrialBalance() {
   }
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-4 py-5 text-slate-900 sm:px-6 sm:py-6">
       <div className="mx-auto max-w-[1380px]">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_240px]">
           <div className="space-y-5">
@@ -257,8 +257,8 @@ export default function TrialBalance() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex h-11 min-w-[268px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm sm:min-w-[268px] sm:w-auto">
                   <CalendarDays className="h-4 w-4 text-slate-500" />
                   <input
                     type="date"
@@ -274,13 +274,13 @@ export default function TrialBalance() {
                     onChange={(event) => setToDate(event.target.value)}
                   />
                 </div>
-                <div className="flex h-11 min-w-[180px] items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm">
+                <div className="flex h-11 w-full items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm sm:min-w-[180px] sm:w-auto">
                   {selectedCompany?.name || "No company selected"}
                 </div>
                 <button
                   type="button"
                   onClick={handleExportPdf}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm sm:w-auto"
                 >
                   <Download className="h-4 w-4" />
                   Export PDF
@@ -288,7 +288,7 @@ export default function TrialBalance() {
                 <button
                   type="button"
                   onClick={handleExportExcel}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
                 >
                   <Download className="h-4 w-4" />
                   Export Excel
@@ -296,14 +296,14 @@ export default function TrialBalance() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
                 >
                   <Printer className="h-4 w-4" />
                   Print
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm sm:w-11"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </button>
@@ -349,7 +349,7 @@ export default function TrialBalance() {
                 <div className="p-10 text-center text-sm text-slate-500">Loading trial balance...</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-[14px]">
+                  <table className="min-w-[760px] text-[14px]">
                     <thead className="bg-[#f8fafc] text-slate-700">
                       <tr>
                         <th className="border-b border-slate-200 px-4 py-3 text-left font-semibold">Particulars</th>
@@ -436,7 +436,7 @@ export default function TrialBalance() {
             </section>
           </div>
 
-          <aside className="rounded-[22px] border border-slate-200 bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+          <aside className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:p-6">
             <div className="flex items-center gap-3">
               <Filter className="h-5 w-5 text-slate-700" />
               <h2 className="text-[15px] font-semibold uppercase tracking-wide text-slate-700">

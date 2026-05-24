@@ -91,19 +91,19 @@ export default function CashFlowPage() {
   }
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
           <div className="grid gap-4 xl:grid-cols-4">
             <div className="xl:col-span-2">
-              <h1 className="text-3xl font-bold text-slate-900">Cash Flow</h1>
+              <h1 className="text-[24px] font-bold text-slate-900 sm:text-3xl">Cash Flow</h1>
               <p className="mt-2 text-sm text-slate-500">
                 Review opening balance, inflow, outflow, and period-wise movement for cash and bank accounts.
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <button
                   type="button"
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm sm:w-auto"
                   onClick={handleExportPdf}
                 >
                   <Download className="h-4 w-4" />
@@ -111,7 +111,7 @@ export default function CashFlowPage() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
                   onClick={handleExportExcel}
                 >
                   <Download className="h-4 w-4" />
@@ -120,7 +120,7 @@ export default function CashFlowPage() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
                 >
                   <Printer className="h-4 w-4" />
                   Print
@@ -178,11 +178,11 @@ export default function CashFlowPage() {
 
             <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
               <article className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
-                <div className="border-b border-slate-200 px-6 py-4">
+                <div className="border-b border-slate-200 px-4 py-4 sm:px-6">
                   <h2 className="text-lg font-semibold text-slate-900">Monthly Movement</h2>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[640px] text-sm">
                     <thead className="bg-slate-50 text-left text-slate-500">
                       <tr>
                         <th className="px-4 py-3 font-medium">Period</th>
@@ -206,14 +206,14 @@ export default function CashFlowPage() {
               </article>
 
               <article className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
-                <div className="border-b border-slate-200 px-6 py-4">
+                <div className="border-b border-slate-200 px-4 py-4 sm:px-6">
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                     <Landmark className="h-5 w-5 text-blue-600" />
                     Cash / Bank Ledgers
                   </h2>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[760px] text-sm">
                     <thead className="bg-slate-50 text-left text-slate-500">
                       <tr>
                         <th className="px-4 py-3 font-medium">Ledger</th>

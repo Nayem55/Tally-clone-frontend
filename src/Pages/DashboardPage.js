@@ -169,8 +169,8 @@ function QuickShortcutsCard() {
   ];
 
   return (
-    <PanelShell title="Quick Shortcuts" className="row-span-2">
-      <div className="grid grid-cols-4 gap-3">
+      <PanelShell title="Quick Shortcuts" className="row-span-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {shortcuts.map((shortcut) => {
           const Icon = shortcut.icon;
           return (

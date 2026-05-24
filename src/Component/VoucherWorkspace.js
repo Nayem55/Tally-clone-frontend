@@ -161,16 +161,16 @@ export default function VoucherWorkspace({
         <section data-print-header="true" className="border-b border-[#a6bfdc] bg-[#f7fbff] px-3 py-3 sm:px-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-3">
-              <div data-print-hide="true" className={`flex h-10 w-10 items-center justify-center rounded-full ${iconTone}`}>
+              <div data-print-hide="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${iconTone} sm:h-10 sm:w-10`}>
                 <Icon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h1 data-print-title="true" className="text-[22px] font-semibold leading-tight text-[#1f2f55] sm:text-[28px]">{title}</h1>
+                <h1 data-print-title="true" className="text-[20px] font-semibold leading-tight text-[#1f2f55] sm:text-[28px]">{title}</h1>
                 <p data-print-subtitle="true" className="mt-1 text-[12px] text-slate-500 sm:text-[13px]">{subtitle}</p>
               </div>
             </div>
 
-            <div data-print-hide="true" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3 lg:justify-end">
+            <div data-print-hide="true" className="grid grid-cols-1 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:gap-3 lg:justify-end">
               {auditLogProps?.companyId && auditLogProps?.voucherId ? (
                 <VoucherEditLogButton
                   companyId={auditLogProps.companyId}
@@ -181,7 +181,7 @@ export default function VoucherWorkspace({
               {extraActions}
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
                 onClick={() =>
                   (onPreviewPrint || (() => previewVoucherNode(containerRef.current, title)))()
                 }
@@ -191,7 +191,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
                 onClick={onCancel}
               >
                 <X className="h-4 w-4" />
@@ -199,7 +199,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
                 onClick={onSaveDraft}
                 disabled={!canManageVoucher}
               >
@@ -208,7 +208,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 bg-[#1463ff] px-5 py-2.5 text-[14px] font-semibold text-white sm:w-auto sm:px-6"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 bg-[#1463ff] px-5 py-2.5 text-[14px] font-semibold text-white sm:w-auto sm:px-6"
                 onClick={() => canManageVoucher && setShowSaveConfirm(true)}
                 disabled={!canManageVoucher}
               >

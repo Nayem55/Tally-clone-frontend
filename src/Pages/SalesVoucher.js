@@ -812,8 +812,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       </VoucherPanel>
 
       <VoucherPanel title="Item Details">
-        <div className="overflow-visible rounded-2xl border border-slate-200">
-          <table className="min-w-full text-sm table-head">
+        <div className="overflow-x-auto overflow-y-visible rounded-2xl border border-slate-200">
+          <table className="min-w-[760px] text-sm table-head">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>
@@ -968,7 +968,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         />
       </VoucherPanel>
 
-      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 text-center">
             <p className="text-sm text-slate-500">Total Quantity</p>
@@ -982,7 +982,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-5 text-center">
             <p className="text-sm text-emerald-700">Total Amount Payable</p>
-            <p className="mt-2 text-4xl font-bold text-emerald-700">
+            <p className="mt-2 text-3xl font-bold text-emerald-700 sm:text-4xl">
               {formatVoucherMoney(totalAmount, currency.symbol)}
             </p>
           </div>

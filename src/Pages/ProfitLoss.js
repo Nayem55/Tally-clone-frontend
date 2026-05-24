@@ -68,9 +68,9 @@ function groupRowsByGroupName(rows) {
 
 function MetricCard({ icon: Icon, title, value, helper, iconClass = "", valueClass = "" }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
+    <article className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_26px_rgba(15,23,42,0.04)] sm:px-5 sm:py-5">
       <div className="flex items-center gap-4">
-        <div className={`flex h-14 w-14 items-center justify-center rounded-full bg-slate-50 ${iconClass}`}>
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-50 ${iconClass} sm:h-14 sm:w-14`}>
           <Icon className="h-6 w-6" />
         </div>
         <div>
@@ -86,7 +86,7 @@ function MetricCard({ icon: Icon, title, value, helper, iconClass = "", valueCla
 function StatementPanel({ icon: Icon, title, children, totalLabel, totalValue, totalNegative }) {
   return (
     <section className="rounded-[22px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex items-center gap-3 text-[#1a59d1]">
           <Icon className="h-5 w-5" />
           <h2 className="text-[16px] font-semibold uppercase tracking-wide">{title}</h2>
@@ -94,9 +94,9 @@ function StatementPanel({ icon: Icon, title, children, totalLabel, totalValue, t
         <ChevronDown className="h-4 w-4 text-slate-500" />
       </div>
 
-      <div className="space-y-7 px-6 py-5 text-[14px]">{children}</div>
+      <div className="space-y-7 px-4 py-4 text-[14px] sm:px-6 sm:py-5">{children}</div>
 
-      <div className={`mx-4 mb-4 rounded-xl px-5 py-4 text-[15px] font-semibold ${totalNegative ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-900"}`}>
+      <div className={`mx-4 mb-4 rounded-xl px-4 py-4 text-[15px] font-semibold sm:px-5 ${totalNegative ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-900"}`}>
         <div className="flex items-center justify-between">
           <span>{totalLabel}</span>
           <span>{totalValue}</span>
@@ -235,7 +235,7 @@ export default function ProfitLoss() {
   }
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-6 py-6 text-slate-900">
+    <div ref={containerRef} className="min-h-screen bg-[#f7f9fc] px-4 py-5 text-slate-900 sm:px-6 sm:py-6">
       <div className="mx-auto max-w-[1380px]">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_240px]">
           <div className="space-y-5">
@@ -261,8 +261,8 @@ export default function ProfitLoss() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex h-11 min-w-[268px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm sm:min-w-[268px] sm:w-auto">
                   <CalendarDays className="h-4 w-4 text-slate-500" />
                   <input
                     type="date"
@@ -278,12 +278,12 @@ export default function ProfitLoss() {
                     onChange={(event) => setToDate(event.target.value)}
                   />
                 </div>
-                <div className="flex h-11 min-w-[180px] items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm">
+                <div className="flex h-11 w-full items-center rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-700 shadow-sm sm:min-w-[180px] sm:w-auto">
                   {selectedCompany?.name || "No company selected"}
                 </div>
                 <button
                   type="button"
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
                 >
                   <GitCompareArrows className="h-4 w-4" />
                   Compare
@@ -293,7 +293,7 @@ export default function ProfitLoss() {
                   data-report-nav="true"
                   data-focus-key="profit-loss-export-pdf"
                   onClick={handleExportPdf}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm sm:w-auto"
                 >
                   <Download className="h-4 w-4" />
                   Export PDF
@@ -303,7 +303,7 @@ export default function ProfitLoss() {
                   data-report-nav="true"
                   data-focus-key="profit-loss-export-excel"
                   onClick={handleExportExcel}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm sm:w-auto"
                 >
                   <Download className="h-4 w-4" />
                   Export Excel
@@ -313,7 +313,7 @@ export default function ProfitLoss() {
                   data-report-nav="true"
                   data-focus-key="profit-loss-print"
                   onClick={() => window.print()}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm sm:w-11"
                 >
                   <Printer className="h-4 w-4" />
                 </button>
@@ -429,8 +429,8 @@ export default function ProfitLoss() {
                   </StatementPanel>
                 </section>
 
-                <section className="rounded-[22px] border border-slate-200 bg-white px-6 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                  <div className="grid gap-4 md:grid-cols-5 text-center">
+                <section className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:px-6">
+                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-5 text-center">
                     {[
                       ["Sales", formatCurrencyAmount(sales, selectedCompany)],
                       ["Gross Profit", formatSignedAmount(grossProfit, selectedCompany)],
@@ -438,7 +438,7 @@ export default function ProfitLoss() {
                       ["Net Profit / Loss", formatSignedAmount(netProfit, selectedCompany)],
                       ["Net Profit Margin", `${Number(report.totals?.profitMargin || 0).toFixed(2)}%`],
                     ].map(([label, value]) => (
-                      <div key={label} className="border-r border-slate-200 last:border-r-0">
+                      <div key={label} className="border-b border-slate-200 pb-3 last:border-b-0 sm:border-b-0 md:border-r md:border-slate-200 md:pb-0 md:last:border-r-0">
                         <p className="text-[13px] text-slate-500">{label}</p>
                         <p className={`mt-2 text-[16px] font-semibold ${String(value).includes("(") ? "text-rose-600" : "text-slate-900"}`}>
                           {value}
@@ -451,7 +451,7 @@ export default function ProfitLoss() {
             )}
           </div>
 
-          <aside className="rounded-[22px] border border-slate-200 bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+          <aside className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:p-6">
             <div className="flex items-center gap-3">
               <Filter className="h-5 w-5 text-slate-700" />
               <h2 className="text-[15px] font-semibold uppercase tracking-wide text-slate-700">
