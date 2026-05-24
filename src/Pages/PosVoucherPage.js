@@ -1103,17 +1103,17 @@ export default function PosVoucherPage({
     <div
       ref={containerRef}
       onKeyDownCapture={handleEnterNavigation}
-      className="min-h-screen bg-slate-100 p-6"
+      className="min-h-screen bg-slate-100 p-4 sm:p-6"
     >
       <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 sm:h-14 sm:w-14">
                 <ShoppingCart className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">
+                <h1 className="text-[24px] font-bold text-slate-900 sm:text-3xl">
                   POS Sales Voucher
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
@@ -1124,10 +1124,10 @@ export default function PosVoucherPage({
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {!isEditMode ? (
-                <div className="md:col-span-2 flex flex-wrap justify-end gap-3">
+                <div className="flex flex-col gap-3 md:col-span-2 sm:flex-row sm:flex-wrap sm:justify-end">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
                     onClick={handleExportTemplate}
                   >
                     <Download className="h-4 w-4" />
@@ -1135,7 +1135,7 @@ export default function PosVoucherPage({
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={importBusy}
                   >
@@ -1198,9 +1198,9 @@ export default function PosVoucherPage({
           </section>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-6">
-            <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
               <h2 className="text-xl font-bold text-slate-900">
                 Customer Details
               </h2>
@@ -1332,7 +1332,7 @@ export default function PosVoucherPage({
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
               <div className="flex flex-col gap-4 lg:flex-row">
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -1484,7 +1484,7 @@ export default function PosVoucherPage({
                 </table>
               </div>
 
-              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
@@ -1602,7 +1602,7 @@ export default function PosVoucherPage({
             </div>
           </div>
 
-          <aside className="space-y-6">
+          <aside className="space-y-6 2xl:sticky 2xl:top-24">
             <section
               data-print-hide="true"
               className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200"

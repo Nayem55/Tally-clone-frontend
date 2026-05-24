@@ -373,19 +373,19 @@ export const menuTree = [
       // },
     ],
   },
-  {
-    label: "Utilities",
-    icon: Settings2,
-    children: [
-      { label: "Audit Log", to: "/utilities/audit-log" },
-      // { label: "Import Data", to: "/utilities/import-data" },
-      // { label: "Export Data", to: "/utilities/export-data" },
-      // { label: "Banking Utilities", to: "/utilities/banking-utilities" },
-      // { label: "Data Verification", to: "/utilities/data-verification" },
-      // { label: "Rewrite Data", to: "/utilities/rewrite-data" },
-      // { label: "Split Company Data", to: "/utilities/split-company-data" },
-    ],
-  },
+  // {
+  //   label: "Utilities",
+  //   icon: Settings2,
+  //   children: [
+  //     { label: "Audit Log", to: "/utilities/audit-log" },
+  //     // { label: "Import Data", to: "/utilities/import-data" },
+  //     // { label: "Export Data", to: "/utilities/export-data" },
+  //     // { label: "Banking Utilities", to: "/utilities/banking-utilities" },
+  //     // { label: "Data Verification", to: "/utilities/data-verification" },
+  //     // { label: "Rewrite Data", to: "/utilities/rewrite-data" },
+  //     // { label: "Split Company Data", to: "/utilities/split-company-data" },
+  //   ],
+  // },
 ];
 
 export function hasActiveNode(node, pathname) {

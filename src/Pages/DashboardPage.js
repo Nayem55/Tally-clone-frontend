@@ -222,32 +222,32 @@ export default function DashboardPage() {
   }, [companyId]);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] px-6 py-7">
+    <div className="min-h-screen bg-[#f8fafc] px-4 py-5 sm:px-6 sm:py-7">
       <div className="mx-auto max-w-[1520px] space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <div className="rounded-xl bg-blue-50 p-2.5 text-blue-700">
               <LayoutGrid className="h-6 w-6" />
             </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-[24px] font-semibold text-slate-900">Dashboard</h1>
-              <span className="rounded-xl bg-slate-100 px-3 py-1 text-[18px] font-medium text-slate-500">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <h1 className="text-[22px] font-semibold text-slate-900 sm:text-[24px]">Dashboard</h1>
+              <span className="w-fit max-w-full truncate rounded-xl bg-slate-100 px-3 py-1 text-sm font-medium text-slate-500 sm:text-[18px]">
                 {selectedCompany?.name || "No company selected"}
               </span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+          <div className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:w-fit sm:px-5 sm:py-3.5">
             <div className="flex items-center gap-3 text-slate-700">
               <CalendarDays className="h-5 w-5 text-slate-500" />
-              <span className="text-[15px] font-medium">{formatLocalDate()}</span>
+              <span className="text-sm font-medium sm:text-[15px]">{formatLocalDate()}</span>
             </div>
           </div>
         </div>
 
         {dashboard && (
           <>
-            <section className="grid gap-4 xl:grid-cols-5">
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <DashboardMetricCard
                 title="Cash Balance"
                 icon={Wallet}

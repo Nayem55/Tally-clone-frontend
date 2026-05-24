@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
+  PanelLeftClose,
   ScrollText,
   ShieldCheck,
   Wallet,
@@ -141,7 +142,7 @@ function TreeNode({
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [openKeys, setOpenKeys] = useState({});
@@ -200,6 +201,10 @@ export default function Sidebar() {
   }, [activeShortcutTarget]);
 
   useEffect(() => {
+    onCloseMobile();
+  }, [location.pathname, onCloseMobile]);
+
+  useEffect(() => {
     function handleSidebarShortcuts(event) {
       if (event.ctrlKey && !event.altKey && !event.shiftKey) {
         const match = sidebarParentShortcuts.find(
@@ -249,12 +254,26 @@ export default function Sidebar() {
     window.localStorage.removeItem("pos-user");
     window.localStorage.removeItem("attendance-user");
     window.localStorage.removeItem(EMPLOYEE_SESSION_TOKEN_KEY);
+    onCloseMobile();
     navigate("/login", { replace: true });
   }
 
   return (
-    <aside className="sticky top-0 flex h-screen w-[23rem] flex-col border-r border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-6 py-5">
+    <>
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
+          onClick={onCloseMobile}
+          aria-label="Close navigation overlay"
+        />
+      ) : null}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[18.5rem] max-w-[88vw] flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:sticky lg:top-0 lg:z-20 lg:w-[23rem] lg:max-w-none ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+      <div className="border-b border-slate-200 px-5 py-4 lg:px-6 lg:py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 shadow-sm">
             <Wallet className="h-6 w-6 text-white" />
@@ -265,6 +284,14 @@ export default function Sidebar() {
               Tally-style Accounting System
             </p>
           </div>
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 lg:hidden"
+            aria-label="Close navigation"
+          >
+            <PanelLeftClose className="h-5 w-5" />
+          </button>
         </div>
         <div className="mt-4">
           <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
@@ -284,7 +311,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-3 py-4 lg:px-4">
         <nav className="space-y-3">
           {treeWithIcons.map((section) => {
             const Icon = section.icon;
@@ -360,7 +387,7 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500">
+      <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 text-xs text-slate-500 lg:px-5">
         <div className="flex items-center gap-2 font-semibold text-slate-700">
           <ShieldCheck className="h-4 w-4 text-emerald-600" />
           Accounting workspace
@@ -374,6 +401,7 @@ export default function Sidebar() {
           </div>
         ) : null}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

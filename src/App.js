@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Sidebar from "./Component/Sidebar";
 import Navbar from "./Component/Navbar";
@@ -152,13 +152,20 @@ function RequireRoleAccess({ children }) {
 }
 
 function AppShell() {
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
+  const openMobileSidebar = useCallback(() => setMobileSidebarOpen(true), []);
+
   return (
     <>
-      <Navbar />
+      <Navbar onOpenSidebar={openMobileSidebar} />
       <CommandSearchModal />
-      <div className="flex">
-        <Sidebar />
-        <main className="min-h-screen flex-1 bg-slate-100">
+      <div className="flex min-h-screen">
+        <Sidebar
+          mobileOpen={mobileSidebarOpen}
+          onCloseMobile={closeMobileSidebar}
+        />
+        <main className="min-h-screen min-w-0 flex-1 bg-slate-100">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/dashboard/manufacturing" element={<ManufacturingDashboardPage />} />

@@ -158,19 +158,19 @@ export default function VoucherWorkspace({
       onKeyDown={handleContainerKeyDown}
     >
       <div className="mx-auto max-w-full">
-        <section data-print-header="true" className="border-b border-[#a6bfdc] bg-[#f7fbff] px-3 py-2">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <section data-print-header="true" className="border-b border-[#a6bfdc] bg-[#f7fbff] px-3 py-3 sm:px-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-3">
               <div data-print-hide="true" className={`flex h-10 w-10 items-center justify-center rounded-full ${iconTone}`}>
                 <Icon className="h-5 w-5" />
               </div>
-              <div>
-                <h1 data-print-title="true" className="text-[28px] font-semibold text-[#1f2f55]">{title}</h1>
-                <p data-print-subtitle="true" className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
+              <div className="min-w-0">
+                <h1 data-print-title="true" className="text-[22px] font-semibold leading-tight text-[#1f2f55] sm:text-[28px]">{title}</h1>
+                <p data-print-subtitle="true" className="mt-1 text-[12px] text-slate-500 sm:text-[13px]">{subtitle}</p>
               </div>
             </div>
 
-            <div data-print-hide="true" className="flex flex-wrap gap-3">
+            <div data-print-hide="true" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3 lg:justify-end">
               {auditLogProps?.companyId && auditLogProps?.voucherId ? (
                 <VoucherEditLogButton
                   companyId={auditLogProps.companyId}
@@ -181,7 +181,7 @@ export default function VoucherWorkspace({
               {extraActions}
               <button
                 type="button"
-                className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+                className="inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
                 onClick={() =>
                   (onPreviewPrint || (() => previewVoucherNode(containerRef.current, title)))()
                 }
@@ -191,7 +191,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+                className="inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
                 onClick={onCancel}
               >
                 <X className="h-4 w-4" />
@@ -199,7 +199,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700"
+                className="inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 sm:w-auto sm:px-5"
                 onClick={onSaveDraft}
                 disabled={!canManageVoucher}
               >
@@ -208,7 +208,7 @@ export default function VoucherWorkspace({
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 bg-[#1463ff] px-6 py-2.5 text-[14px] font-semibold text-white"
+                className="inline-flex w-full items-center justify-center gap-2 bg-[#1463ff] px-5 py-2.5 text-[14px] font-semibold text-white sm:w-auto sm:px-6"
                 onClick={() => canManageVoucher && setShowSaveConfirm(true)}
                 disabled={!canManageVoucher}
               >
@@ -220,8 +220,8 @@ export default function VoucherWorkspace({
           </div>
         </section>
 
-        <div data-print-layout="true" className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_250px]">
-          <div data-print-main="true" className="space-y-4 bg-[#f8f8f8] p-3">
+        <div data-print-layout="true" className="grid gap-0 2xl:grid-cols-[minmax(0,1fr)_250px]">
+          <div data-print-main="true" className="space-y-4 bg-[#f8f8f8] p-3 sm:p-4">
             {!canManageVoucher ? (
               <div data-print-hide="true" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 You can review this voucher screen, but save actions are limited for your role.
@@ -230,7 +230,7 @@ export default function VoucherWorkspace({
             {children}
           </div>
 
-          <aside data-print-sidebar="true" className="border-l border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3">
+          <aside data-print-sidebar="true" className="border-t border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3 2xl:border-l 2xl:border-t-0">
             <InfoCard title="Voucher Summary">
               <div className="space-y-2 text-[13px]">
                 {summaryTag ? (
@@ -299,7 +299,7 @@ export default function VoucherWorkspace({
 
 export function VoucherPanel({ title, children, className = "" }) {
   return (
-    <section data-print-panel="true" className={`border border-[#bccfe3] bg-white p-4 shadow-sm ${className}`}>
+    <section data-print-panel="true" className={`border border-[#bccfe3] bg-white p-3 shadow-sm sm:p-4 ${className}`}>
       <h2 data-print-panel-title="true" className="text-[16px] font-semibold text-[#1f2f55]">{title}</h2>
       <div className="mt-4">{children}</div>
     </section>

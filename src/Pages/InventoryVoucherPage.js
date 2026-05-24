@@ -490,13 +490,13 @@ export default function InventoryVoucherPage({
   }
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-slate-100 p-6">
+    <div ref={containerRef} className="min-h-screen bg-slate-100 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
           <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
             <div>
-              <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-900">
-                <FileText className="h-8 w-8 text-blue-600" />
+              <h1 className="flex items-start gap-3 text-[24px] font-bold text-slate-900 sm:items-center sm:text-3xl">
+                <FileText className="mt-1 h-7 w-7 shrink-0 text-blue-600 sm:mt-0 sm:h-8 sm:w-8" />
                 {voucherName}
               </h1>
               <p className="mt-2 text-sm text-slate-500">
@@ -504,10 +504,10 @@ export default function InventoryVoucherPage({
               </p>
             </div>
             {!isEditMode ? (
-              <div className="flex flex-wrap items-start justify-end gap-3">
+              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-end">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
                   onClick={handleExportTemplate}
                 >
                   <Download className="h-4 w-4" />
@@ -515,7 +515,7 @@ export default function InventoryVoucherPage({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importBusy}
                 >
@@ -547,7 +547,7 @@ export default function InventoryVoucherPage({
           </section>
         ) : null}
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
           <div className="grid gap-4 md:grid-cols-3">
             <input
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
@@ -576,7 +576,7 @@ export default function InventoryVoucherPage({
 
         <section className="overflow-visible rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
           <div className="overflow-x-auto overflow-y-visible">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[760px] text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">
@@ -640,7 +640,7 @@ export default function InventoryVoucherPage({
                       <input
                         type="number"
                         min="0"
-                        className="w-28 rounded-lg border border-slate-200 px-3 py-2"
+                        className="w-24 rounded-lg border border-slate-200 px-3 py-2 sm:w-28"
                         value={row.qty}
                         onChange={(event) => updateRow(index, "qty", event.target.value)}
                       />
@@ -649,7 +649,7 @@ export default function InventoryVoucherPage({
                       <input
                         type="number"
                         step="0.01"
-                        className="w-32 rounded-lg border border-slate-200 px-3 py-2"
+                        className="w-28 rounded-lg border border-slate-200 px-3 py-2 sm:w-32"
                         value={row.rate}
                         onChange={(event) => updateRow(index, "rate", event.target.value)}
                       />
@@ -697,17 +697,17 @@ export default function InventoryVoucherPage({
           </div>
         </section>
 
-        <section className="flex justify-end gap-3">
+        <section className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
-            className="rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700"
+            className="w-full rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 sm:w-auto"
             onClick={() => previewVoucherNode(containerRef.current, voucherName)}
           >
             Print Preview
           </button>
           <button
             type="button"
-            className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
+            className="w-full rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white sm:w-auto"
             onClick={() => setShowSaveConfirm(true)}
           >
             Save {voucherName}
