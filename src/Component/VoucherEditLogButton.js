@@ -109,6 +109,67 @@ function getSectionTitle(path = "") {
   return "Voucher Header";
 }
 
+function getSectionIndex(path = "", sectionTitle = "") {
+  const lineMatch = path.match(/^lines\[(\d+)\]\./);
+  if (lineMatch && sectionTitle.startsWith("Accounting Allocations")) {
+    return Number(lineMatch[1]) - 1;
+  }
+
+  const inventoryMatch = path.match(/^inventoryLines\[(\d+)\]\./);
+  if (inventoryMatch && sectionTitle.startsWith("Inventory Entries")) {
+    return Number(inventoryMatch[1]) - 1;
+  }
+
+  return -1;
+}
+
+function resolveSectionContext(sectionTitle, sectionIndex, row, lookups) {
+  const before = row?.before || {};
+  const after = row?.after || {};
+
+  if (sectionTitle.startsWith("Accounting Allocations") && sectionIndex >= 0) {
+    const beforeLine = Array.isArray(before.lines) ? before.lines[sectionIndex] : null;
+    const afterLine = Array.isArray(after.lines) ? after.lines[sectionIndex] : null;
+    const ledgerId = afterLine?.ledgerId || beforeLine?.ledgerId || "";
+    const debitValue = Number(afterLine?.debit ?? beforeLine?.debit ?? 0);
+    const creditValue = Number(afterLine?.credit ?? beforeLine?.credit ?? 0);
+    const sideLabel = debitValue > 0 ? "Debit" : creditValue > 0 ? "Credit" : "Ledger";
+    return {
+      primary:
+        lookups.ledgerMap.get(String(ledgerId)) ||
+        afterLine?.ledgerName ||
+        beforeLine?.ledgerName ||
+        "Ledger",
+      secondary: sideLabel,
+    };
+  }
+
+  if (sectionTitle.startsWith("Inventory Entries") && sectionIndex >= 0) {
+    const beforeLine = Array.isArray(before.inventoryLines)
+      ? before.inventoryLines[sectionIndex]
+      : null;
+    const afterLine = Array.isArray(after.inventoryLines)
+      ? after.inventoryLines[sectionIndex]
+      : null;
+    const itemId = afterLine?.itemId || beforeLine?.itemId || "";
+    return {
+      primary:
+        afterLine?.itemName ||
+        beforeLine?.itemName ||
+        lookups.itemMap.get(String(itemId)) ||
+        "Item",
+      secondary:
+        afterLine?.groupName ||
+        beforeLine?.groupName ||
+        afterLine?.stockCategoryName ||
+        beforeLine?.stockCategoryName ||
+        "",
+    };
+  }
+
+  return null;
+}
+
 function getFieldLabel(path = "") {
   const mapping = [
     [/^number$/, "Voucher No."],
@@ -179,7 +240,14 @@ function buildDiffGroups(row, lookups) {
     });
   });
 
-  return Array.from(grouped.entries()).map(([title, entries]) => ({ title, entries }));
+  return Array.from(grouped.entries()).map(([title, entries]) => {
+    const sectionIndex = entries.length ? getSectionIndex(entries[0].path, title) : -1;
+    return {
+      title,
+      context: resolveSectionContext(title, sectionIndex, row, lookups),
+      entries,
+    };
+  });
 }
 
 function buildHighlights(row) {
@@ -387,8 +455,22 @@ export default function VoucherEditLogButton({
                         <div className="divide-y divide-slate-200 bg-white">
                           {diffGroups.map((group) => (
                             <div key={group.title}>
-                              <div className="bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-800">
-                                {group.title}
+                              <div className="bg-slate-100 px-5 py-3">
+                                <div className="text-sm font-semibold text-slate-800">
+                                  {group.title}
+                                </div>
+                                {group.context?.primary ? (
+                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                    <span className="font-semibold text-slate-800">
+                                      {group.context.primary}
+                                    </span>
+                                    {group.context.secondary ? (
+                                      <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                        {group.context.secondary}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                               </div>
                               <div className="divide-y divide-slate-100">
                                 {group.entries.map((entry) => (
