@@ -434,7 +434,78 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
       </VoucherPanel>
 
       <VoucherPanel title="Receipt Details">
-        <div className="overflow-visible border border-[#bccfe3]">
+        <div className="space-y-3 md:hidden">
+          {form.rows.map((row, index) => {
+            const ledger = ledgerMap.get(row.ledgerId);
+            return (
+              <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">Receipt Row {index + 1}</p>
+                  {form.rows.length > 1 ? (
+                    <button
+                      type="button"
+                      className="rounded-lg p-2 text-rose-500 hover:bg-rose-100"
+                      onClick={() => removeRow(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="text-sm font-semibold text-slate-700">Received From (Account)</label>
+                      <button
+                        type="button"
+                        className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        onClick={navigateToCreateLedger}
+                      >
+                        Add+
+                      </button>
+                    </div>
+                    <SearchableSelect
+                      options={ledgerOptions}
+                      value={row.ledgerId}
+                      onChange={(newValue) => updateRow(index, "ledgerId", newValue)}
+                      placeholder="Search received-from ledger"
+                    />
+                    <p className="mt-2 text-xs text-slate-500">
+                      Current Balance:{" "}
+                      {ledger
+                        ? renderBalance(
+                            ledger.currentBalanceAbs,
+                            ledger.currentBalanceSide,
+                            currency.symbol
+                          )
+                        : "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
+                    <input
+                      data-vnav="true"
+                      type="number"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-right text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.amount}
+                      onChange={(event) => updateRow(index, "amount", event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Narration</label>
+                    <input
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.narration}
+                      onChange={(event) => updateRow(index, "narration", event.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-visible border border-[#bccfe3] md:block">
           <table className="min-w-full table-fixed text-sm">
             <thead className="bg-[#edf4ff] text-left text-slate-600">
               <tr>
@@ -517,7 +588,7 @@ export default function ReceiptVoucher({ companyId, editVoucherId = "" }) {
 
         <button
           type="button"
-          className="mt-4 inline-flex items-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 md:w-auto"
           onClick={addRow}
         >
           <Plus className="h-4 w-4" />

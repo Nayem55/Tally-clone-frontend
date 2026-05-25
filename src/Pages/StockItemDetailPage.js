@@ -141,11 +141,14 @@ export default function StockItemDetailPage({ partyMovementMode = false }) {
   );
   const totals = useMemo(() => {
     if (requestedItemId && selectedItemRow) {
+      const openingValue = Number(selectedItemRow.openingValue || 0);
+      const inwardValue = Number(selectedItemRow.inwardValue || 0);
+      const closingValue = Number(selectedItemRow.closingValue || 0);
       return {
-        openingValue: Number(selectedItemRow.openingValue || 0),
-        inwardValue: Number(selectedItemRow.inwardValue || 0),
-        outwardValue: Number(selectedItemRow.outwardValue || 0),
-        closingValue: Number(selectedItemRow.closingValue || 0),
+        openingValue,
+        inwardValue,
+        outwardValue: openingValue + inwardValue - closingValue,
+        closingValue,
       };
     }
 
