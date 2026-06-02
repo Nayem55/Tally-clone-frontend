@@ -17,7 +17,6 @@ import VoucherWorkspace, {
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
-import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 
@@ -72,6 +71,17 @@ function normalizeImportedDate(value) {
 
 function createEmptyRow() {
   return { ...emptyRow };
+}
+
+function resolvePurchaseItemRate(item) {
+  if (!item) return 0;
+  if (item.lastPurchaseRate !== undefined && item.lastPurchaseRate !== null) {
+    return Number(item.lastPurchaseRate) || 0;
+  }
+  if (item.openingRate !== undefined && item.openingRate !== null) {
+    return Number(item.openingRate) || 0;
+  }
+  return 0;
 }
 
 function padRows(rows, minRows = 8) {
@@ -313,7 +323,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     const item = itemMap.get(row.itemId);
     return {
       ...row,
-      rate: resolveItemRateByDate(item, null, voucherDate),
+      rate: resolvePurchaseItemRate(item),
     };
   };
 
@@ -468,7 +478,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           firstItem?.name || "",
           1,
           1,
-          firstItem ? resolveItemRateByDate(firstItem, null, form.date) : "",
+          firstItem ? resolvePurchaseItemRate(firstItem) : "",
           "",
         ],
       ],
@@ -512,7 +522,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           "",
           item?.name || "",
           item?.groupName || "",
-          item ? resolveItemRateByDate(item, null, form.date) : "",
+          item ? resolvePurchaseItemRate(item) : "",
         ];
       }),
     ];
