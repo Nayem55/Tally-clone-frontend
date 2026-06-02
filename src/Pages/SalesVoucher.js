@@ -71,8 +71,10 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     salesLedger: "",
     priceLevelId: "",
     narration: "",
-    discountAmount: "",
-    additionalCharges: "",
+    additionalExpenseLedger: "",
+    additionalExpenseAmount: "",
+    additionalIncomeLedger: "",
+    additionalIncomeAmount: "",
     rows: [emptyRow],
   });
   const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
@@ -135,11 +137,29 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     let alive = true;
 
     async function loadVoucherForEdit() {
-      if (!companyId || !editVoucherId || items.length === 0) return;
+      if (!companyId || !editVoucherId || items.length === 0 || allLedgers.length === 0) return;
       const response = await api.get(`/companies/${companyId}/vouchers/${editVoucherId}`);
       const voucher = response.data;
-      const debitLine = (voucher.lines || []).find((line) => Number(line.debit || 0) > 0);
-      const creditLine = (voucher.lines || []).find((line) => Number(line.credit || 0) > 0);
+      const editLedgerMap = new Map(allLedgers.map((ledger) => [String(ledger._id), ledger]));
+      const debitLines = (voucher.lines || []).filter((line) => Number(line.debit || 0) > 0);
+      const creditLines = (voucher.lines || []).filter((line) => Number(line.credit || 0) > 0);
+      const ledgerNature = (line) =>
+        String(editLedgerMap.get(String(line.ledgerId || ""))?.group?.nature || "").toUpperCase();
+      const isExpenseLine = (line) => ledgerNature(line) === "EXPENSE";
+      const isSalesLine = (line) =>
+        normalizeExcelNameKey(
+          editLedgerMap.get(String(line.ledgerId || ""))?.group?.name || "",
+        ) === "sales accounts";
+      const debitLine = debitLines.find((line) => !isExpenseLine(line)) || debitLines[0];
+      const creditLine = creditLines.find(isSalesLine) || creditLines[0];
+      const additionalExpenseLine =
+        debitLines.find((line) => isExpenseLine(line)) || null;
+      const additionalIncomeLine =
+        creditLines.find(
+          (line) =>
+            ledgerNature(line) === "INCOME" &&
+            String(line.ledgerId || "") !== String(creditLine?.ledgerId || ""),
+        ) || null;
 
       if (!alive) return;
       hasHydratedEditVoucherRef.current = true;
@@ -150,8 +170,28 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         salesLedger: String(creditLine?.ledgerId || salesLedgerId || ""),
         priceLevelId: "",
         narration: voucher.narration || "",
-        discountAmount: String(voucher.commercialMeta?.invoiceDiscount || ""),
-        additionalCharges: String(voucher.commercialMeta?.additionalCharges || ""),
+        additionalExpenseLedger: String(
+          voucher.commercialMeta?.additionalExpenseLedgerId ||
+            additionalExpenseLine?.ledgerId ||
+            "",
+        ),
+        additionalExpenseAmount: String(
+          voucher.commercialMeta?.additionalExpenseAmount ||
+            additionalExpenseLine?.debit ||
+            voucher.commercialMeta?.invoiceDiscount ||
+            "",
+        ),
+        additionalIncomeLedger: String(
+          voucher.commercialMeta?.additionalIncomeLedgerId ||
+            additionalIncomeLine?.ledgerId ||
+            "",
+        ),
+        additionalIncomeAmount: String(
+          voucher.commercialMeta?.additionalIncomeAmount ||
+            additionalIncomeLine?.credit ||
+            voucher.commercialMeta?.additionalCharges ||
+            "",
+        ),
         rows:
           (voucher.inventoryLines || []).map((line) => ({
             itemId: String(line.itemId || ""),
@@ -171,7 +211,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     return () => {
       alive = false;
     };
-  }, [companyId, editVoucherId, items.length, salesLedgerId]);
+  }, [companyId, editVoucherId, items.length, allLedgers, salesLedgerId]);
 
   useEffect(() => {
     if (isEditMode && hasHydratedEditVoucherRef.current) {
@@ -234,6 +274,32 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const itemOptions = useMemo(
     () => items.map((item) => ({ value: item._id, label: item.name })),
     [items]
+  );
+  const expenseLedgerOptions = useMemo(
+    () =>
+      allLedgers
+        .filter((ledger) => String(ledger.group?.nature || "").toUpperCase() === "EXPENSE")
+        .map((ledger) => ({
+          value: ledger._id,
+          label: ledger.name,
+          meta: ledger.group?.name || ledger.groupName || "",
+        })),
+    [allLedgers],
+  );
+  const incomeLedgerOptions = useMemo(
+    () =>
+      allLedgers
+        .filter(
+          (ledger) =>
+            String(ledger.group?.nature || "").toUpperCase() === "INCOME" &&
+            String(ledger._id) !== String(form.salesLedger || salesLedgerId),
+        )
+        .map((ledger) => ({
+          value: ledger._id,
+          label: ledger.name,
+          meta: ledger.group?.name || ledger.groupName || "",
+        })),
+    [allLedgers, form.salesLedger, salesLedgerId],
   );
   useEffect(() => {
     if (isEditMode) return;
@@ -330,9 +396,9 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     const rate = Number(row.rate || 0);
     return sum + (qty * rate * Number(row.discountPercent || 0)) / 100;
   }, 0);
-  const invoiceDiscount = Number(form.discountAmount || 0);
-  const additionalCharges = Number(form.additionalCharges || 0);
-  const totalAmount = Number((subtotal - invoiceDiscount + additionalCharges).toFixed(2));
+  const additionalExpenseAmount = Number(form.additionalExpenseAmount || 0);
+  const additionalIncomeAmount = Number(form.additionalIncomeAmount || 0);
+  const totalAmount = Number((subtotal - additionalExpenseAmount + additionalIncomeAmount).toFixed(2));
   const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
 
   const printData = useMemo(
@@ -375,12 +441,16 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         totals: [
           { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
           {
-            label: "Discount",
-            value: formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol),
+            label: "Line Discount",
+            value: formatVoucherMoney(totalDiscount, currency.symbol),
           },
           {
-            label: "Additional Charges",
-            value: formatVoucherMoney(additionalCharges, currency.symbol),
+            label: "Additional Expense",
+            value: formatVoucherMoney(additionalExpenseAmount, currency.symbol),
+          },
+          {
+            label: "Additional Income",
+            value: formatVoucherMoney(additionalIncomeAmount, currency.symbol),
           },
           {
             label: "Net Payable",
@@ -406,8 +476,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       currency.code,
       subtotal,
       totalDiscount,
-      invoiceDiscount,
-      additionalCharges,
+      additionalExpenseAmount,
+      additionalIncomeAmount,
       totalAmount,
     ]
   );
@@ -420,8 +490,10 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       salesLedger: salesLedgerId,
       priceLevelId: "",
       narration: "",
-      discountAmount: "",
-      additionalCharges: "",
+      additionalExpenseLedger: "",
+      additionalExpenseAmount: "",
+      additionalIncomeLedger: "",
+      additionalIncomeAmount: "",
       rows: [emptyRow],
     });
 
@@ -617,6 +689,15 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     if (!form.partyLedger) return alert("Please select a party account");
     if (!form.salesLedger && !salesLedgerId) return alert("Sales ledger is missing for this company");
     if (validRows.length === 0) return alert("Please add at least one item");
+    if (additionalExpenseAmount > 0 && !form.additionalExpenseLedger) {
+      return alert("Please select an expense ledger before entering additional expense.");
+    }
+    if (additionalIncomeAmount > 0 && !form.additionalIncomeLedger) {
+      return alert("Please select an income ledger before entering additional income.");
+    }
+    if (totalAmount < 0) {
+      return alert("Total amount cannot be negative. Check additional expense and income.");
+    }
 
     const inventoryLines = validRows.map((row) => {
       const item = itemMap.get(row.itemId);
@@ -631,6 +712,27 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       };
     });
 
+    const lines = [
+      { ledgerId: form.partyLedger, debit: totalAmount, credit: 0 },
+      { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: subtotal },
+    ];
+
+    if (additionalExpenseAmount > 0) {
+      lines.push({
+        ledgerId: form.additionalExpenseLedger,
+        debit: additionalExpenseAmount,
+        credit: 0,
+      });
+    }
+
+    if (additionalIncomeAmount > 0) {
+      lines.push({
+        ledgerId: form.additionalIncomeLedger,
+        debit: 0,
+        credit: additionalIncomeAmount,
+      });
+    }
+
     const payload = {
       voucherTypeId: salesTypeId,
       voucherName: "Sales",
@@ -640,15 +742,16 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       commercialMeta: {
         subtotal,
         lineDiscountTotal: totalDiscount,
-        invoiceDiscount,
-        additionalCharges,
+        invoiceDiscount: 0,
+        additionalCharges: 0,
+        additionalExpenseLedgerId: form.additionalExpenseLedger || null,
+        additionalExpenseAmount,
+        additionalIncomeLedgerId: form.additionalIncomeLedger || null,
+        additionalIncomeAmount,
         totalAmount,
       },
       salesMeta: {},
-      lines: [
-        { ledgerId: form.partyLedger, debit: totalAmount, credit: 0 },
-        { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: totalAmount },
-      ],
+      lines,
       inventoryLines,
     };
 
@@ -699,8 +802,9 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       amountSummaryItems={[
         { label: "Total Quantity", value: `${totalQty} pcs` },
         { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
-        { label: "Discount", value: formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol) },
-        { label: "Additional Charges", value: formatVoucherMoney(additionalCharges, currency.symbol) },
+        { label: "Line Discount", value: formatVoucherMoney(totalDiscount, currency.symbol) },
+        { label: "Additional Expense", value: formatVoucherMoney(additionalExpenseAmount, currency.symbol) },
+        { label: "Additional Income", value: formatVoucherMoney(additionalIncomeAmount, currency.symbol) },
         {
           label: "Total Amount",
           value: formatVoucherMoney(totalAmount, currency.symbol),
@@ -1050,39 +1154,111 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       </VoucherPanel>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <VoucherPanel title="Discount">
+        <VoucherPanel title="Additional Expense">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Discount Type</label>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Invoice Discount
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-700">
+                  Expense Ledger
+                </label>
+                <button
+                  type="button"
+                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                >
+                  Add+
+                </button>
               </div>
+              <SearchableSelect
+                options={expenseLedgerOptions}
+                value={form.additionalExpenseLedger}
+                onChange={(newValue) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    additionalExpenseLedger: newValue,
+                    additionalExpenseAmount: newValue ? prev.additionalExpenseAmount : "",
+                  }))
+                }
+                placeholder="Search expense ledger"
+              />
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
               <input
                 type="number"
                 data-vnav="true"
-                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
-                value={form.discountAmount}
+                disabled={!form.additionalExpenseLedger}
+                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                value={form.additionalExpenseAmount}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, discountAmount: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    additionalExpenseAmount: prev.additionalExpenseLedger
+                      ? event.target.value
+                      : "",
+                  }))
+                }
+                placeholder={
+                  form.additionalExpenseLedger
+                    ? "Enter expense amount"
+                    : "Select expense ledger first"
                 }
               />
             </div>
           </div>
         </VoucherPanel>
-        <VoucherPanel title="Additional Charges">
-          <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
-          <input
-            type="number"
-            data-vnav="true"
-            className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
-            value={form.additionalCharges}
-            onChange={(event) =>
-              setForm((prev) => ({ ...prev, additionalCharges: event.target.value }))
-            }
-          />
+        <VoucherPanel title="Additional Income">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-700">
+                  Income Ledger
+                </label>
+                <button
+                  type="button"
+                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                >
+                  Add+
+                </button>
+              </div>
+              <SearchableSelect
+                options={incomeLedgerOptions}
+                value={form.additionalIncomeLedger}
+                onChange={(newValue) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    additionalIncomeLedger: newValue,
+                    additionalIncomeAmount: newValue ? prev.additionalIncomeAmount : "",
+                  }))
+                }
+                placeholder="Search income ledger"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
+              <input
+                type="number"
+                data-vnav="true"
+                disabled={!form.additionalIncomeLedger}
+                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                value={form.additionalIncomeAmount}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    additionalIncomeAmount: prev.additionalIncomeLedger
+                      ? event.target.value
+                      : "",
+                  }))
+                }
+                placeholder={
+                  form.additionalIncomeLedger
+                    ? "Enter income amount"
+                    : "Select income ledger first"
+                }
+              />
+            </div>
+          </div>
         </VoucherPanel>
       </div>
 

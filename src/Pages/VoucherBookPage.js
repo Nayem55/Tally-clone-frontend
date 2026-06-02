@@ -16,6 +16,12 @@ function formatAmount(value) {
 }
 
 function voucherValue(voucher) {
+  if (Object.prototype.hasOwnProperty.call(voucher.commercialMeta || {}, "totalAmount")) {
+    return Number(voucher.commercialMeta?.totalAmount || 0);
+  }
+  if (Object.prototype.hasOwnProperty.call(voucher.posMeta || {}, "totalAmount")) {
+    return Number(voucher.posMeta?.totalAmount || 0);
+  }
   return (voucher.lines || []).reduce(
     (sum, line) => Math.max(sum, Number(line.debit || 0), Number(line.credit || 0)),
     0
