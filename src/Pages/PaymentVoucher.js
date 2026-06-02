@@ -33,6 +33,7 @@ const inputClass =
 export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const bottomSaveButtonRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [paymentTypeId, setPaymentTypeId] = useState("");
@@ -161,6 +162,12 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
   const paymentLedger = ledgerMap.get(form.paymentLedger);
   const validRows = form.rows.filter((row) => row.ledgerId && Number(row.amount) > 0);
   const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  function handleNarrationKeyDown(event) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    bottomSaveButtonRef.current?.focus();
+  }
 
   function updateRow(index, key, value) {
     setForm((prev) => {
@@ -354,6 +361,13 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
       onSave={save}
       onSaveDraft={() => alert("Draft support can be added next.")}
       onAddRow={addRow}
+      showTopSaveButton={false}
+      bottomSaveAction={{
+        ref: bottomSaveButtonRef,
+        label: "Save Voucher",
+        className:
+          "inline-flex min-h-11 items-center justify-center gap-2 bg-[#1463ff] px-6 py-3 text-[14px] font-semibold text-white",
+      }}
       summaryTag="Payment Voucher"
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
@@ -639,13 +653,14 @@ export default function PaymentVoucher({ companyId, editVoucherId = "" }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <VoucherPanel title="Narration">
-          <textarea
+          <input
             data-vnav="true"
-            className="min-h-24 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+            className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
             value={form.narration}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, narration: event.target.value }))
             }
+            onKeyDown={handleNarrationKeyDown}
             placeholder="Payment for goods purchased."
           />
         </VoucherPanel>

@@ -47,6 +47,8 @@ export default function VoucherWorkspace({
   onPrintAfterSave,
   extraActions = null,
   auditLogProps = null,
+  showTopSaveButton = true,
+  bottomSaveAction = null,
   children,
 }) {
   const Icon = icon;
@@ -105,12 +107,23 @@ export default function VoucherWorkspace({
 
   async function handleSave(mode = "save") {
     if (!canManageVoucher) return;
-    setShowSaveConfirm(false);
-    await onSave?.({
-      printAfterSave: mode === "print",
-      printVoucher:
-        onPrintAfterSave || (() => printVoucherNode(containerRef.current, title)),
-    });
+    try {
+      setShowSaveConfirm(false);
+      await onSave?.({
+        printAfterSave: mode === "print",
+        printVoucher:
+          onPrintAfterSave || (() => printVoucherNode(containerRef.current, title)),
+      });
+    } catch (error) {
+      if (error?.__sessionExpired) {
+        return;
+      }
+      alert(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Unable to save voucher right now.",
+      );
+    }
   }
 
   function focusRelativeField(currentTarget, direction) {
@@ -206,16 +219,18 @@ export default function VoucherWorkspace({
                 <Save className="h-4 w-4" />
                 Save Draft
               </button>
-              <button
-                type="button"
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 bg-[#1463ff] px-5 py-2.5 text-[14px] font-semibold text-white sm:w-auto sm:px-6"
-                onClick={() => canManageVoucher && setShowSaveConfirm(true)}
-                disabled={!canManageVoucher}
-              >
-                <Check className="h-4 w-4" />
-                Save Voucher
-                <ChevronDown className="h-4 w-4 opacity-70" />
-              </button>
+              {showTopSaveButton ? (
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 bg-[#1463ff] px-5 py-2.5 text-[14px] font-semibold text-white sm:w-auto sm:px-6"
+                  onClick={() => canManageVoucher && setShowSaveConfirm(true)}
+                  disabled={!canManageVoucher}
+                >
+                  <Check className="h-4 w-4" />
+                  Save Voucher
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </button>
+              ) : null}
             </div>
           </div>
         </section>
@@ -228,6 +243,24 @@ export default function VoucherWorkspace({
               </div>
             ) : null}
             {children}
+            {bottomSaveAction ? (
+              <div data-print-hide="true" className="flex justify-start">
+                <button
+                  ref={bottomSaveAction.ref || null}
+                  type="button"
+                  className={
+                    bottomSaveAction.className ||
+                    "inline-flex min-h-11 items-center justify-center gap-2 bg-[#1463ff] px-6 py-3 text-[14px] font-semibold text-white"
+                  }
+                  onClick={() => canManageVoucher && setShowSaveConfirm(true)}
+                  disabled={!canManageVoucher}
+                >
+                  <Check className="h-4 w-4" />
+                  {bottomSaveAction.label || "Save Voucher"}
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <aside data-print-sidebar="true" className="border-t border-[#b8cbe1] bg-[#dbeeff] p-3 space-y-3 2xl:border-l 2xl:border-t-0">

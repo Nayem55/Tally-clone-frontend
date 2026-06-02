@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import api from "../api/api";
+import api, { SESSION_EXPIRED_NOTICE_KEY } from "../api/api";
 import {
   STORAGE_KEY,
   useActiveCompany,
@@ -28,6 +28,7 @@ export default function EmployeeLoginPage() {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [needsEmployeeLogin, setNeedsEmployeeLogin] = useState(false);
   const [form, setForm] = useState(() => ({
     companyId: "",
@@ -51,6 +52,12 @@ export default function EmployeeLoginPage() {
     window.localStorage.removeItem("pos-user");
     window.localStorage.removeItem("attendance-user");
     window.localStorage.removeItem(EMPLOYEE_SESSION_TOKEN_KEY);
+    const expiredNotice =
+      window.sessionStorage.getItem(SESSION_EXPIRED_NOTICE_KEY) || "";
+    if (expiredNotice) {
+      setInfoMessage(expiredNotice);
+      window.sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+    }
 
     async function loadCompanies() {
       setLoadingCompanies(true);
@@ -271,6 +278,12 @@ export default function EmployeeLoginPage() {
             {errorMessage ? (
               <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {errorMessage}
+              </div>
+            ) : null}
+
+            {infoMessage ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {infoMessage}
               </div>
             ) : null}
 

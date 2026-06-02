@@ -30,6 +30,7 @@ const JOURNAL_VOUCHER_RETURN_STORAGE_KEY = "journal-voucher-return-draft";
 export default function JournalVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
+  const bottomSaveButtonRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [journalTypeId, setJournalTypeId] = useState("");
@@ -151,6 +152,12 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
     (row) => row.fromLedgerId && row.toLedgerId && Number(row.amount) > 0
   );
   const totalAmount = validRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  function handleNarrationKeyDown(event) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    bottomSaveButtonRef.current?.focus();
+  }
 
   function updateRow(index, key, value) {
     setForm((prev) => {
@@ -349,6 +356,13 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
       onSave={save}
       onSaveDraft={() => alert("Draft support can be added next.")}
       onAddRow={addRow}
+      showTopSaveButton={false}
+      bottomSaveAction={{
+        ref: bottomSaveButtonRef,
+        label: "Save Voucher",
+        className:
+          "inline-flex min-h-11 items-center justify-center gap-2 bg-[#1463ff] px-6 py-3 text-[14px] font-semibold text-white",
+      }}
       summaryTag="Journal Voucher"
       summaryItems={[
         { label: "Voucher No.", value: form.number || "-" },
@@ -572,11 +586,12 @@ export default function JournalVoucher({ companyId, editVoucherId = "" }) {
       </VoucherPanel>
 
       <VoucherPanel title="Narration">
-        <textarea
+        <input
           data-vnav="true"
-          className="min-h-24 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+          className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
           onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+          onKeyDown={handleNarrationKeyDown}
           placeholder="Advance adjusted."
         />
       </VoucherPanel>

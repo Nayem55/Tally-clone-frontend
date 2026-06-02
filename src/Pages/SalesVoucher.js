@@ -48,6 +48,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const hasHydratedEditVoucherRef = useRef(false);
   const fileInputRef = useRef(null);
+  const bottomSaveButtonRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [salesTypeId, setSalesTypeId] = useState("");
@@ -668,6 +669,12 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     }
   };
 
+  const handleNarrationKeyDown = (event) => {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    bottomSaveButtonRef.current?.focus();
+  };
+
   if (loading) {
     return <div className="p-10 text-center text-slate-500">Loading sales voucher...</div>;
   }
@@ -690,6 +697,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         { label: "Sales Ledger", value: salesLedger?.name || "Sales" },
       ]}
       amountSummaryItems={[
+        { label: "Total Quantity", value: `${totalQty} pcs` },
         { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
         { label: "Discount", value: formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol) },
         { label: "Additional Charges", value: formatVoucherMoney(additionalCharges, currency.symbol) },
@@ -702,6 +710,13 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       ]}
       onPreviewPrint={() => previewVoucherDocument(printData)}
       onPrintAfterSave={() => printVoucherDocument(printData)}
+      showTopSaveButton={false}
+      bottomSaveAction={{
+        ref: bottomSaveButtonRef,
+        label: "Save Voucher",
+        className:
+          "inline-flex min-h-11 items-center justify-center gap-2 bg-[#1463ff] px-6 py-3 text-[14px] font-semibold text-white",
+      }}
       auditLogProps={
         isEditMode
           ? {
@@ -1072,35 +1087,15 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       </div>
 
       <VoucherPanel title="Narration">
-        <textarea
+        <input
           data-vnav="true"
-          className="min-h-28 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+          className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
           onChange={(event) => setForm((prev) => ({ ...prev, narration: event.target.value }))}
+          onKeyDown={handleNarrationKeyDown}
           placeholder="Sold to customer as per invoice."
         />
       </VoucherPanel>
-
-      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 text-center">
-            <p className="text-sm text-slate-500">Total Quantity</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{totalQty} pcs</p>
-          </div>
-          <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-5 text-center">
-            <p className="text-sm text-rose-600">Total Discount</p>
-            <p className="mt-2 text-3xl font-bold text-rose-600">
-              {formatVoucherMoney(totalDiscount + invoiceDiscount, currency.symbol)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-5 text-center">
-            <p className="text-sm text-emerald-700">Total Amount Payable</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-700 sm:text-4xl">
-              {formatVoucherMoney(totalAmount, currency.symbol)}
-            </p>
-          </div>
-        </div>
-      </section>
     </VoucherWorkspace>
   );
 }
