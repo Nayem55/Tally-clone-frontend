@@ -336,10 +336,10 @@ export default function ProfitLoss() {
                 valueClass={grossProfit >= 0 ? "text-emerald-600" : "text-rose-600"}
                 iconClass="text-emerald-600"
               />
-              <MetricCard
+                <MetricCard
                 icon={Wallet}
                 title="Expenses"
-                value={formatCurrencyAmount(expenses, selectedCompany)}
+                value={formatSignedAmount(expenses, selectedCompany)}
                 helper="Expense nature ledgers"
                 iconClass="text-amber-500"
               />
@@ -434,7 +434,7 @@ export default function ProfitLoss() {
                     {[
                       ["Sales", formatCurrencyAmount(sales, selectedCompany)],
                       ["Gross Profit", formatSignedAmount(grossProfit, selectedCompany)],
-                      ["Expenses", formatCurrencyAmount(expenses, selectedCompany)],
+                      ["Expenses", formatSignedAmount(expenses, selectedCompany)],
                       ["Net Profit / Loss", formatSignedAmount(netProfit, selectedCompany)],
                       ["Net Profit Margin", `${Number(report.totals?.profitMargin || 0).toFixed(2)}%`],
                     ].map(([label, value]) => (

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   FileSpreadsheet,
-  Plus,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -25,8 +24,15 @@ const emptyRow = {
   actualQty: "1",
   billedQty: "1",
   rate: "",
+  discountPercent: "",
   billedManuallyEdited: false,
   persistedFromVoucher: false,
+};
+const END_OF_LIST = "__END_OF_LIST__";
+const emptyAdjustmentRow = {
+  ledgerId: "",
+  mode: "fixed",
+  value: "",
 };
 
 const PURCHASE_TEMPLATE_SHEET = "Purchase Voucher";
@@ -84,6 +90,16 @@ function resolvePurchaseItemRate(item) {
   return 0;
 }
 
+function calculatePurchaseLineAmount(row) {
+  return Number(
+    (
+      Number(row.billedQty || row.actualQty || 0) *
+      Number(row.rate || 0) *
+      (1 - Number(row.discountPercent || 0) / 100)
+    ).toFixed(2),
+  );
+}
+
 function padRows(rows, minRows = 8) {
   const nextRows = [...rows];
   while (nextRows.length < minRows) {
@@ -98,7 +114,11 @@ function buildPurchasePayload({
   defaultPurchaseLedgerId,
   itemMap,
   validRows,
+  subtotal,
   totalAmount,
+  adjustmentRows = [],
+  additionalExpenseAmount = 0,
+  additionalIncomeAmount = 0,
 }) {
   const inventoryLines = validRows.map((row) => {
     const item = itemMap.get(row.itemId);
@@ -108,11 +128,8 @@ function buildPurchasePayload({
       qty: Number(row.billedQty || row.actualQty),
       billedQty: Number(row.billedQty || row.actualQty),
       rate: Number(row.rate),
-      amount: Number(
-        (
-          Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0)
-        ).toFixed(2),
-      ),
+      discount: Number(row.discountPercent || 0),
+      amount: calculatePurchaseLineAmount(row),
       productSnapshot: { name: item.name, prices: item.prices },
     };
   });
@@ -125,18 +142,50 @@ function buildPurchasePayload({
     narration: normalizeText(form.narration) || "Purchase Voucher",
     referenceNo: normalizeText(form.supplierInvoiceNo),
     commercialMeta: {
-      subtotal: totalAmount,
+      subtotal,
       lineDiscountTotal: 0,
       invoiceDiscount: 0,
       additionalCharges: 0,
+      additionalAdjustments: adjustmentRows.map((row) => ({
+        ledgerId: row.ledgerId,
+        ledgerName: row.ledger?.name || "",
+        nature: row.nature,
+        mode: row.mode || "fixed",
+        value: Number(row.value || 0),
+        amount: row.calculatedAmount,
+      })),
+      additionalExpenseLedgerId:
+        adjustmentRows.find((row) => row.nature === "EXPENSE")?.ledgerId || null,
+      additionalExpenseMode:
+        adjustmentRows.find((row) => row.nature === "EXPENSE")?.mode || "fixed",
+      additionalExpenseValue:
+        Number(adjustmentRows.find((row) => row.nature === "EXPENSE")?.value || 0),
+      additionalExpenseAmount,
+      additionalIncomeLedgerId:
+        adjustmentRows.find((row) => row.nature === "INCOME")?.ledgerId || null,
+      additionalIncomeMode:
+        adjustmentRows.find((row) => row.nature === "INCOME")?.mode || "fixed",
+      additionalIncomeValue:
+        Number(adjustmentRows.find((row) => row.nature === "INCOME")?.value || 0),
+      additionalIncomeAmount,
       totalAmount,
     },
     lines: [
       {
         ledgerId: form.purchaseLedger || defaultPurchaseLedgerId,
-        debit: totalAmount,
+        debit: subtotal,
         credit: 0,
       },
+      ...adjustmentRows
+        .filter((row) => Number(row.calculatedAmount || 0) !== 0)
+        .map((row) => {
+          const signedAmount = Number(row.calculatedAmount || 0);
+          return {
+            ledgerId: row.ledgerId,
+            debit: signedAmount > 0 ? signedAmount : 0,
+            credit: signedAmount < 0 ? Math.abs(signedAmount) : 0,
+          };
+        }),
       {
         ledgerId: form.supplierLedger,
         debit: 0,
@@ -151,6 +200,8 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
   const bottomSaveButtonRef = useRef(null);
+  const adjustmentPanelRef = useRef(null);
+  const narrationInputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [purchaseTypeId, setPurchaseTypeId] = useState("");
@@ -170,6 +221,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     supplierInvoiceNo: "",
     supplierLedger: "",
     purchaseLedger: "",
+    additionalRows: [emptyAdjustmentRow],
     narration: "",
     rows: [createEmptyRow()],
   });
@@ -236,6 +288,14 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       const voucher = response.data;
       const debitLine = (voucher.lines || []).find((line) => Number(line.debit || 0) > 0);
       const creditLine = (voucher.lines || []).find((line) => Number(line.credit || 0) > 0);
+      const savedAdjustments = Array.isArray(voucher.commercialMeta?.additionalAdjustments)
+        ? voucher.commercialMeta.additionalAdjustments
+        : [];
+      const additionalRows = savedAdjustments.map((row) => ({
+        ledgerId: String(row.ledgerId || ""),
+        mode: row.mode || "fixed",
+        value: String(row.value ?? row.amount ?? ""),
+      }));
 
       if (!alive) return;
       setForm({
@@ -246,6 +306,10 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
         supplierInvoiceNo: voucher.referenceNo || "",
         supplierLedger: String(creditLine?.ledgerId || ""),
         purchaseLedger: String(debitLine?.ledgerId || defaultPurchaseLedgerId || ""),
+        additionalRows:
+          additionalRows.length > 0
+            ? [...additionalRows, emptyAdjustmentRow]
+            : [emptyAdjustmentRow],
         narration: voucher.narration || "",
         rows:
           (voucher.inventoryLines || []).map((line) => ({
@@ -253,6 +317,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
             actualQty: String(line.qty || line.billedQty || 1),
             billedQty: String(line.billedQty || line.qty || 1),
             rate: Number(line.rate || 0),
+            discountPercent: String(line.discount || line.discountPercent || ""),
             billedManuallyEdited:
               String(line.billedQty || line.qty || 1) !==
               String(line.qty || line.billedQty || 1),
@@ -311,12 +376,29 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     [suppliers],
   );
   const itemOptions = useMemo(
-    () => items.map((item) => ({ value: item._id, label: item.name })),
+    () => [
+      { value: END_OF_LIST, label: "End of List", meta: "" },
+      ...items.map((item) => ({ value: item._id, label: item.name })),
+    ],
     [items],
   );
+  const adjustmentLedgerOptions = useMemo(
+    () => [
+      { value: END_OF_LIST, label: "End of List", meta: "" },
+      ...allLedgers
+        .filter((ledger) =>
+          ["EXPENSE", "INCOME"].includes(String(ledger.group?.nature || "").toUpperCase()),
+        )
+        .map((ledger) => ({
+          value: ledger._id,
+          label: ledger.name,
+          meta: "",
+        })),
+    ],
+    [allLedgers],
+  );
 
-  const lineAmount = (row) =>
-    Number((Number(row.billedQty || row.actualQty || 0) * Number(row.rate || 0)).toFixed(2));
+  const lineAmount = calculatePurchaseLineAmount;
 
   const recalculateRow = (row, voucherDate) => {
     if (!row.itemId) return row;
@@ -327,13 +409,32 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     };
   };
 
+  const focusAdjustmentList = () => {
+    window.setTimeout(() => {
+      adjustmentPanelRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const focusNarration = () => {
+    window.setTimeout(() => {
+      narrationInputRef.current?.focus();
+    }, 0);
+  };
+
   const updateRow = (index, key, value) => {
+    if (key === "itemId" && value === END_OF_LIST) {
+      focusAdjustmentList();
+      return;
+    }
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
         if (!isEditMode || !rows[index].persistedFromVoucher) {
           rows[index] = recalculateRow(rows[index], prev.date);
+        }
+        if (value && index === rows.length - 1) {
+          rows.push(createEmptyRow());
         }
       }
       if (key === "billedQty") {
@@ -351,8 +452,37 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const removeRow = (index) =>
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
+      rows: prev.rows.length === 1 ? [createEmptyRow()] : prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
+
+  const updateAdjustmentRow = (index, key, value) => {
+    if (key === "ledgerId" && value === END_OF_LIST) {
+      focusNarration();
+      return;
+    }
+    setForm((prev) => {
+      const additionalRows = [...(prev.additionalRows || [emptyAdjustmentRow])];
+      additionalRows[index] = { ...additionalRows[index], [key]: value };
+      if (key === "ledgerId") {
+        if (!value) {
+          additionalRows[index] = { ...additionalRows[index], ledgerId: "", value: "" };
+        } else if (index === additionalRows.length - 1) {
+          additionalRows.push(emptyAdjustmentRow);
+        }
+      }
+      return { ...prev, additionalRows };
+    });
+  };
+
+  const removeAdjustmentRow = (index) => {
+    setForm((prev) => {
+      const additionalRows =
+        (prev.additionalRows || []).length === 1
+          ? [emptyAdjustmentRow]
+          : (prev.additionalRows || []).filter((_, rowIndex) => rowIndex !== index);
+      return { ...prev, additionalRows };
+    });
+  };
 
   const updateDate = (value) => {
     if (isEditMode) {
@@ -378,7 +508,34 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
   const validRows = form.rows.filter(
     (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,
   );
-  const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const subtotal = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const calculateAdjustmentAmount = (value, mode) => {
+    const numericValue = Number(value || 0);
+    if (mode === "percentage") {
+      return Number(((subtotal * numericValue) / 100).toFixed(2));
+    }
+    return Number(numericValue.toFixed(2));
+  };
+  const adjustmentRows = (form.additionalRows || [])
+    .filter((row) => row.ledgerId && row.ledgerId !== END_OF_LIST)
+    .map((row) => {
+      const ledger = ledgerMap.get(row.ledgerId);
+      const nature = String(ledger?.group?.nature || "").toUpperCase();
+      return {
+        ...row,
+        ledger,
+        nature,
+        calculatedAmount: calculateAdjustmentAmount(row.value, row.mode),
+      };
+    })
+    .filter((row) => row.ledger && ["EXPENSE", "INCOME"].includes(row.nature));
+  const additionalExpenseAmount = adjustmentRows
+    .filter((row) => row.nature === "EXPENSE")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const additionalIncomeAmount = adjustmentRows
+    .filter((row) => row.nature === "INCOME")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const totalAmount = Number((subtotal + additionalExpenseAmount + additionalIncomeAmount).toFixed(2));
   const totalQty = validRows.reduce(
     (sum, row) => sum + Number(row.billedQty || row.actualQty || 0),
     0,
@@ -391,6 +548,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       supplierInvoiceNo: "",
       supplierLedger: "",
       purchaseLedger: defaultPurchaseLedgerId,
+      additionalRows: [emptyAdjustmentRow],
       narration: "",
       rows: [createEmptyRow()],
     });
@@ -441,6 +599,15 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       return alert("Purchase ledger is missing");
     }
     if (validRows.length === 0) return alert("Please add at least one item");
+    const incompleteAdjustment = (form.additionalRows || []).find(
+      (row) => !row.ledgerId && Number(row.value || 0) !== 0,
+    );
+    if (incompleteAdjustment) {
+      return alert("Please select an additional expense/income ledger before entering a value.");
+    }
+    if (totalAmount < 0) {
+      return alert("Total amount cannot be negative. Check additional expense / income.");
+    }
 
     const payload = buildPurchasePayload({
       form,
@@ -448,7 +615,11 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       defaultPurchaseLedgerId,
       itemMap,
       validRows,
+      subtotal,
       totalAmount,
+      adjustmentRows,
+      additionalExpenseAmount,
+      additionalIncomeAmount,
     });
 
     await submitPayload(payload, options);
@@ -634,6 +805,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           actualQty: String(actualQty),
           billedQty: String(billedQty),
           rate: String(rate),
+          discountPercent: "",
           billedManuallyEdited: normalizeText(row.billedQty) !== "",
         };
       });
@@ -644,6 +816,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
         supplierInvoiceNo: prev.supplierInvoiceNo,
         supplierLedger: prev.supplierLedger || "",
         purchaseLedger: prev.purchaseLedger || defaultPurchaseLedgerId,
+        additionalRows: prev.additionalRows || [emptyAdjustmentRow],
         narration: prev.narration || "Imported from Excel",
         rows: resolvedRows,
       }));
@@ -687,6 +860,15 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       ]}
       amountSummaryItems={[
         { label: "Total Quantity", value: `${totalQty} pcs` },
+        { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
+        {
+          label: "Additional Expense",
+          value: formatVoucherMoney(additionalExpenseAmount, currency.symbol),
+        },
+        {
+          label: "Additional Income",
+          value: formatVoucherMoney(additionalIncomeAmount, currency.symbol),
+        },
         {
           label: "Total Amount",
           value: formatVoucherMoney(totalAmount, currency.symbol),
@@ -894,10 +1076,20 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-900">
-                        {formatVoucherMoney(lineAmount(row), currency.symbol)}
-                      </div>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">Disc %</label>
+                      <input
+                        type="number"
+                        data-vnav="true"
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                        value={row.discountPercent}
+                        onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-900">
+                      {formatVoucherMoney(lineAmount(row), currency.symbol)}
                     </div>
                   </div>
                 </div>
@@ -926,6 +1118,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                 <th className="px-4 py-3 font-medium">Actual</th>
                 <th className="px-4 py-3 font-medium">Billed</th>
                 <th className="px-4 py-3 font-medium">Rate</th>
+                <th className="px-4 py-3 font-medium">Disc %</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -969,6 +1162,15 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                       onChange={(event) => updateRow(index, "rate", event.target.value)}
                     />
                   </td>
+                  <td className="px-4 py-4">
+                    <input
+                      type="number"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.discountPercent}
+                      onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
+                    />
+                  </td>
                   <td className="px-4 py-4 text-right font-semibold text-slate-900">
                     {formatVoucherMoney(lineAmount(row), currency.symbol)}
                   </td>
@@ -989,18 +1191,106 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
           </table>
         </div>
 
-        <button
-          type="button"
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 md:w-auto"
-          onClick={addRow}
-        >
-          <Plus className="h-4 w-4" />
-          Add New Item
-        </button>
+      </VoucherPanel>
+
+      <VoucherPanel title="Additional Expense / Income">
+        <div ref={adjustmentPanelRef} className="overflow-x-auto overflow-y-visible border border-[#bccfe3]">
+          <table className="min-w-[760px] text-sm">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
+              <tr>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Additional Expense / Income</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Value</th>
+                <th className="px-4 py-3 text-right font-medium">Calculated</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(form.additionalRows || [emptyAdjustmentRow]).map((row, index) => {
+                const ledger = ledgerMap.get(row.ledgerId);
+                const calculated = calculateAdjustmentAmount(row.value, row.mode);
+                return (
+                  <tr key={index} className="border-t border-slate-100">
+                    <td className="px-4 py-4 align-top text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 align-top">
+                      <SearchableSelect
+                        options={adjustmentLedgerOptions}
+                        value={row.ledgerId}
+                        onChange={(newValue) => updateAdjustmentRow(index, "ledgerId", newValue)}
+                        placeholder="Search additional expense / income"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        {ledger
+                          ? `${ledger.group?.nature || ""} - ${ledger.group?.name || ledger.groupName || ""}`
+                          : "Select End of List to continue"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <select
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.mode}
+                        onChange={(event) => updateAdjustmentRow(index, "mode", event.target.value)}
+                      >
+                        <option value="fixed">Fixed</option>
+                        <option value="percentage">Percentage</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <input
+                        type="number"
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.value}
+                        onChange={(event) => updateAdjustmentRow(index, "value", event.target.value)}
+                        placeholder={
+                          row.ledgerId
+                            ? row.mode === "percentage"
+                              ? "Use + or - percentage"
+                              : "Use + or - amount"
+                            : "Select ledger first"
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
+                      {formatVoucherMoney(row.ledgerId ? calculated : 0, currency.symbol)}
+                    </td>
+                    <td className="px-4 py-4 align-top text-right">
+                      {(form.additionalRows || []).length > 1 ? (
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          onClick={() => removeAdjustmentRow(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </VoucherPanel>
 
       <VoucherPanel title="Narration">
         <input
+          ref={narrationInputRef}
           data-vnav="true"
           className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}

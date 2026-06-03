@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Plus, ReceiptText, Trash2, Upload } from "lucide-react";
+import { Download, ReceiptText, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
@@ -29,7 +29,21 @@ import {
   parseWorksheetRows,
 } from "../utils/voucherExcel";
 
-const emptyRow = { itemId: "", qty: "1", rate: "", persistedFromVoucher: false };
+const emptyRow = {
+  itemId: "",
+  actualQty: "1",
+  billedQty: "1",
+  rate: "",
+  discountPercent: "",
+  billedManuallyEdited: false,
+  persistedFromVoucher: false,
+};
+const END_OF_LIST = "__END_OF_LIST__";
+const emptyAdjustmentRow = {
+  ledgerId: "",
+  mode: "fixed",
+  value: "",
+};
 const CREDIT_TEMPLATE_SHEET = "Credit Note Voucher";
 const CREDIT_NOTE_RETURN_STORAGE_KEY = "credit-note-voucher-return-draft";
 
@@ -37,6 +51,8 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
   const bottomSaveButtonRef = useRef(null);
+  const adjustmentPanelRef = useRef(null);
+  const narrationInputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [creditTypeId, setCreditTypeId] = useState("");
@@ -54,10 +70,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     date: formatDateForInput(new Date()),
     customerLedger: "",
     returnLedger: "",
-    additionalExpenseLedger: "",
-    additionalExpenseAmount: "",
-    additionalIncomeLedger: "",
-    additionalIncomeAmount: "",
+    additionalRows: [emptyAdjustmentRow],
     narration: "",
     rows: [emptyRow],
   });
@@ -116,10 +129,15 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
         String(editLedgerMap.get(String(line.ledgerId || ""))?.group?.nature || "").toUpperCase();
       const ledgerGroupName = (line) =>
         normalizeExcelNameKey(editLedgerMap.get(String(line.ledgerId || ""))?.group?.name || "");
+      const ledgerName = (line) =>
+        normalizeExcelNameKey(editLedgerMap.get(String(line.ledgerId || ""))?.name || "");
       const debitLines = (voucher.lines || []).filter((line) => Number(line.debit || 0) > 0);
       const creditLines = (voucher.lines || []).filter((line) => Number(line.credit || 0) > 0);
       const returnLine =
-        debitLines.find((line) => ledgerGroupName(line) === "sales accounts") || debitLines[0];
+        debitLines.find((line) => ledgerGroupName(line) === "sales accounts") ||
+        debitLines.find((line) => ledgerName(line).includes("sales return")) ||
+        debitLines.find((line) => !["EXPENSE", "INCOME"].includes(ledgerNature(line))) ||
+        debitLines[0];
       const additionalExpenseLine =
         debitLines.find(
           (line) =>
@@ -127,13 +145,65 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
             String(line.ledgerId || "") !== String(returnLine?.ledgerId || ""),
         ) || null;
       const customerLine =
-        creditLines.find((line) => ledgerNature(line) !== "INCOME") || creditLines[0];
+        creditLines.find(
+          (line) =>
+            !["EXPENSE", "INCOME"].includes(ledgerNature(line)) &&
+            String(line.ledgerId || "") !== String(returnLine?.ledgerId || ""),
+        ) || creditLines[0];
       const additionalIncomeLine =
         creditLines.find(
           (line) =>
             ledgerNature(line) === "INCOME" &&
             String(line.ledgerId || "") !== String(customerLine?.ledgerId || ""),
         ) || null;
+      const savedAdjustments = Array.isArray(voucher.commercialMeta?.additionalAdjustments)
+        ? voucher.commercialMeta.additionalAdjustments
+        : [];
+      const additionalRows =
+        savedAdjustments.length > 0
+          ? savedAdjustments.map((row) => ({
+              ledgerId: String(row.ledgerId || ""),
+              mode: row.mode || "fixed",
+              value: String(row.value ?? row.amount ?? ""),
+            }))
+          : [
+              ...(voucher.commercialMeta?.additionalExpenseLedgerId || additionalExpenseLine
+                ? [
+                    {
+                      ledgerId: String(
+                        voucher.commercialMeta?.additionalExpenseLedgerId ||
+                          additionalExpenseLine?.ledgerId ||
+                          "",
+                      ),
+                      mode: voucher.commercialMeta?.additionalExpenseMode || "fixed",
+                      value: String(
+                        voucher.commercialMeta?.additionalExpenseValue ??
+                          voucher.commercialMeta?.additionalExpenseAmount ??
+                          additionalExpenseLine?.debit ??
+                          "",
+                      ),
+                    },
+                  ]
+                : []),
+              ...(voucher.commercialMeta?.additionalIncomeLedgerId || additionalIncomeLine
+                ? [
+                    {
+                      ledgerId: String(
+                        voucher.commercialMeta?.additionalIncomeLedgerId ||
+                          additionalIncomeLine?.ledgerId ||
+                          "",
+                      ),
+                      mode: voucher.commercialMeta?.additionalIncomeMode || "fixed",
+                      value: String(
+                        voucher.commercialMeta?.additionalIncomeValue ??
+                          voucher.commercialMeta?.additionalIncomeAmount ??
+                          additionalIncomeLine?.credit ??
+                          "",
+                      ),
+                    },
+                  ]
+                : []),
+            ];
 
       if (!alive) return;
       setForm({
@@ -143,31 +213,20 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
           : formatDateForInput(new Date()),
         customerLedger: String(customerLine?.ledgerId || ""),
         returnLedger: String(returnLine?.ledgerId || ""),
-        additionalExpenseLedger: String(
-          voucher.commercialMeta?.additionalExpenseLedgerId ||
-            additionalExpenseLine?.ledgerId ||
-            "",
-        ),
-        additionalExpenseAmount: String(
-          voucher.commercialMeta?.additionalExpenseAmount ||
-            additionalExpenseLine?.debit ||
-            "",
-        ),
-        additionalIncomeLedger: String(
-          voucher.commercialMeta?.additionalIncomeLedgerId ||
-            additionalIncomeLine?.ledgerId ||
-            "",
-        ),
-        additionalIncomeAmount: String(
-          voucher.commercialMeta?.additionalIncomeAmount ||
-            additionalIncomeLine?.credit ||
-            "",
-        ),
+        additionalRows:
+          additionalRows.length > 0
+            ? [...additionalRows, emptyAdjustmentRow]
+            : [emptyAdjustmentRow],
         narration: voucher.narration || "",
         rows: (voucher.inventoryLines || []).map((line) => ({
           itemId: String(line.itemId || ""),
-          qty: String(line.qty || 1),
+          actualQty: String(line.actualQty || line.qty || 1),
+          billedQty: String(line.billedQty || line.qty || 1),
           rate: Number(line.rate || 0),
+          discountPercent: String(line.discount || line.discountPercent || ""),
+          billedManuallyEdited:
+            String(line.billedQty || line.qty || 1) !==
+            String(line.actualQty || line.qty || 1),
           persistedFromVoucher: true,
         })) || [emptyRow],
       });
@@ -226,34 +285,31 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     () => ledgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
     [ledgers],
   );
-  const expenseLedgerOptions = useMemo(
+  const adjustmentLedgerOptions = useMemo(
     () =>
-      ledgers
-        .filter((ledger) => String(ledger.group?.nature || "").toUpperCase() === "EXPENSE")
-        .map((ledger) => ({
-          value: ledger._id,
-          label: ledger.name,
-          meta: ledger.group?.name || ledger.groupName || "",
-        })),
+      [
+        { value: END_OF_LIST, label: "End of List", meta: "Move to narration" },
+        ...ledgers
+          .filter((ledger) =>
+            ["EXPENSE", "INCOME"].includes(
+              String(ledger.group?.nature || "").toUpperCase(),
+            ),
+          )
+          .map((ledger) => ({
+            value: ledger._id,
+            label: ledger.name,
+            meta: `${ledger.group?.nature || ""} - ${
+              ledger.group?.name || ledger.groupName || ""
+            }`,
+          })),
+      ],
     [ledgers],
   );
-  const incomeLedgerOptions = useMemo(
-    () =>
-      ledgers
-        .filter(
-          (ledger) =>
-            String(ledger.group?.nature || "").toUpperCase() === "INCOME" &&
-            String(ledger._id) !== String(form.returnLedger),
-        )
-        .map((ledger) => ({
-          value: ledger._id,
-          label: ledger.name,
-          meta: ledger.group?.name || ledger.groupName || "",
-        })),
-    [ledgers, form.returnLedger],
-  );
   const itemOptions = useMemo(
-    () => items.map((item) => ({ value: item._id, label: item.name })),
+    () => [
+      { value: END_OF_LIST, label: "End of List", meta: "Move to additional expense / income" },
+      ...items.map((item) => ({ value: item._id, label: item.name })),
+    ],
     [items],
   );
   const customerNameMap = useMemo(
@@ -276,17 +332,49 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     [items],
   );
 
-  const lineAmount = (row) =>
-    Number((Number(row.qty || 0) * Number(row.rate || 0)).toFixed(2));
+  const lineAmount = (row) => {
+    const qty = Number(row.billedQty || row.actualQty || 0);
+    const rate = Number(row.rate || 0);
+    const gross = qty * rate;
+    const discount = (gross * Number(row.discountPercent || 0)) / 100;
+    return Number((gross - discount).toFixed(2));
+  };
   const validRows = form.rows.filter(
-    (row) => row.itemId && Number(row.qty) > 0,
+    (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,
   );
-  const totalQty = validRows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const totalQty = validRows.reduce(
+    (sum, row) => sum + Number(row.billedQty || row.actualQty || 0),
+    0,
+  );
   const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
-  const additionalExpenseAmount = Number(form.additionalExpenseAmount || 0);
-  const additionalIncomeAmount = Number(form.additionalIncomeAmount || 0);
+  const calculateAdjustmentAmount = (value, mode) => {
+    const numericValue = Number(value || 0);
+    if (mode === "percentage") {
+      return Number(((totalAmount * numericValue) / 100).toFixed(2));
+    }
+    return Number(numericValue.toFixed(2));
+  };
+  const adjustmentRows = (form.additionalRows || [])
+    .filter((row) => row.ledgerId && row.ledgerId !== END_OF_LIST)
+    .map((row) => {
+      const ledger = ledgerMap.get(row.ledgerId);
+      const nature = String(ledger?.group?.nature || "").toUpperCase();
+      return {
+        ...row,
+        ledger,
+        nature,
+        calculatedAmount: calculateAdjustmentAmount(row.value, row.mode),
+      };
+    })
+    .filter((row) => row.ledger && ["EXPENSE", "INCOME"].includes(row.nature));
+  const additionalExpenseAmount = adjustmentRows
+    .filter((row) => row.nature === "EXPENSE")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const additionalIncomeAmount = adjustmentRows
+    .filter((row) => row.nature === "INCOME")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
   const settlementAmount = Number(
-    (totalAmount + additionalExpenseAmount - additionalIncomeAmount).toFixed(2),
+    (totalAmount + additionalExpenseAmount + additionalIncomeAmount).toFixed(2),
   );
   const printData = useMemo(
     () =>
@@ -304,8 +392,11 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
           const item = itemMap.get(row.itemId);
           return {
             name: item?.name || "-",
-            qty: `${Number(row.qty || 0)}`,
+            qty: `${Number(row.billedQty || row.actualQty || 0)}`,
             rate: formatVoucherMoney(row.rate, currency.symbol),
+            discount: Number(row.discountPercent || 0)
+              ? `${Number(row.discountPercent || 0).toFixed(2)}%`
+              : "",
             amount: formatVoucherMoney(lineAmount(row), currency.symbol),
           };
         }),
@@ -350,7 +441,23 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     ],
   );
 
+  function focusAdjustmentList() {
+    window.setTimeout(() => {
+      adjustmentPanelRef.current?.querySelector("input")?.focus();
+    }, 0);
+  }
+
+  function focusNarration() {
+    window.setTimeout(() => {
+      narrationInputRef.current?.focus();
+    }, 0);
+  }
+
   function updateRow(index, key, value) {
+    if (key === "itemId" && value === END_OF_LIST) {
+      focusAdjustmentList();
+      return;
+    }
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
@@ -362,6 +469,15 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
             prev.date,
           );
         }
+        if (value && index === rows.length - 1) {
+          rows.push(emptyRow);
+        }
+      }
+      if (key === "billedQty") {
+        rows[index].billedManuallyEdited = true;
+      }
+      if (key === "actualQty" && !rows[index].billedManuallyEdited) {
+        rows[index].billedQty = value;
       }
       return { ...prev, rows };
     });
@@ -374,8 +490,37 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
   function removeRow(index) {
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
+      rows: prev.rows.length === 1 ? [emptyRow] : prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
+  }
+
+  function updateAdjustmentRow(index, key, value) {
+    if (key === "ledgerId" && value === END_OF_LIST) {
+      focusNarration();
+      return;
+    }
+    setForm((prev) => {
+      const additionalRows = [...(prev.additionalRows || [emptyAdjustmentRow])];
+      additionalRows[index] = { ...additionalRows[index], [key]: value };
+      if (key === "ledgerId") {
+        if (!value) {
+          additionalRows[index] = { ...additionalRows[index], ledgerId: "", value: "" };
+        } else if (index === additionalRows.length - 1) {
+          additionalRows.push(emptyAdjustmentRow);
+        }
+      }
+      return { ...prev, additionalRows };
+    });
+  }
+
+  function removeAdjustmentRow(index) {
+    setForm((prev) => {
+      const additionalRows =
+        (prev.additionalRows || []).length === 1
+          ? [emptyAdjustmentRow]
+          : (prev.additionalRows || []).filter((_, rowIndex) => rowIndex !== index);
+      return { ...prev, additionalRows };
+    });
   }
 
   function updateDate(value) {
@@ -412,10 +557,7 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
       date: formatDateForInput(new Date()),
       customerLedger: "",
       returnLedger: "",
-      additionalExpenseLedger: "",
-      additionalExpenseAmount: "",
-      additionalIncomeLedger: "",
-      additionalIncomeAmount: "",
+      additionalRows: [emptyAdjustmentRow],
       narration: "",
       rows: [emptyRow],
     });
@@ -545,8 +687,11 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
           throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
         return {
           itemId: item._id,
-          qty: String(qty),
+          actualQty: String(qty),
+          billedQty: String(qty),
           rate,
+          discountPercent: "",
+          billedManuallyEdited: false,
         };
       });
       setForm((prev) => ({
@@ -575,33 +720,28 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
     if (!form.customerLedger) return alert("Please select customer");
     if (!form.returnLedger) return alert("Please select return ledger");
     if (validRows.length === 0) return alert("Please add at least one item");
-    if (additionalExpenseAmount > 0 && !form.additionalExpenseLedger) {
-      return alert("Please select an expense ledger before entering additional expense.");
-    }
-    if (additionalIncomeAmount > 0 && !form.additionalIncomeLedger) {
-      return alert("Please select an income ledger before entering additional income.");
+    const incompleteAdjustment = (form.additionalRows || []).find(
+      (row) => !row.ledgerId && Number(row.value || 0) !== 0,
+    );
+    if (incompleteAdjustment) {
+      return alert("Please select an additional expense/income ledger before entering a value.");
     }
     if (settlementAmount < 0) {
-      return alert("Additional income cannot be greater than return amount plus additional expense.");
+      return alert("Total amount cannot be negative. Check additional expense / income.");
     }
 
     const lines = [
       { ledgerId: form.returnLedger, debit: totalAmount, credit: 0 },
     ];
-    if (additionalExpenseAmount > 0) {
+    adjustmentRows.forEach((row) => {
+      const signedAmount = Number(row.calculatedAmount || 0);
+      if (signedAmount === 0) return;
       lines.push({
-        ledgerId: form.additionalExpenseLedger,
-        debit: additionalExpenseAmount,
-        credit: 0,
+        ledgerId: row.ledgerId,
+        debit: signedAmount > 0 ? signedAmount : 0,
+        credit: signedAmount < 0 ? Math.abs(signedAmount) : 0,
       });
-    }
-    if (additionalIncomeAmount > 0) {
-      lines.push({
-        ledgerId: form.additionalIncomeLedger,
-        debit: 0,
-        credit: additionalIncomeAmount,
-      });
-    }
+    });
     lines.push({ ledgerId: form.customerLedger, debit: 0, credit: settlementAmount });
 
     const payload = {
@@ -613,8 +753,11 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
       lines,
       inventoryLines: validRows.map((row) => ({
         itemId: row.itemId,
-        qty: Number(row.qty),
+        qty: Number(row.billedQty || row.actualQty),
+        actualQty: Number(row.actualQty || row.billedQty),
+        billedQty: Number(row.billedQty || row.actualQty),
         rate: Number(row.rate),
+        discount: Number(row.discountPercent || 0),
         amount: lineAmount(row),
       })),
       commercialMeta: {
@@ -622,9 +765,27 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
         lineDiscountTotal: 0,
         invoiceDiscount: 0,
         additionalCharges: 0,
-        additionalExpenseLedgerId: form.additionalExpenseLedger || null,
+        additionalAdjustments: adjustmentRows.map((row) => ({
+          ledgerId: row.ledgerId,
+          ledgerName: row.ledger?.name || "",
+          nature: row.nature,
+          mode: row.mode || "fixed",
+          value: Number(row.value || 0),
+          amount: row.calculatedAmount,
+        })),
+        additionalExpenseLedgerId:
+          adjustmentRows.find((row) => row.nature === "EXPENSE")?.ledgerId || null,
+        additionalExpenseMode:
+          adjustmentRows.find((row) => row.nature === "EXPENSE")?.mode || "fixed",
+        additionalExpenseValue:
+          Number(adjustmentRows.find((row) => row.nature === "EXPENSE")?.value || 0),
         additionalExpenseAmount,
-        additionalIncomeLedgerId: form.additionalIncomeLedger || null,
+        additionalIncomeLedgerId:
+          adjustmentRows.find((row) => row.nature === "INCOME")?.ledgerId || null,
+        additionalIncomeMode:
+          adjustmentRows.find((row) => row.nature === "INCOME")?.mode || "fixed",
+        additionalIncomeValue:
+          Number(adjustmentRows.find((row) => row.nature === "INCOME")?.value || 0),
         additionalIncomeAmount,
         totalAmount: settlementAmount,
       },
@@ -880,15 +1041,27 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Qty</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Actual</label>
                     <input
                       type="number"
                       data-vnav="true"
                       className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
-                      value={row.qty}
-                      onChange={(event) => updateRow(index, "qty", event.target.value)}
+                      value={row.actualQty}
+                      onChange={(event) => updateRow(index, "actualQty", event.target.value)}
                     />
                   </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Billed</label>
+                    <input
+                      type="number"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.billedQty}
+                      onChange={(event) => updateRow(index, "billedQty", event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">Rate</label>
                     <input
@@ -897,6 +1070,16 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
                       className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={row.rate}
                       onChange={(event) => updateRow(index, "rate", event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Disc %</label>
+                    <input
+                      type="number"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.discountPercent}
+                      onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
                     />
                   </div>
                 </div>
@@ -930,8 +1113,10 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
                     </button>
                   </div>
                 </th>
-                <th className="px-4 py-3 font-medium">Qty</th>
+                <th className="px-4 py-3 font-medium">Actual</th>
+                <th className="px-4 py-3 font-medium">Billed</th>
                 <th className="px-4 py-3 font-medium">Rate</th>
+                <th className="px-4 py-3 font-medium">Disc %</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -955,9 +1140,20 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
                       data-vnav="true"
                       type="number"
                       className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
-                      value={row.qty}
+                      value={row.actualQty}
                       onChange={(event) =>
-                        updateRow(index, "qty", event.target.value)
+                        updateRow(index, "actualQty", event.target.value)
+                      }
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      data-vnav="true"
+                      type="number"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.billedQty}
+                      onChange={(event) =>
+                        updateRow(index, "billedQty", event.target.value)
                       }
                     />
                   </td>
@@ -969,6 +1165,17 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
                       value={row.rate}
                       onChange={(event) =>
                         updateRow(index, "rate", event.target.value)
+                      }
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      data-vnav="true"
+                      type="number"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.discountPercent}
+                      onChange={(event) =>
+                        updateRow(index, "discountPercent", event.target.value)
                       }
                     />
                   </td>
@@ -991,132 +1198,106 @@ export default function CreditNoteVoucher({ companyId, editVoucherId = "" }) {
             </tbody>
           </table>
         </div>
-        <button
-          type="button"
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 md:w-auto"
-          onClick={addRow}
-        >
-          <Plus className="h-4 w-4" />
-          Add New Item
-        </button>
       </VoucherPanel>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <VoucherPanel title="Additional Expense">
-          <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="text-sm font-semibold text-slate-700">
-                  Expense Ledger
-                </label>
-                <button
-                  type="button"
-                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
-                >
-                  Add+
-                </button>
-              </div>
-              <SearchableSelect
-                options={expenseLedgerOptions}
-                value={form.additionalExpenseLedger}
-                onChange={(newValue) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalExpenseLedger: newValue,
-                    additionalExpenseAmount: newValue ? prev.additionalExpenseAmount : "",
-                  }))
-                }
-                placeholder="Search expense ledger"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Amount
-              </label>
-              <input
-                data-vnav="true"
-                type="number"
-                disabled={!form.additionalExpenseLedger}
-                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                value={form.additionalExpenseAmount}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalExpenseAmount: prev.additionalExpenseLedger
-                      ? event.target.value
-                      : "",
-                  }))
-                }
-                placeholder={
-                  form.additionalExpenseLedger
-                    ? "Enter expense amount"
-                    : "Select expense ledger first"
-                }
-              />
-            </div>
-          </div>
-        </VoucherPanel>
-
-        <VoucherPanel title="Additional Income">
-          <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="text-sm font-semibold text-slate-700">
-                  Income Ledger
-                </label>
-                <button
-                  type="button"
-                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
-                >
-                  Add+
-                </button>
-              </div>
-              <SearchableSelect
-                options={incomeLedgerOptions}
-                value={form.additionalIncomeLedger}
-                onChange={(newValue) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalIncomeLedger: newValue,
-                    additionalIncomeAmount: newValue ? prev.additionalIncomeAmount : "",
-                  }))
-                }
-                placeholder="Search income ledger"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Amount
-              </label>
-              <input
-                data-vnav="true"
-                type="number"
-                disabled={!form.additionalIncomeLedger}
-                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                value={form.additionalIncomeAmount}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalIncomeAmount: prev.additionalIncomeLedger
-                      ? event.target.value
-                      : "",
-                  }))
-                }
-                placeholder={
-                  form.additionalIncomeLedger
-                    ? "Enter income amount"
-                    : "Select income ledger first"
-                }
-              />
-            </div>
-          </div>
-        </VoucherPanel>
-      </div>
+      <VoucherPanel title="Additional Expense / Income">
+        <div ref={adjustmentPanelRef} className="overflow-x-auto overflow-y-visible border border-[#bccfe3]">
+          <table className="min-w-[860px] text-sm">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
+              <tr>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Additional Expense / Income</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Value</th>
+                <th className="px-4 py-3 text-right font-medium">Calculated</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(form.additionalRows || [emptyAdjustmentRow]).map((row, index) => {
+                const ledger = ledgerMap.get(row.ledgerId);
+                const calculated = calculateAdjustmentAmount(row.value, row.mode);
+                return (
+                  <tr key={index} className="border-t border-slate-100">
+                    <td className="px-4 py-4 align-top text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 align-top">
+                      <SearchableSelect
+                        options={adjustmentLedgerOptions}
+                        value={row.ledgerId}
+                        onChange={(newValue) => updateAdjustmentRow(index, "ledgerId", newValue)}
+                        placeholder="Search additional expense / income"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        {ledger
+                          ? `${ledger.group?.nature || ""} - ${ledger.group?.name || ledger.groupName || ""}`
+                          : "Select End of List to continue"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <select
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.mode}
+                        onChange={(event) => updateAdjustmentRow(index, "mode", event.target.value)}
+                      >
+                        <option value="fixed">Fixed</option>
+                        <option value="percentage">Percentage</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <input
+                        type="number"
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.value}
+                        onChange={(event) => updateAdjustmentRow(index, "value", event.target.value)}
+                        placeholder={
+                          row.ledgerId
+                            ? row.mode === "percentage"
+                              ? "Use + or - percentage"
+                              : "Use + or - amount"
+                            : "Select ledger first"
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
+                      {formatVoucherMoney(row.ledgerId ? calculated : 0, currency.symbol)}
+                    </td>
+                    <td className="px-4 py-4 align-top text-right">
+                      {(form.additionalRows || []).length > 1 ? (
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          onClick={() => removeAdjustmentRow(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </VoucherPanel>
 
       <VoucherPanel title="Narration">
         <input
+          ref={narrationInputRef}
           data-vnav="true"
           className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}

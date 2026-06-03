@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText, Plus, Trash2, Upload } from "lucide-react";
+import { Download, FileText, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import api from "../api/api";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -39,6 +39,13 @@ const emptyRow = {
   persistedFromVoucher: false,
 };
 
+const END_OF_LIST = "__END_OF_LIST__";
+const emptyAdjustmentRow = {
+  ledgerId: "",
+  mode: "fixed",
+  value: "",
+};
+
 const SALES_TEMPLATE_SHEET = "Sales Voucher";
 const SALES_INSTRUCTION_SHEET = "Instructions";
 const SALES_REFERENCE_SHEET = "Reference Data";
@@ -49,6 +56,8 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const hasHydratedEditVoucherRef = useRef(false);
   const fileInputRef = useRef(null);
   const bottomSaveButtonRef = useRef(null);
+  const adjustmentPanelRef = useRef(null);
+  const narrationInputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [salesTypeId, setSalesTypeId] = useState("");
@@ -71,10 +80,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     salesLedger: "",
     priceLevelId: "",
     narration: "",
-    additionalExpenseLedger: "",
-    additionalExpenseAmount: "",
-    additionalIncomeLedger: "",
-    additionalIncomeAmount: "",
+    additionalRows: [emptyAdjustmentRow],
     rows: [emptyRow],
   });
   const { suggestedNumber, refreshSuggestedNumber } = useAutoVoucherNumber({
@@ -160,6 +166,56 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
             ledgerNature(line) === "INCOME" &&
             String(line.ledgerId || "") !== String(creditLine?.ledgerId || ""),
         ) || null;
+      const savedAdjustments = Array.isArray(voucher.commercialMeta?.additionalAdjustments)
+        ? voucher.commercialMeta.additionalAdjustments
+        : [];
+      const additionalRows =
+        savedAdjustments.length > 0
+          ? savedAdjustments.map((row) => ({
+              ledgerId: String(row.ledgerId || ""),
+              mode: row.mode || "fixed",
+              value: String(row.value ?? row.amount ?? ""),
+            }))
+          : [
+              ...(voucher.commercialMeta?.additionalExpenseLedgerId || additionalExpenseLine
+                ? [
+                    {
+                      ledgerId: String(
+                        voucher.commercialMeta?.additionalExpenseLedgerId ||
+                          additionalExpenseLine?.ledgerId ||
+                          "",
+                      ),
+                      mode: voucher.commercialMeta?.additionalExpenseMode || "fixed",
+                      value: String(
+                        voucher.commercialMeta?.additionalExpenseValue ??
+                          voucher.commercialMeta?.additionalExpenseAmount ??
+                          additionalExpenseLine?.debit ??
+                          voucher.commercialMeta?.invoiceDiscount ??
+                          "",
+                      ),
+                    },
+                  ]
+                : []),
+              ...(voucher.commercialMeta?.additionalIncomeLedgerId || additionalIncomeLine
+                ? [
+                    {
+                      ledgerId: String(
+                        voucher.commercialMeta?.additionalIncomeLedgerId ||
+                          additionalIncomeLine?.ledgerId ||
+                          "",
+                      ),
+                      mode: voucher.commercialMeta?.additionalIncomeMode || "fixed",
+                      value: String(
+                        voucher.commercialMeta?.additionalIncomeValue ??
+                          voucher.commercialMeta?.additionalIncomeAmount ??
+                          additionalIncomeLine?.credit ??
+                          voucher.commercialMeta?.additionalCharges ??
+                          "",
+                      ),
+                    },
+                  ]
+                : []),
+            ];
 
       if (!alive) return;
       hasHydratedEditVoucherRef.current = true;
@@ -170,28 +226,10 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         salesLedger: String(creditLine?.ledgerId || salesLedgerId || ""),
         priceLevelId: "",
         narration: voucher.narration || "",
-        additionalExpenseLedger: String(
-          voucher.commercialMeta?.additionalExpenseLedgerId ||
-            additionalExpenseLine?.ledgerId ||
-            "",
-        ),
-        additionalExpenseAmount: String(
-          voucher.commercialMeta?.additionalExpenseAmount ||
-            additionalExpenseLine?.debit ||
-            voucher.commercialMeta?.invoiceDiscount ||
-            "",
-        ),
-        additionalIncomeLedger: String(
-          voucher.commercialMeta?.additionalIncomeLedgerId ||
-            additionalIncomeLine?.ledgerId ||
-            "",
-        ),
-        additionalIncomeAmount: String(
-          voucher.commercialMeta?.additionalIncomeAmount ||
-            additionalIncomeLine?.credit ||
-            voucher.commercialMeta?.additionalCharges ||
-            "",
-        ),
+        additionalRows:
+          additionalRows.length > 0
+            ? [...additionalRows, emptyAdjustmentRow]
+            : [emptyAdjustmentRow],
         rows:
           (voucher.inventoryLines || []).map((line) => ({
             itemId: String(line.itemId || ""),
@@ -272,33 +310,32 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     [priceLevels]
   );
   const itemOptions = useMemo(
-    () => items.map((item) => ({ value: item._id, label: item.name })),
+    () => [
+      { value: END_OF_LIST, label: "End of List", meta: "" },
+      ...items.map((item) => ({ value: item._id, label: item.name })),
+    ],
     [items]
   );
-  const expenseLedgerOptions = useMemo(
+  const adjustmentLedgerOptions = useMemo(
     () =>
-      allLedgers
-        .filter((ledger) => String(ledger.group?.nature || "").toUpperCase() === "EXPENSE")
-        .map((ledger) => ({
-          value: ledger._id,
-          label: ledger.name,
-          meta: ledger.group?.name || ledger.groupName || "",
-        })),
-    [allLedgers],
-  );
-  const incomeLedgerOptions = useMemo(
-    () =>
-      allLedgers
+      [
+        {
+          value: END_OF_LIST,
+          label: "End of List",
+          meta: "",
+        },
+        ...allLedgers
         .filter(
           (ledger) =>
-            String(ledger.group?.nature || "").toUpperCase() === "INCOME" &&
+            ["EXPENSE", "INCOME"].includes(String(ledger.group?.nature || "").toUpperCase()) &&
             String(ledger._id) !== String(form.salesLedger || salesLedgerId),
         )
         .map((ledger) => ({
           value: ledger._id,
           label: ledger.name,
-          meta: ledger.group?.name || ledger.groupName || "",
+          meta: "",
         })),
+      ],
     [allLedgers, form.salesLedger, salesLedgerId],
   );
   useEffect(() => {
@@ -326,13 +363,32 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     return { ...row, rate };
   };
 
+  const focusAdjustmentList = () => {
+    window.setTimeout(() => {
+      adjustmentPanelRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const focusNarration = () => {
+    window.setTimeout(() => {
+      narrationInputRef.current?.focus();
+    }, 0);
+  };
+
   const updateRow = (index, key, value) => {
+    if (key === "itemId" && value === END_OF_LIST) {
+      focusAdjustmentList();
+      return;
+    }
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
         if (!isEditMode || !rows[index].persistedFromVoucher) {
           rows[index] = recalculateRow(rows[index], prev.date, activePriceLevelId);
+        }
+        if (value && index === rows.length - 1) {
+          rows.push(emptyRow);
         }
       }
       if (key === "billedQty") {
@@ -355,8 +411,37 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
   const removeRow = (index) => {
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
+      rows: prev.rows.length === 1 ? [emptyRow] : prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
+  };
+
+  const updateAdjustmentRow = (index, key, value) => {
+    if (key === "ledgerId" && value === END_OF_LIST) {
+      focusNarration();
+      return;
+    }
+    setForm((prev) => {
+      const additionalRows = [...(prev.additionalRows || [emptyAdjustmentRow])];
+      additionalRows[index] = { ...additionalRows[index], [key]: value };
+      if (key === "ledgerId") {
+        if (!value) {
+          additionalRows[index] = { ...additionalRows[index], ledgerId: "", value: "" };
+        } else if (index === additionalRows.length - 1) {
+          additionalRows.push(emptyAdjustmentRow);
+        }
+      }
+      return { ...prev, additionalRows };
+    });
+  };
+
+  const removeAdjustmentRow = (index) => {
+    setForm((prev) => {
+      const additionalRows =
+        (prev.additionalRows || []).length === 1
+          ? [emptyAdjustmentRow]
+          : (prev.additionalRows || []).filter((_, rowIndex) => rowIndex !== index);
+      return { ...prev, additionalRows };
+    });
   };
 
   const updateDate = (value) => {
@@ -396,9 +481,33 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     const rate = Number(row.rate || 0);
     return sum + (qty * rate * Number(row.discountPercent || 0)) / 100;
   }, 0);
-  const additionalExpenseAmount = Number(form.additionalExpenseAmount || 0);
-  const additionalIncomeAmount = Number(form.additionalIncomeAmount || 0);
-  const totalAmount = Number((subtotal - additionalExpenseAmount + additionalIncomeAmount).toFixed(2));
+  const calculateAdjustmentAmount = (value, mode) => {
+    const numericValue = Number(value || 0);
+    if (mode === "percentage") {
+      return Number(((subtotal * numericValue) / 100).toFixed(2));
+    }
+    return Number(numericValue.toFixed(2));
+  };
+  const adjustmentRows = (form.additionalRows || [])
+    .filter((row) => row.ledgerId && row.ledgerId !== END_OF_LIST)
+    .map((row) => {
+      const ledger = ledgerMap.get(row.ledgerId);
+      const nature = String(ledger?.group?.nature || "").toUpperCase();
+      return {
+        ...row,
+        ledger,
+        nature,
+        calculatedAmount: calculateAdjustmentAmount(row.value, row.mode),
+      };
+    })
+    .filter((row) => row.ledger && ["EXPENSE", "INCOME"].includes(row.nature));
+  const additionalExpenseAmount = adjustmentRows
+    .filter((row) => row.nature === "EXPENSE")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const additionalIncomeAmount = adjustmentRows
+    .filter((row) => row.nature === "INCOME")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const totalAmount = Number((subtotal + additionalExpenseAmount + additionalIncomeAmount).toFixed(2));
   const totalQty = validRows.reduce((sum, row) => sum + Number(row.billedQty || row.actualQty || 0), 0);
 
   const printData = useMemo(
@@ -490,10 +599,7 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       salesLedger: salesLedgerId,
       priceLevelId: "",
       narration: "",
-      additionalExpenseLedger: "",
-      additionalExpenseAmount: "",
-      additionalIncomeLedger: "",
-      additionalIncomeAmount: "",
+      additionalRows: [emptyAdjustmentRow],
       rows: [emptyRow],
     });
 
@@ -689,14 +795,14 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     if (!form.partyLedger) return alert("Please select a party account");
     if (!form.salesLedger && !salesLedgerId) return alert("Sales ledger is missing for this company");
     if (validRows.length === 0) return alert("Please add at least one item");
-    if (additionalExpenseAmount > 0 && !form.additionalExpenseLedger) {
-      return alert("Please select an expense ledger before entering additional expense.");
-    }
-    if (additionalIncomeAmount > 0 && !form.additionalIncomeLedger) {
-      return alert("Please select an income ledger before entering additional income.");
+    const incompleteAdjustment = (form.additionalRows || []).find(
+      (row) => !row.ledgerId && Number(row.value || 0) !== 0,
+    );
+    if (incompleteAdjustment) {
+      return alert("Please select an additional expense/income ledger before entering a value.");
     }
     if (totalAmount < 0) {
-      return alert("Total amount cannot be negative. Check additional expense and income.");
+      return alert("Total amount cannot be negative. Check additional expense / income.");
     }
 
     const inventoryLines = validRows.map((row) => {
@@ -717,21 +823,19 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
       { ledgerId: form.salesLedger || salesLedgerId, debit: 0, credit: subtotal },
     ];
 
-    if (additionalExpenseAmount > 0) {
+    const pushSignedAdjustmentLine = (ledgerId, amount) => {
+      const signedAmount = Number(amount || 0);
+      if (!ledgerId || signedAmount === 0) return;
       lines.push({
-        ledgerId: form.additionalExpenseLedger,
-        debit: additionalExpenseAmount,
-        credit: 0,
+        ledgerId,
+        debit: signedAmount < 0 ? Math.abs(signedAmount) : 0,
+        credit: signedAmount > 0 ? signedAmount : 0,
       });
-    }
+    };
 
-    if (additionalIncomeAmount > 0) {
-      lines.push({
-        ledgerId: form.additionalIncomeLedger,
-        debit: 0,
-        credit: additionalIncomeAmount,
-      });
-    }
+    adjustmentRows.forEach((row) => {
+      pushSignedAdjustmentLine(row.ledgerId, row.calculatedAmount);
+    });
 
     const payload = {
       voucherTypeId: salesTypeId,
@@ -744,9 +848,27 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
         lineDiscountTotal: totalDiscount,
         invoiceDiscount: 0,
         additionalCharges: 0,
-        additionalExpenseLedgerId: form.additionalExpenseLedger || null,
+        additionalAdjustments: adjustmentRows.map((row) => ({
+          ledgerId: row.ledgerId,
+          ledgerName: row.ledger?.name || "",
+          nature: row.nature,
+          mode: row.mode || "fixed",
+          value: Number(row.value || 0),
+          amount: row.calculatedAmount,
+        })),
+        additionalExpenseLedgerId:
+          adjustmentRows.find((row) => row.nature === "EXPENSE")?.ledgerId || null,
+        additionalExpenseMode:
+          adjustmentRows.find((row) => row.nature === "EXPENSE")?.mode || "fixed",
+        additionalExpenseValue:
+          Number(adjustmentRows.find((row) => row.nature === "EXPENSE")?.value || 0),
         additionalExpenseAmount,
-        additionalIncomeLedgerId: form.additionalIncomeLedger || null,
+        additionalIncomeLedgerId:
+          adjustmentRows.find((row) => row.nature === "INCOME")?.ledgerId || null,
+        additionalIncomeMode:
+          adjustmentRows.find((row) => row.nature === "INCOME")?.mode || "fixed",
+        additionalIncomeValue:
+          Number(adjustmentRows.find((row) => row.nature === "INCOME")?.value || 0),
         additionalIncomeAmount,
         totalAmount,
       },
@@ -1143,127 +1265,106 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
           </table>
         </div>
 
-        <button
-          type="button"
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 md:w-auto"
-          onClick={addRow}
-        >
-          <Plus className="h-4 w-4" />
-          Add New Item
-        </button>
       </VoucherPanel>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <VoucherPanel title="Additional Expense">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="text-sm font-semibold text-slate-700">
-                  Expense Ledger
-                </label>
-                <button
-                  type="button"
-                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
-                >
-                  Add+
-                </button>
-              </div>
-              <SearchableSelect
-                options={expenseLedgerOptions}
-                value={form.additionalExpenseLedger}
-                onChange={(newValue) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalExpenseLedger: newValue,
-                    additionalExpenseAmount: newValue ? prev.additionalExpenseAmount : "",
-                  }))
-                }
-                placeholder="Search expense ledger"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
-              <input
-                type="number"
-                data-vnav="true"
-                disabled={!form.additionalExpenseLedger}
-                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                value={form.additionalExpenseAmount}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalExpenseAmount: prev.additionalExpenseLedger
-                      ? event.target.value
-                      : "",
-                  }))
-                }
-                placeholder={
-                  form.additionalExpenseLedger
-                    ? "Enter expense amount"
-                    : "Select expense ledger first"
-                }
-              />
-            </div>
-          </div>
-        </VoucherPanel>
-        <VoucherPanel title="Additional Income">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="text-sm font-semibold text-slate-700">
-                  Income Ledger
-                </label>
-                <button
-                  type="button"
-                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
-                >
-                  Add+
-                </button>
-              </div>
-              <SearchableSelect
-                options={incomeLedgerOptions}
-                value={form.additionalIncomeLedger}
-                onChange={(newValue) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalIncomeLedger: newValue,
-                    additionalIncomeAmount: newValue ? prev.additionalIncomeAmount : "",
-                  }))
-                }
-                placeholder="Search income ledger"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Amount</label>
-              <input
-                type="number"
-                data-vnav="true"
-                disabled={!form.additionalIncomeLedger}
-                className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                value={form.additionalIncomeAmount}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    additionalIncomeAmount: prev.additionalIncomeLedger
-                      ? event.target.value
-                      : "",
-                  }))
-                }
-                placeholder={
-                  form.additionalIncomeLedger
-                    ? "Enter income amount"
-                    : "Select income ledger first"
-                }
-              />
-            </div>
-          </div>
-        </VoucherPanel>
-      </div>
+      <VoucherPanel title="Additional Expense / Income">
+        <div ref={adjustmentPanelRef} className="overflow-x-auto overflow-y-visible border border-[#bccfe3]">
+          <table className="min-w-[860px] text-sm">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
+              <tr>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Additional Expense / Income</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Value</th>
+                <th className="px-4 py-3 text-right font-medium">Calculated</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(form.additionalRows || [emptyAdjustmentRow]).map((row, index) => {
+                const ledger = ledgerMap.get(row.ledgerId);
+                const calculated = calculateAdjustmentAmount(row.value, row.mode);
+                return (
+                  <tr key={index} className="border-t border-slate-100">
+                    <td className="px-4 py-4 align-top text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 align-top">
+                      <SearchableSelect
+                        options={adjustmentLedgerOptions}
+                        value={row.ledgerId}
+                        onChange={(newValue) => updateAdjustmentRow(index, "ledgerId", newValue)}
+                        placeholder="Search additional expense / income"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        {ledger
+                          ? `${ledger.group?.nature || ""} - ${ledger.group?.name || ledger.groupName || ""}`
+                          : "Select End of List to continue"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <select
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.mode}
+                        onChange={(event) => updateAdjustmentRow(index, "mode", event.target.value)}
+                      >
+                        <option value="fixed">Fixed</option>
+                        <option value="percentage">Percentage</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <input
+                        type="number"
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.value}
+                        onChange={(event) => updateAdjustmentRow(index, "value", event.target.value)}
+                        placeholder={
+                          row.ledgerId
+                            ? row.mode === "percentage"
+                              ? "Use + or - percentage"
+                              : "Use + or - amount"
+                            : "Select ledger first"
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
+                      {formatVoucherMoney(row.ledgerId ? calculated : 0, currency.symbol)}
+                    </td>
+                    <td className="px-4 py-4 align-top text-right">
+                      {(form.additionalRows || []).length > 1 ? (
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          onClick={() => removeAdjustmentRow(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </VoucherPanel>
 
       <VoucherPanel title="Narration">
         <input
+          ref={narrationInputRef}
           data-vnav="true"
           className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}

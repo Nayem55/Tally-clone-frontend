@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BadgeMinus, Download, Plus, Trash2, Upload } from "lucide-react";
+import { BadgeMinus, Download, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
@@ -11,7 +11,6 @@ import VoucherWorkspace, {
 import SearchableSelect from "../Component/SearchableSelect";
 import TallyDateInput from "../Component/TallyDateInput";
 import useAutoVoucherNumber from "../hooks/useAutoVoucherNumber";
-import { resolveItemRateByDate } from "../utils/pricing";
 import { getCompanyCurrency } from "../utils/currency";
 import { formatDateForInput } from "../utils/voucherDates";
 import {
@@ -29,14 +28,41 @@ import {
   parseWorksheetRows,
 } from "../utils/voucherExcel";
 
-const emptyRow = { itemId: "", qty: "1", rate: "", persistedFromVoucher: false };
+const emptyRow = {
+  itemId: "",
+  actualQty: "1",
+  billedQty: "1",
+  rate: "",
+  discountPercent: "",
+  billedManuallyEdited: false,
+  persistedFromVoucher: false,
+};
+const END_OF_LIST = "__END_OF_LIST__";
+const emptyAdjustmentRow = {
+  ledgerId: "",
+  mode: "fixed",
+  value: "",
+};
 const DEBIT_TEMPLATE_SHEET = "Debit Note Voucher";
 const DEBIT_NOTE_RETURN_STORAGE_KEY = "debit-note-voucher-return-draft";
+
+function resolvePurchaseItemRate(item) {
+  if (!item) return 0;
+  if (item.lastPurchaseRate !== undefined && item.lastPurchaseRate !== null) {
+    return Number(item.lastPurchaseRate) || 0;
+  }
+  if (item.openingRate !== undefined && item.openingRate !== null) {
+    return Number(item.openingRate) || 0;
+  }
+  return 0;
+}
 
 export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
   const isEditMode = Boolean(editVoucherId);
   const fileInputRef = useRef(null);
   const bottomSaveButtonRef = useRef(null);
+  const adjustmentPanelRef = useRef(null);
+  const narrationInputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [debitTypeId, setDebitTypeId] = useState("");
@@ -54,6 +80,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     date: formatDateForInput(new Date()),
     supplierLedger: "",
     returnLedger: "",
+    additionalRows: [emptyAdjustmentRow],
     narration: "",
     rows: [emptyRow],
   });
@@ -102,17 +129,37 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     let alive = true;
 
     async function loadVoucherForEdit() {
-      if (!companyId || !editVoucherId || items.length === 0) return;
+      if (!companyId || !editVoucherId || items.length === 0 || ledgers.length === 0) return;
       const response = await api.get(
         `/companies/${companyId}/vouchers/${editVoucherId}`,
       );
       const voucher = response.data;
+      const editLedgerMap = new Map(ledgers.map((ledger) => [String(ledger._id), ledger]));
+      const ledgerGroupName = (line) =>
+        normalizeExcelNameKey(editLedgerMap.get(String(line.ledgerId || ""))?.group?.name || "");
       const debitLine = (voucher.lines || []).find(
         (line) => Number(line.debit || 0) > 0,
       );
       const creditLine = (voucher.lines || []).find(
         (line) => Number(line.credit || 0) > 0,
       );
+      const returnLine =
+        [debitLine, creditLine].find((line) => ledgerGroupName(line) === "purchase accounts") ||
+        creditLine;
+      const supplierLine =
+        [debitLine, creditLine].find(
+          (line) =>
+            line &&
+            String(line.ledgerId || "") !== String(returnLine?.ledgerId || ""),
+        ) || debitLine;
+      const savedAdjustments = Array.isArray(voucher.commercialMeta?.additionalAdjustments)
+        ? voucher.commercialMeta.additionalAdjustments
+        : [];
+      const additionalRows = savedAdjustments.map((row) => ({
+        ledgerId: String(row.ledgerId || ""),
+        mode: row.mode || "fixed",
+        value: String(row.value ?? row.amount ?? ""),
+      }));
 
       if (!alive) return;
       setForm({
@@ -120,13 +167,22 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
         date: voucher.date
           ? String(voucher.date).slice(0, 10)
           : formatDateForInput(new Date()),
-        supplierLedger: String(creditLine?.ledgerId || ""),
-        returnLedger: String(debitLine?.ledgerId || ""),
+        supplierLedger: String(supplierLine?.ledgerId || ""),
+        returnLedger: String(returnLine?.ledgerId || ""),
+        additionalRows:
+          additionalRows.length > 0
+            ? [...additionalRows, emptyAdjustmentRow]
+            : [emptyAdjustmentRow],
         narration: voucher.narration || "",
         rows: (voucher.inventoryLines || []).map((line) => ({
           itemId: String(line.itemId || ""),
-          qty: String(line.qty || 1),
+          actualQty: String(line.actualQty || line.qty || 1),
+          billedQty: String(line.billedQty || line.qty || 1),
           rate: Number(line.rate || 0),
+          discountPercent: String(line.discount || line.discountPercent || ""),
+          billedManuallyEdited:
+            String(line.billedQty || line.qty || 1) !==
+            String(line.actualQty || line.qty || 1),
           persistedFromVoucher: true,
         })) || [emptyRow],
       });
@@ -136,7 +192,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     return () => {
       alive = false;
     };
-  }, [companyId, editVoucherId, items.length]);
+  }, [companyId, editVoucherId, items.length, ledgers]);
 
   useEffect(() => {
     if (!suggestedNumber || isEditMode) return;
@@ -186,8 +242,26 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     [ledgers],
   );
   const itemOptions = useMemo(
-    () => items.map((item) => ({ value: item._id, label: item.name })),
+    () => [
+      { value: END_OF_LIST, label: "End of List", meta: "" },
+      ...items.map((item) => ({ value: item._id, label: item.name })),
+    ],
     [items],
+  );
+  const adjustmentLedgerOptions = useMemo(
+    () => [
+      { value: END_OF_LIST, label: "End of List", meta: "" },
+      ...ledgers
+        .filter((ledger) =>
+          ["EXPENSE", "INCOME"].includes(String(ledger.group?.nature || "").toUpperCase()),
+        )
+        .map((ledger) => ({
+          value: ledger._id,
+          label: ledger.name,
+          meta: "",
+        })),
+    ],
+    [ledgers],
   );
   const supplierNameMap = useMemo(
     () =>
@@ -209,13 +283,48 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     [items],
   );
 
-  const lineAmount = (row) =>
-    Number((Number(row.qty || 0) * Number(row.rate || 0)).toFixed(2));
+  const lineAmount = (row) => {
+    const qty = Number(row.billedQty || row.actualQty || 0);
+    const rate = Number(row.rate || 0);
+    const gross = qty * rate;
+    const discount = (gross * Number(row.discountPercent || 0)) / 100;
+    return Number((gross - discount).toFixed(2));
+  };
   const validRows = form.rows.filter(
-    (row) => row.itemId && Number(row.qty) > 0,
+    (row) => row.itemId && Number(row.billedQty || row.actualQty || 0) > 0,
   );
-  const totalQty = validRows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
-  const totalAmount = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalQty = validRows.reduce(
+    (sum, row) => sum + Number(row.billedQty || row.actualQty || 0),
+    0,
+  );
+  const subtotal = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const calculateAdjustmentAmount = (value, mode) => {
+    const numericValue = Number(value || 0);
+    if (mode === "percentage") {
+      return Number(((subtotal * numericValue) / 100).toFixed(2));
+    }
+    return Number(numericValue.toFixed(2));
+  };
+  const adjustmentRows = (form.additionalRows || [])
+    .filter((row) => row.ledgerId && row.ledgerId !== END_OF_LIST)
+    .map((row) => {
+      const ledger = ledgerMap.get(row.ledgerId);
+      const nature = String(ledger?.group?.nature || "").toUpperCase();
+      return {
+        ...row,
+        ledger,
+        nature,
+        calculatedAmount: calculateAdjustmentAmount(row.value, row.mode),
+      };
+    })
+    .filter((row) => row.ledger && ["EXPENSE", "INCOME"].includes(row.nature));
+  const additionalExpenseAmount = adjustmentRows
+    .filter((row) => row.nature === "EXPENSE")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const additionalIncomeAmount = adjustmentRows
+    .filter((row) => row.nature === "INCOME")
+    .reduce((sum, row) => sum + row.calculatedAmount, 0);
+  const totalAmount = Number((subtotal + additionalExpenseAmount + additionalIncomeAmount).toFixed(2));
   const printData = useMemo(
     () =>
       buildSalesFamilyPrintData({
@@ -232,8 +341,11 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
           const item = itemMap.get(row.itemId);
           return {
             name: item?.name || "-",
-            qty: `${Number(row.qty || 0)}`,
+            qty: `${Number(row.billedQty || row.actualQty || 0)}`,
             rate: formatVoucherMoney(row.rate, currency.symbol),
+            discount: Number(row.discountPercent || 0)
+              ? `${Number(row.discountPercent || 0).toFixed(2)}%`
+              : "",
             amount: formatVoucherMoney(lineAmount(row), currency.symbol),
           };
         }),
@@ -264,20 +376,41 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
   );
 
   function updateRow(index, key, value) {
+    if (key === "itemId" && value === END_OF_LIST) {
+      focusAdjustmentList();
+      return;
+    }
     setForm((prev) => {
       const rows = [...prev.rows];
       rows[index] = { ...rows[index], [key]: value };
       if (key === "itemId") {
         if (!isEditMode || !rows[index].persistedFromVoucher) {
-          rows[index].rate = resolveItemRateByDate(
-            itemMap.get(value),
-            null,
-            prev.date,
-          );
+          rows[index].rate = resolvePurchaseItemRate(itemMap.get(value));
         }
+        if (value && index === rows.length - 1) {
+          rows.push(emptyRow);
+        }
+      }
+      if (key === "billedQty") {
+        rows[index].billedManuallyEdited = true;
+      }
+      if (key === "actualQty" && !rows[index].billedManuallyEdited) {
+        rows[index].billedQty = value;
       }
       return { ...prev, rows };
     });
+  }
+
+  function focusAdjustmentList() {
+    window.setTimeout(() => {
+      adjustmentPanelRef.current?.querySelector("input")?.focus();
+    }, 0);
+  }
+
+  function focusNarration() {
+    window.setTimeout(() => {
+      narrationInputRef.current?.focus();
+    }, 0);
   }
 
   function addRow() {
@@ -287,8 +420,37 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
   function removeRow(index) {
     setForm((prev) => ({
       ...prev,
-      rows: prev.rows.filter((_, rowIndex) => rowIndex !== index),
+      rows: prev.rows.length === 1 ? [emptyRow] : prev.rows.filter((_, rowIndex) => rowIndex !== index),
     }));
+  }
+
+  function updateAdjustmentRow(index, key, value) {
+    if (key === "ledgerId" && value === END_OF_LIST) {
+      focusNarration();
+      return;
+    }
+    setForm((prev) => {
+      const additionalRows = [...(prev.additionalRows || [emptyAdjustmentRow])];
+      additionalRows[index] = { ...additionalRows[index], [key]: value };
+      if (key === "ledgerId") {
+        if (!value) {
+          additionalRows[index] = { ...additionalRows[index], ledgerId: "", value: "" };
+        } else if (index === additionalRows.length - 1) {
+          additionalRows.push(emptyAdjustmentRow);
+        }
+      }
+      return { ...prev, additionalRows };
+    });
+  }
+
+  function removeAdjustmentRow(index) {
+    setForm((prev) => {
+      const additionalRows =
+        (prev.additionalRows || []).length === 1
+          ? [emptyAdjustmentRow]
+          : (prev.additionalRows || []).filter((_, rowIndex) => rowIndex !== index);
+      return { ...prev, additionalRows };
+    });
   }
 
   function updateDate(value) {
@@ -306,7 +468,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
         row.itemId
           ? {
               ...row,
-              rate: resolveItemRateByDate(itemMap.get(row.itemId), null, value),
+              rate: resolvePurchaseItemRate(itemMap.get(row.itemId)),
             }
           : row,
       ),
@@ -325,6 +487,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       date: formatDateForInput(new Date()),
       supplierLedger: "",
       returnLedger: "",
+      additionalRows: [emptyAdjustmentRow],
       narration: "",
       rows: [emptyRow],
     });
@@ -386,7 +549,7 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       ...items.map((item) => [
         item.name,
         formatVoucherMoney(
-          resolveItemRateByDate(item, null, form.date),
+          resolvePurchaseItemRate(item),
           currency.symbol,
         ),
       ]),
@@ -454,8 +617,11 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
           throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
         return {
           itemId: item._id,
-          qty: String(qty),
+          actualQty: String(qty),
+          billedQty: String(qty),
           rate,
+          discountPercent: "",
+          billedManuallyEdited: false,
         };
       });
       setForm((prev) => ({
@@ -484,6 +650,29 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
     if (!form.supplierLedger) return alert("Please select supplier");
     if (!form.returnLedger) return alert("Please select return ledger");
     if (validRows.length === 0) return alert("Please add at least one item");
+    const incompleteAdjustment = (form.additionalRows || []).find(
+      (row) => !row.ledgerId && Number(row.value || 0) !== 0,
+    );
+    if (incompleteAdjustment) {
+      return alert("Please select an additional expense/income ledger before entering a value.");
+    }
+    if (totalAmount < 0) {
+      return alert("Total amount cannot be negative. Check additional expense / income.");
+    }
+
+    const lines = [
+      { ledgerId: form.supplierLedger, debit: totalAmount, credit: 0 },
+      { ledgerId: form.returnLedger, debit: 0, credit: subtotal },
+    ];
+    adjustmentRows.forEach((row) => {
+      const signedAmount = Number(row.calculatedAmount || 0);
+      if (signedAmount === 0) return;
+      lines.push({
+        ledgerId: row.ledgerId,
+        debit: signedAmount < 0 ? Math.abs(signedAmount) : 0,
+        credit: signedAmount > 0 ? signedAmount : 0,
+      });
+    });
 
     const payload = {
       voucherTypeId: debitTypeId,
@@ -491,16 +680,45 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
       number: form.number,
       date: form.date,
       narration: form.narration || "Debit Note",
-      lines: [
-        { ledgerId: form.returnLedger, debit: totalAmount, credit: 0 },
-        { ledgerId: form.supplierLedger, debit: 0, credit: totalAmount },
-      ],
+      lines,
       inventoryLines: validRows.map((row) => ({
         itemId: row.itemId,
-        qty: Number(row.qty),
+        qty: Number(row.billedQty || row.actualQty),
+        actualQty: Number(row.actualQty || row.billedQty),
+        billedQty: Number(row.billedQty || row.actualQty),
         rate: Number(row.rate),
+        discount: Number(row.discountPercent || 0),
         amount: lineAmount(row),
       })),
+      commercialMeta: {
+        subtotal,
+        lineDiscountTotal: 0,
+        invoiceDiscount: 0,
+        additionalCharges: 0,
+        additionalAdjustments: adjustmentRows.map((row) => ({
+          ledgerId: row.ledgerId,
+          ledgerName: row.ledger?.name || "",
+          nature: row.nature,
+          mode: row.mode || "fixed",
+          value: Number(row.value || 0),
+          amount: row.calculatedAmount,
+        })),
+        additionalExpenseLedgerId:
+          adjustmentRows.find((row) => row.nature === "EXPENSE")?.ledgerId || null,
+        additionalExpenseMode:
+          adjustmentRows.find((row) => row.nature === "EXPENSE")?.mode || "fixed",
+        additionalExpenseValue:
+          Number(adjustmentRows.find((row) => row.nature === "EXPENSE")?.value || 0),
+        additionalExpenseAmount,
+        additionalIncomeLedgerId:
+          adjustmentRows.find((row) => row.nature === "INCOME")?.ledgerId || null,
+        additionalIncomeMode:
+          adjustmentRows.find((row) => row.nature === "INCOME")?.mode || "fixed",
+        additionalIncomeValue:
+          Number(adjustmentRows.find((row) => row.nature === "INCOME")?.value || 0),
+        additionalIncomeAmount,
+        totalAmount,
+      },
     };
     if (isEditMode) {
       await api.put(
@@ -549,6 +767,15 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
         {
           label: "Total Quantity",
           value: `${totalQty} pcs`,
+        },
+        { label: "Subtotal", value: formatVoucherMoney(subtotal, currency.symbol) },
+        {
+          label: "Additional Expense",
+          value: formatVoucherMoney(additionalExpenseAmount, currency.symbol),
+        },
+        {
+          label: "Additional Income",
+          value: formatVoucherMoney(additionalIncomeAmount, currency.symbol),
         },
         {
           label: "Total Amount",
@@ -732,15 +959,27 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Qty</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Actual</label>
                     <input
                       type="number"
                       data-vnav="true"
                       className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
-                      value={row.qty}
-                      onChange={(event) => updateRow(index, "qty", event.target.value)}
+                      value={row.actualQty}
+                      onChange={(event) => updateRow(index, "actualQty", event.target.value)}
                     />
                   </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Billed</label>
+                    <input
+                      type="number"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.billedQty}
+                      onChange={(event) => updateRow(index, "billedQty", event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">Rate</label>
                     <input
@@ -749,6 +988,16 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
                       className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
                       value={row.rate}
                       onChange={(event) => updateRow(index, "rate", event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Disc %</label>
+                    <input
+                      type="number"
+                      data-vnav="true"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.discountPercent}
+                      onChange={(event) => updateRow(index, "discountPercent", event.target.value)}
                     />
                   </div>
                 </div>
@@ -782,8 +1031,10 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
                     </button>
                   </div>
                 </th>
-                <th className="px-4 py-3 font-medium">Qty</th>
+                <th className="px-4 py-3 font-medium">Actual</th>
+                <th className="px-4 py-3 font-medium">Billed</th>
                 <th className="px-4 py-3 font-medium">Rate</th>
+                <th className="px-4 py-3 font-medium">Disc %</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -807,9 +1058,20 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
                       data-vnav="true"
                       type="number"
                       className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
-                      value={row.qty}
+                      value={row.actualQty}
                       onChange={(event) =>
-                        updateRow(index, "qty", event.target.value)
+                        updateRow(index, "actualQty", event.target.value)
+                      }
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      data-vnav="true"
+                      type="number"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.billedQty}
+                      onChange={(event) =>
+                        updateRow(index, "billedQty", event.target.value)
                       }
                     />
                   </td>
@@ -821,6 +1083,17 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
                       value={row.rate}
                       onChange={(event) =>
                         updateRow(index, "rate", event.target.value)
+                      }
+                    />
+                  </td>
+                  <td className="px-4 py-4">
+                    <input
+                      data-vnav="true"
+                      type="number"
+                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]"
+                      value={row.discountPercent}
+                      onChange={(event) =>
+                        updateRow(index, "discountPercent", event.target.value)
                       }
                     />
                   </td>
@@ -843,18 +1116,106 @@ export default function DebitNoteVoucher({ companyId, editVoucherId = "" }) {
             </tbody>
           </table>
         </div>
-        <button
-          type="button"
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 border border-[#c8d2de] bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 md:w-auto"
-          onClick={addRow}
-        >
-          <Plus className="h-4 w-4" />
-          Add New Item
-        </button>
+      </VoucherPanel>
+
+      <VoucherPanel title="Additional Expense / Income">
+        <div ref={adjustmentPanelRef} className="overflow-x-auto overflow-y-visible border border-[#bccfe3]">
+          <table className="min-w-[760px] text-sm">
+            <thead className="bg-[#edf4ff] text-left text-slate-600">
+              <tr>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Additional Expense / Income</span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                    >
+                      Add+
+                    </button>
+                  </div>
+                </th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Value</th>
+                <th className="px-4 py-3 text-right font-medium">Calculated</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(form.additionalRows || [emptyAdjustmentRow]).map((row, index) => {
+                const ledger = ledgerMap.get(row.ledgerId);
+                const calculated = calculateAdjustmentAmount(row.value, row.mode);
+                return (
+                  <tr key={index} className="border-t border-slate-100">
+                    <td className="px-4 py-4 align-top text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 align-top">
+                      <SearchableSelect
+                        options={adjustmentLedgerOptions}
+                        value={row.ledgerId}
+                        onChange={(newValue) => updateAdjustmentRow(index, "ledgerId", newValue)}
+                        placeholder="Search additional expense / income"
+                      />
+                      <p className="mt-2 text-xs text-slate-500">
+                        {ledger
+                          ? `${ledger.group?.nature || ""} - ${ledger.group?.name || ledger.groupName || ""}`
+                          : "Select End of List to continue"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <select
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.mode}
+                        onChange={(event) => updateAdjustmentRow(index, "mode", event.target.value)}
+                      >
+                        <option value="fixed">Fixed</option>
+                        <option value="percentage">Percentage</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <input
+                        type="number"
+                        data-vnav="true"
+                        disabled={!row.ledgerId}
+                        className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={row.value}
+                        onChange={(event) => updateAdjustmentRow(index, "value", event.target.value)}
+                        placeholder={
+                          row.ledgerId
+                            ? row.mode === "percentage"
+                              ? "Use + or - percentage"
+                              : "Use + or - amount"
+                            : "Select ledger first"
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
+                      {formatVoucherMoney(row.ledgerId ? calculated : 0, currency.symbol)}
+                    </td>
+                    <td className="px-4 py-4 align-top text-right">
+                      {(form.additionalRows || []).length > 1 ? (
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                          onClick={() => removeAdjustmentRow(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </VoucherPanel>
 
       <VoucherPanel title="Narration">
         <input
+          ref={narrationInputRef}
           data-vnav="true"
           className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
           value={form.narration}
