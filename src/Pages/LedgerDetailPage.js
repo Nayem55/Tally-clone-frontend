@@ -142,10 +142,12 @@ export default function LedgerDetailPage() {
     }
 
     entries.forEach((entry) => {
-      const particulars =
-        mode === "inventory"
-          ? `${entry.voucherName}${entry.itemName ? ` ${entry.itemName}` : ""}`.trim()
-          : `${entry.voucherName}${entry.voucherNumber ? ` ${entry.voucherNumber}` : ""}${entry.counterpart ? ` ${entry.counterpart}` : ""}`.trim();
+      const accountNames = [entry.debitAccountName, entry.creditAccountName]
+        .filter(Boolean)
+        .join(" / ");
+      const particulars = `${entry.voucherName}${
+        entry.voucherNumber ? ` ${entry.voucherNumber}` : ""
+      }${accountNames ? ` ${accountNames}` : entry.counterpart ? ` ${entry.counterpart}` : ""}`.trim();
 
       if (Number(entry.debit || 0) > 0) {
         debitRows.push({
@@ -433,14 +435,8 @@ export default function LedgerDetailPage() {
                     <tr>
                       <th className="px-3 py-2 font-medium">Date</th>
                       <th className="px-3 py-2 font-medium">Voucher</th>
-                      {mode === "inventory" ? (
-                        <th className="px-3 py-2 font-medium">Item Name</th>
-                      ) : (
-                        <>
-                          <th className="px-3 py-2 font-medium">No.</th>
-                          <th className="px-3 py-2 font-medium">Counterpart</th>
-                        </>
-                      )}
+                      <th className="px-3 py-2 font-medium">Debit Account</th>
+                      <th className="px-3 py-2 font-medium">Credit Account</th>
                       <th className="px-3 py-2 text-right font-medium">Debit</th>
                       <th className="px-3 py-2 text-right font-medium">Credit</th>
                       <th className="px-3 py-2 text-right font-medium">Running</th>
@@ -452,14 +448,12 @@ export default function LedgerDetailPage() {
                       <tr key={`${entry.voucherId}-${entry.lineIndex}-${index}`} className="border-t border-slate-100">
                         <td className="px-3 py-2 text-slate-700">{entry.dateLabel}</td>
                         <td className="px-3 py-2 font-medium text-slate-800">{entry.voucherName}</td>
-                        {mode === "inventory" ? (
-                          <td className="px-3 py-2 text-slate-600">{entry.itemName || "-"}</td>
-                        ) : (
-                          <>
-                            <td className="px-3 py-2 text-slate-700">{entry.voucherNumber || "-"}</td>
-                            <td className="px-3 py-2 text-slate-600">{entry.counterpart || "-"}</td>
-                          </>
-                        )}
+                        <td className="px-3 py-2 text-slate-600">
+                          {entry.debitAccountName || "-"}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {entry.creditAccountName || "-"}
+                        </td>
                         <td className="px-3 py-2 text-right text-emerald-700">
                           {formatCurrencyAmount(entry.debit, selectedCompany)}
                         </td>
