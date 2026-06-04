@@ -47,6 +47,40 @@ function findBalanceGroupById(rows = [], targetId) {
   return null;
 }
 
+function ProfitLossBreakdown({ details, company }) {
+  if (!details) return null;
+  const opening = Number(details.openingBalance || 0);
+  const currentPeriod = Number(details.currentPeriod || 0);
+  const transferred = Number(details.transferred || 0);
+  const rows = [
+    { label: "Opening Balance", value: opening },
+    {
+      label: currentPeriod >= 0 ? "Current Period" : "Current Loss",
+      value: currentPeriod,
+    },
+  ];
+  if (transferred !== 0) {
+    rows.push({
+      label: transferred >= 0 ? "Less: Transferred" : "Add: Transferred",
+      value: transferred,
+      isTransfer: true,
+    });
+  }
+
+  return (
+    <div className="mt-2 space-y-1 pl-4 text-[12px] font-medium text-slate-500">
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-center justify-between gap-4">
+          <span className="italic">{row.label}</span>
+          <span className={Number(row.value || 0) < 0 ? "text-rose-600" : "text-slate-600"}>
+            {formatCurrencyAmount(Math.abs(Number(row.value || 0)), company)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function GroupListColumn({ title, rows, company, onOpenGroup }) {
   return (
     <div className="border-b border-slate-200 last:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0">
@@ -76,6 +110,7 @@ function GroupListColumn({ title, rows, company, onOpenGroup }) {
                     {row.pnlType === "profit" ? "Current Profit" : "Current Loss"}
                   </span>
                 ) : null}
+                <ProfitLossBreakdown details={row.pnlDetails} company={company} />
               </span>
               <span className="font-semibold text-slate-900">
                 {formatCurrencyAmount(row.amount, company)}
@@ -129,6 +164,7 @@ function LedgerListPanel({ title, groupName, rows, company, onBack, onOpenLedger
                   >
                     {ledger.ledgerName}
                   </button>
+                  <ProfitLossBreakdown details={ledger.pnlDetails} company={company} />
                 </td>
                 <td className="px-4 py-3 text-right text-slate-700">
                   {formatCurrencyAmount(ledger.openingAmount, company)}
@@ -255,7 +291,12 @@ export default function BalanceSheetPage() {
   });
 
   function openGroup(side, row) {
-    if (String(row.groupName || "").trim().toLowerCase() === "closing stock") {
+    const normalizedGroupName = String(row.groupName || "").trim().toLowerCase();
+    if (
+      normalizedGroupName === "closing stock" ||
+      normalizedGroupName === "stock-in-trade" ||
+      normalizedGroupName === "stock in trade"
+    ) {
       navigate(
         `/reports/inventory-books/stock-group-summary?companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
         {
@@ -343,8 +384,15 @@ export default function BalanceSheetPage() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm sm:min-w-[180px] sm:w-auto">
+            <div className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-sm sm:min-w-[300px] sm:w-auto">
               <CalendarDays className="h-4 w-4 text-slate-500" />
+              <input
+                type="date"
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14px] outline-none"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+              <span className="text-slate-400">to</span>
               <input
                 type="date"
                 className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14px] outline-none"
