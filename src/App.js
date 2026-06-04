@@ -704,6 +704,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<EmployeeLoginPage />} />
+        <Route path="/login/create-company" element={<CompanyList standaloneCreate />} />
+        <Route path="/company/create" element={<CompanyList standaloneCreate />} />
         <Route
           path="/*"
           element={

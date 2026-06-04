@@ -193,7 +193,7 @@ export default function EmployeeLoginPage() {
             </p>
             <div className="mt-4">
               <Link
-                to="/company/create"
+                to="/login/create-company"
                 className="inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
               >
                 Create Company
@@ -323,7 +323,7 @@ export default function EmployeeLoginPage() {
             {!needsEmployeeLogin ? (
               <div className="pt-2 text-center">
                 <Link
-                  to="/company/create"
+                  to="/login/create-company"
                   className="inline-flex text-sm font-semibold text-blue-700 hover:text-blue-800"
                 >
                   Create Company

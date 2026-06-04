@@ -52,11 +52,20 @@ export function ActiveCompanyProvider({ children }) {
     if (currentCompany) return;
 
     const storedCompanyId = window.localStorage.getItem(STORAGE_KEY) || "";
-    const preferredCompany =
-      companies.find((company) => String(company._id) === String(storedCompanyId)) || companies[0];
+    const preferredCompany = storedCompanyId
+      ? companies.find((company) => String(company._id) === String(storedCompanyId))
+      : null;
 
     if (preferredCompany && String(companyId) !== String(preferredCompany._id)) {
       setCompanyId(String(preferredCompany._id));
+      return;
+    }
+
+    if (!preferredCompany) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      if (companyId) {
+        setCompanyId("");
+      }
     }
   }, [companies, companyId, loading]);
 

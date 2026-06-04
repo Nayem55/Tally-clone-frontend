@@ -22,6 +22,7 @@ import {
 } from "../utils/financialStatementExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
 import {
+  buildReportReturnState,
   navigateBackFromReport,
 } from "../utils/reportNavigation";
 
@@ -106,18 +107,31 @@ function StatementPanel({ icon: Icon, title, children, totalLabel, totalValue, t
   );
 }
 
-function LedgerBlock({ heading, rows, company, negative = false }) {
+function LedgerBlock({ heading, rows, company, negative = false, onRowClick }) {
   return (
     <div>
       <h3 className="text-[15px] font-semibold text-slate-900">{heading}</h3>
       <div className="mt-3 space-y-3">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-4 text-[14px]">
-            <span className="text-slate-700">{row.label}</span>
-            <span className={negative ? "text-rose-600" : "text-slate-900"}>
+          <button
+            key={`${row.label}-${row.ledgerId || "total"}`}
+            type="button"
+            data-report-nav={row.ledgerId ? "true" : undefined}
+            data-focus-key={row.ledgerId ? `pl-ledger-${row.ledgerId}` : undefined}
+            className={`flex w-full items-center justify-between gap-4 rounded-lg text-left text-[14px] transition ${
+              row.ledgerId ? "cursor-pointer px-2 py-1 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none" : ""
+            }`}
+            onClick={() => {
+              if (row.ledgerId) onRowClick?.(row);
+            }}
+          >
+            <span className={row.ledgerId ? "font-medium text-blue-700" : "text-slate-700"}>
+              {row.label}
+            </span>
+            <span className={negative || Number(row.value || 0) < 0 ? "text-rose-600" : "text-slate-900"}>
               {formatSignedAmount(row.value, company)}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -194,6 +208,34 @@ export default function ProfitLoss() {
   const grossProfit = Number(report.trading?.grossProfit || 0);
   const expenses = Number(report.totals?.netExpense || 0);
   const netProfit = Number(report.totals?.netProfit || 0);
+  const netPurchases = Number(report.trading?.netPurchases || 0);
+  const costOfGoodsSold = Number(report.trading?.costOfGoodsSold || 0);
+
+  function rowsFromLedgers(ledgers = [], fallbackLabel, fallbackValue, sign = 1) {
+    if (Array.isArray(ledgers) && ledgers.length > 0) {
+      return ledgers.map((ledger) => ({
+        label: ledger.ledgerName || fallbackLabel,
+        value: Number(ledger.amount || 0) * sign,
+        ledgerId: ledger.ledgerId,
+        ledgerName: ledger.ledgerName || fallbackLabel,
+      }));
+    }
+    return [{ label: fallbackLabel, value: Number(fallbackValue || 0) * sign }];
+  }
+
+  function openLedgerDetail(row) {
+    if (!row?.ledgerId || !companyId) return;
+    const params = new URLSearchParams({
+      companyId,
+      ledgerId: String(row.ledgerId),
+      ledgerName: row.ledgerName || row.label || "Ledger Detail",
+      from: fromDate,
+      to: toDate,
+    });
+    navigate(`/reports/account-books/ledger-detail?${params.toString()}`, {
+      state: buildReportReturnState(location, `pl-ledger-${row.ledgerId}`),
+    });
+  }
 
   useReportKeyboardNav(
     containerRef,
@@ -370,21 +412,49 @@ export default function ProfitLoss() {
                     <LedgerBlock
                       heading="Sales"
                       rows={[
-                        { label: "Sales Account", value: report.trading?.sales },
-                        { label: "Sales Return", value: -Number(report.trading?.salesReturns || 0) },
+                        ...rowsFromLedgers(
+                          report.trading?.salesLedgers,
+                          "Sales Account",
+                          report.trading?.sales,
+                        ),
+                        ...rowsFromLedgers(
+                          report.trading?.salesReturnLedgers,
+                          "Sales Return",
+                          report.trading?.salesReturns,
+                          -1,
+                        ),
+                        { label: "Net Sale Amount", value: report.trading?.netSales },
                       ]}
                       company={selectedCompany}
+                      onRowClick={openLedgerDetail}
                     />
                     <LedgerBlock
                       heading="Cost of Goods Sold"
                       rows={[
                         { label: "Opening Stock", value: report.trading?.openingStock },
-                        { label: "Add: Purchase Accounts", value: report.trading?.purchases },
+                        ...rowsFromLedgers(
+                          report.trading?.purchaseLedgers,
+                          "Add: Purchase Accounts",
+                          report.trading?.purchases,
+                        ).map((row) => ({
+                          ...row,
+                          label: row.ledgerId ? `Add: ${row.label}` : row.label,
+                        })),
+                        ...rowsFromLedgers(
+                          report.trading?.purchaseReturnLedgers,
+                          "Less: Purchase Return",
+                          report.trading?.purchaseReturns,
+                          -1,
+                        ).map((row) => ({
+                          ...row,
+                          label: row.ledgerId ? `Less: ${row.label}` : row.label,
+                        })),
+                        { label: "Net Purchase Amount", value: netPurchases },
                         { label: "Less: Closing Stock", value: -Number(report.trading?.closingStock || 0) },
-                        { label: "COGS: ", value: report.trading?.openingStock+report.trading?.purchases-Number(report.trading?.closingStock || 0) },
+                        { label: "COGS: ", value: costOfGoodsSold },
                       ]}
                       company={selectedCompany}
-                      negative
+                      onRowClick={openLedgerDetail}
                     />
                   </StatementPanel>
 
