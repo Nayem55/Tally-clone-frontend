@@ -30,6 +30,7 @@ export default function EmployeeLoginPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [needsEmployeeLogin, setNeedsEmployeeLogin] = useState(false);
+  const [loginEmployees, setLoginEmployees] = useState([]);
   const [form, setForm] = useState(() => ({
     companyId: "",
     username: "",
@@ -46,6 +47,28 @@ export default function EmployeeLoginPage() {
         label: company.name,
       })),
     [companies],
+  );
+  const employeeOptions = useMemo(
+    () =>
+      loginEmployees.map((employee) => ({
+        value: employee.accessControl?.username || "",
+        label: [
+          employee.name || employee.accessControl?.username || "Employee",
+          employee.accessControl?.role ? `(${employee.accessControl.role})` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      })),
+    [loginEmployees],
+  );
+  const selectedEmployee = useMemo(
+    () =>
+      loginEmployees.find(
+        (employee) =>
+          String(employee.accessControl?.username || "").toLowerCase() ===
+          String(form.username || "").toLowerCase(),
+      ) || null,
+    [form.username, loginEmployees],
   );
 
   useEffect(() => {
@@ -100,14 +123,33 @@ export default function EmployeeLoginPage() {
         { preserveCompanyId: true },
       );
       const employees = employeeResponse.data || [];
+      const hasPasswordAdmin = employees.some(
+        (employee) =>
+          employee.accessControl?.loginEnabled &&
+          employee.accessControl?.hasPassword &&
+          String(employee.accessControl?.role || "").trim().toLowerCase() ===
+            "admin" &&
+          String(employee.accessControl?.username || "").trim() &&
+          String(employee.accessControl?.status || "Active").trim().toLowerCase() !==
+            "inactive",
+      );
 
-      if (employees.length === 0) {
+      if (!hasPasswordAdmin) {
         setCompanyId(String(form.companyId));
         window.localStorage.setItem(STORAGE_KEY, String(form.companyId));
         navigate(targetPath, { replace: true });
         return;
       }
 
+      setLoginEmployees(
+        employees.filter(
+          (employee) =>
+            employee.accessControl?.loginEnabled &&
+            String(employee.accessControl?.username || "").trim() &&
+            String(employee.accessControl?.status || "Active").trim().toLowerCase() !==
+              "inactive",
+        ),
+      );
       setNeedsEmployeeLogin(true);
     } catch (error) {
       setErrorMessage(
@@ -120,8 +162,12 @@ export default function EmployeeLoginPage() {
 
   async function handleEmployeeLogin(event) {
     event.preventDefault();
-    if (!form.companyId || !form.username.trim() || !form.password) {
-      setErrorMessage("Username and password are required.");
+    if (!form.companyId || !form.username.trim()) {
+      setErrorMessage("Please select an employee user.");
+      return;
+    }
+    if (selectedEmployee?.accessControl?.hasPassword && !form.password) {
+      setErrorMessage("Password is required for this employee.");
       return;
     }
 
@@ -221,6 +267,7 @@ export default function EmployeeLoginPage() {
                     username: "", // also clear credentials
                     password: "",
                   }));
+                  setLoginEmployees([]);
 
                   // Reset to company selection mode when company changes
                   setNeedsEmployeeLogin(false);
@@ -238,40 +285,49 @@ export default function EmployeeLoginPage() {
               <>
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Username
+                    Employee User
                   </span>
-                  <input
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                  <SearchableSelect
+                    options={employeeOptions}
                     value={form.username}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        username: event.target.value,
+                        username: value,
+                        password: "",
                       }))
                     }
-                    autoComplete="username"
-                    placeholder="Enter employee username"
+                    placeholder="Select employee user"
+                    inputClassName="rounded-xl border border-slate-200 bg-white px-4 py-3 pl-9 pr-8 text-sm text-slate-900"
+                    className="rounded-xl"
+                    allowClear
                   />
                 </label>
 
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Password
-                  </span>
-                  <input
-                    type="password"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
-                    value={form.password}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        password: event.target.value,
-                      }))
-                    }
-                    autoComplete="current-password"
-                    placeholder="Enter employee password"
-                  />
-                </label>
+                {selectedEmployee?.accessControl?.hasPassword ? (
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">
+                      Password
+                    </span>
+                    <input
+                      type="password"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                      value={form.password}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          password: event.target.value,
+                        }))
+                      }
+                      autoComplete="current-password"
+                      placeholder="Enter employee password"
+                    />
+                  </label>
+                ) : selectedEmployee ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    This employee has no password saved. Continue to open the workspace.
+                  </div>
+                ) : null}
               </>
             ) : null}
 

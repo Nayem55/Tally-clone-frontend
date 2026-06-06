@@ -818,10 +818,6 @@ function EmployeeCreationPage({ mode = "create" }) {
         setNotice("Access role is required when employee login is enabled.");
         return;
       }
-      if (!isAlterMode && !password) {
-        setNotice("Login password is required when employee login is enabled.");
-        return;
-      }
       if (password || confirmPassword) {
         if (password.length < 4) {
           setNotice("Login password must be at least 4 characters long.");
@@ -2110,10 +2106,10 @@ function EmployeeCreationPage({ mode = "create" }) {
           <section className="rounded-2xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm xl:col-span-3">
             <CardTitle
               title="Access Control"
-              subtitle="Enable employee login now and assign a baseline role for the larger role-based access batch."
+              subtitle="Allow this employee to open the company and assign their access role. Password is optional."
             />
-            <div className="grid gap-4 xl:grid-cols-4">
-              <Field label="Enable Login">
+            <div className="grid gap-4 xl:grid-cols-3">
+              <Field label="Login Access">
                 <TogglePills
                   value={employee.accessControl.loginEnabled}
                   onChange={(value) => updateNested("accessControl", "loginEnabled", value)}
@@ -2130,21 +2126,12 @@ function EmployeeCreationPage({ mode = "create" }) {
                   options={ACCESS_ROLE_OPTIONS}
                 />
               </Field>
-              <Field label="Login Status">
-                <Select
-                  value={employee.accessControl.status}
-                  onChange={(event) =>
-                    updateNested("accessControl", "status", event.target.value)
-                  }
-                  options={ACCESS_STATUS_OPTIONS}
-                />
-              </Field>
               <div className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-slate-600">
                 <div className="font-semibold text-slate-800">Password State</div>
                 <div className="mt-1">
                   {employee.accessControl.hasPassword
                     ? "Password already set. Leave it blank during alter to keep the current password."
-                    : "No password saved yet. Set one if login is enabled."}
+                    : "No password saved. This user can enter without a password unless you set one."}
                 </div>
               </div>
               <Field label="Login Username" required={employee.accessControl.loginEnabled}>
@@ -2157,7 +2144,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                   autoComplete="off"
                 />
               </Field>
-              <Field label="Password" required={employee.accessControl.loginEnabled && !isAlterMode}>
+              <Field label="Password">
                 <Input
                   type="password"
                   value={employee.accessControl.password}
@@ -2167,7 +2154,7 @@ function EmployeeCreationPage({ mode = "create" }) {
                   placeholder={
                     isAlterMode
                       ? "Leave blank to keep current password"
-                      : "Enter login password"
+                      : "Optional login password"
                   }
                   autoComplete="new-password"
                 />

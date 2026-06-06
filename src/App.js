@@ -68,7 +68,7 @@ function RequireEmployeeSession({ children }) {
   const { companyId, loading } = useActiveCompany();
   const location = useLocation();
   const [employeeGateLoading, setEmployeeGateLoading] = useState(true);
-  const [hasEmployees, setHasEmployees] = useState(false);
+  const [requiresEmployeeLogin, setRequiresEmployeeLogin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +77,7 @@ function RequireEmployeeSession({ children }) {
       if (loading) return;
       if (!companyId) {
         if (!cancelled) {
-          setHasEmployees(false);
+          setRequiresEmployeeLogin(false);
           setEmployeeGateLoading(false);
         }
         return;
@@ -88,11 +88,23 @@ function RequireEmployeeSession({ children }) {
         const response = await api.get(`/companies/${companyId}/employees`);
         const rows = response.data || [];
         if (!cancelled) {
-          setHasEmployees(rows.length > 0);
+          setRequiresEmployeeLogin(
+            rows.some(
+              (employee) =>
+                employee.accessControl?.loginEnabled &&
+                employee.accessControl?.hasPassword &&
+                String(employee.accessControl?.role || "").trim().toLowerCase() ===
+                  "admin" &&
+                String(employee.accessControl?.username || "").trim() &&
+                String(employee.accessControl?.status || "Active")
+                  .trim()
+                  .toLowerCase() !== "inactive",
+            ),
+          );
         }
       } catch (error) {
         if (!cancelled) {
-          setHasEmployees(false);
+          setRequiresEmployeeLogin(false);
         }
       } finally {
         if (!cancelled) {
@@ -111,7 +123,7 @@ function RequireEmployeeSession({ children }) {
     return null;
   }
 
-  if (!hasEmployees) {
+  if (!requiresEmployeeLogin) {
     return children;
   }
 
