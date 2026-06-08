@@ -40,6 +40,11 @@ import {
 
 const POS_TEMPLATE_SHEET = "POS Voucher";
 const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
+const emptyAdjustmentRow = {
+  ledgerId: "",
+  mode: "fixed",
+  value: "",
+};
 
 function formatMaskedPhone(value = "") {
   const digits = String(value || "").replace(/\D/g, "");
@@ -98,6 +103,7 @@ export default function PosVoucherPage({
   const [items, setItems] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [allLedgers, setAllLedgers] = useState([]);
   const [defaults, setDefaults] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [importBusy, setImportBusy] = useState(false);
@@ -118,9 +124,7 @@ export default function PosVoucherPage({
     salesPersonId: "",
     address: "",
     note: "",
-    discountType: "fixed",
-    discountValue: "",
-    redeemPoints: "",
+    additionalRows: [emptyAdjustmentRow],
     cardPayment: "",
     cashPayment: "",
     cashTendered: "",
@@ -149,16 +153,21 @@ export default function PosVoucherPage({
         levelResponse,
         defaultResponse,
         employeeResponse,
+        balanceResponse,
       ] = await Promise.all([
         api.get(`/companies/${effectiveCompanyId}/voucher-types`),
         api.get(`/companies/${effectiveCompanyId}/items`),
         api.get(`/companies/${effectiveCompanyId}/price-levels`),
         api.get(`/companies/${effectiveCompanyId}/ledgers/defaults`),
         api.get(`/companies/${effectiveCompanyId}/employees`),
+        api.get(`/companies/${effectiveCompanyId}/ledgers/with-balances`, {
+          params: { to: form.date },
+        }),
       ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
       setEmployees(employeeResponse.data || []);
+      setAllLedgers(balanceResponse.data || []);
       setDefaults(defaultResponse.data || {});
       const voucherType = voucherTypeResponse.data.find(
         (row) => row.name.toLowerCase() === "pos voucher",
@@ -166,7 +175,7 @@ export default function PosVoucherPage({
       setVoucherTypeId(voucherType?._id || "");
     }
     loadMasters();
-  }, [effectiveCompanyId]);
+  }, [effectiveCompanyId, form.date]);
 
   useEffect(() => {
     if (!suggestedNumber || isEditMode) return;
@@ -280,9 +289,18 @@ export default function PosVoucherPage({
         salesPersonId: String(voucher.salesMeta?.employeeId || ""),
         address: voucher.customerSnapshot?.address || "",
         note: voucher.narration || "",
-        discountType: voucher.posMeta?.discountType || "fixed",
-        discountValue: String(voucher.posMeta?.discountValue || ""),
-        redeemPoints: String(voucher.posMeta?.rewardRedeemed || ""),
+        additionalRows:
+          Array.isArray(voucher.posMeta?.additionalAdjustments) &&
+          voucher.posMeta.additionalAdjustments.length > 0
+            ? [
+                ...voucher.posMeta.additionalAdjustments.map((row) => ({
+                  ledgerId: String(row.ledgerId || ""),
+                  mode: row.mode || "fixed",
+                  value: String(row.value ?? row.amount ?? ""),
+                })),
+                { ...emptyAdjustmentRow },
+              ]
+            : [{ ...emptyAdjustmentRow }],
         cardPayment: String(voucher.posMeta?.cardAmount || ""),
         cashPayment: String(voucher.posMeta?.cashAmount || ""),
         cashTendered: String(voucher.posMeta?.cashTendered || ""),
@@ -329,6 +347,23 @@ export default function PosVoucherPage({
         (employee) => String(employee._id) === String(form.salesPersonId),
       ) || null,
     [salesEmployees, form.salesPersonId],
+  );
+  const ledgerMap = useMemo(
+    () => new Map(allLedgers.map((ledger) => [String(ledger._id), ledger])),
+    [allLedgers],
+  );
+  const expenseLedgerOptions = useMemo(
+    () =>
+      allLedgers
+        .filter(
+          (ledger) =>
+            String(ledger.group?.nature || "").toUpperCase() === "EXPENSE",
+        )
+        .map((ledger) => ({
+          value: String(ledger._id),
+          label: ledger.name,
+        })),
+    [allLedgers],
   );
   const itemNameMap = useMemo(
     () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
@@ -453,6 +488,16 @@ export default function PosVoucherPage({
     focusSearchInput();
   };
 
+  const addAdjustmentRow = () => {
+    setForm((current) => ({
+      ...current,
+      additionalRows: [
+        ...(current.additionalRows || []),
+        { ...emptyAdjustmentRow },
+      ],
+    }));
+  };
+
   const updateRow = (index, field, value) => {
     setForm((current) => {
       const nextRows = [...current.rows];
@@ -470,6 +515,30 @@ export default function PosVoucherPage({
     focusSearchInput();
   };
 
+  const updateAdjustmentRow = (index, field, value) => {
+    setForm((current) => {
+      const nextRows = [...(current.additionalRows || [])];
+      nextRows[index] = {
+        ...(nextRows[index] || emptyAdjustmentRow),
+        [field]: value,
+      };
+      return { ...current, additionalRows: nextRows };
+    });
+  };
+
+  const removeAdjustmentRow = (index) => {
+    setForm((current) => {
+      const nextRows = (current.additionalRows || []).filter(
+        (_, rowIndex) => rowIndex !== index,
+      );
+      return {
+        ...current,
+        additionalRows:
+          nextRows.length > 0 ? nextRows : [{ ...emptyAdjustmentRow }],
+      };
+    });
+  };
+
   const validRows = form.rows.filter(
     (row) => row.itemId && Number(row.qty) > 0,
   );
@@ -478,17 +547,33 @@ export default function PosVoucherPage({
     const gross = Number(row.qty || 0) * Number(row.rate || 0);
     return sum + gross * (Number(row.discountPercent || 0) / 100);
   }, 0);
-  const invoiceDiscount =
-    form.discountType === "percentage"
-      ? subtotal * (Number(form.discountValue || 0) / 100)
-      : Number(form.discountValue || 0);
-  const redeemPoints = Math.min(
-    Number(form.redeemPoints || 0),
-    Number(activeCustomer?.rewardPoints || 0),
+  const adjustmentRows = (form.additionalRows || [])
+    .map((row) => {
+      const ledger = ledgerMap.get(String(row.ledgerId || "")) || null;
+      const mode = row.mode || "fixed";
+      const rawValue = Number(row.value || 0);
+      const calculatedAmount =
+        mode === "percentage"
+          ? Number(((subtotal * rawValue) / 100).toFixed(2))
+          : Number(rawValue.toFixed(2));
+      return {
+        ...row,
+        ledger,
+        nature: "EXPENSE",
+        calculatedAmount,
+      };
+    })
+    .filter((row) => row.ledgerId);
+  const additionalExpenseAmount = adjustmentRows.reduce(
+    (sum, row) => sum + row.calculatedAmount,
+    0,
+  );
+  const rewardRedeemed = Number(
+    (rowDiscountTotal + Math.max(additionalExpenseAmount, 0)).toFixed(2),
   );
   const totalAmount = Math.max(
     0,
-    Number((subtotal - invoiceDiscount - redeemPoints).toFixed(2)),
+    Number((subtotal - additionalExpenseAmount).toFixed(2)),
   );
   const totalItems = validRows.reduce(
     (sum, row) => sum + Number(row.qty || 0),
@@ -519,16 +604,7 @@ export default function PosVoucherPage({
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-    const uniformRowDiscount =
-      validRows.length > 0 &&
-      validRows.every(
-        (row) =>
-          Number(row.discountPercent || 0) ===
-          Number(validRows[0]?.discountPercent || 0),
-      )
-        ? Number(validRows[0]?.discountPercent || 0)
-        : 0;
-    const promotionAmount = rowDiscountTotal + invoiceDiscount;
+    const promotionAmount = rowDiscountTotal;
 
     return {
       documentTitle: `POS Invoice - ${form.number || "Preview"}`,
@@ -569,23 +645,16 @@ export default function PosVoucherPage({
       discountLine:
         promotionAmount > 0
           ? {
-              label:
-                uniformRowDiscount > 0
-                  ? `Product Promotion ${uniformRowDiscount}% (-)`
-                  : "Product Promotion (-)",
-              value:
-                uniformRowDiscount > 0
-                  ? `${formatCompactMoney(promotionAmount)} (-)${uniformRowDiscount} %`
-                  : formatCompactMoney(promotionAmount),
+              label: "Product Promotion (-)",
+              value: formatCompactMoney(promotionAmount),
             }
           : null,
-      redeemLine:
-        redeemPoints > 0
-          ? {
-              label: "Reward Redeem (-)",
-              value: formatCompactMoney(redeemPoints),
-            }
-          : null,
+      adjustmentLines: adjustmentRows
+        .filter((row) => Number(row.calculatedAmount || 0) !== 0)
+        .map((row) => ({
+          label: row.ledger?.name || "Additional Expense",
+          value: formatCompactMoney(row.calculatedAmount),
+        })),
       totalText: formatCompactMoney(totalAmount),
       totalQtyText: String(totalItems),
       payments: [
@@ -616,10 +685,9 @@ export default function PosVoucherPage({
     validRows,
     items,
     rowDiscountTotal,
-    invoiceDiscount,
-    redeemPoints,
     totalAmount,
     totalItems,
+    adjustmentRows,
     cardPayment,
     cashPayment,
     changeAmount,
@@ -854,9 +922,7 @@ export default function PosVoucherPage({
       salesPersonId: "",
       address: "",
       note: "",
-      discountType: "fixed",
-      discountValue: "",
-      redeemPoints: "",
+      additionalRows: [{ ...emptyAdjustmentRow }],
       cardPayment: "",
       cashPayment: "0",
       cashTendered: "",
@@ -897,6 +963,15 @@ export default function PosVoucherPage({
     if (form.phone.replace(/\D/g, "").length < 6)
       return alert("Valid phone number is required");
     if (validRows.length === 0) return alert("Please add at least one item");
+    const incompleteAdjustment = (form.additionalRows || []).find(
+      (row) => !row.ledgerId && Number(row.value || 0) !== 0,
+    );
+    if (incompleteAdjustment) {
+      return alert("Please select an expense ledger before entering a value.");
+    }
+    if (rewardRedeemed > Number(activeCustomer?.rewardPoints || 0)) {
+      return alert("Customer does not have enough reward points for this discount.");
+    }
     if (
       Number((cardPayment + cashPayment).toFixed(2)) !==
       Number(totalAmount.toFixed(2))
@@ -906,6 +981,36 @@ export default function PosVoucherPage({
 
     const primaryBankLedgerId =
       defaults.bankLedger?._id || defaults.bankLedgers?.[0]?._id || "";
+    const lines = [
+      ...(cashPayment > 0 && defaults.cashLedger?._id
+        ? [
+            {
+              ledgerId: defaults.cashLedger._id,
+              debit: cashPayment,
+              credit: 0,
+            },
+          ]
+        : []),
+      ...(cardPayment > 0 && primaryBankLedgerId
+        ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
+        : []),
+      {
+        ledgerId: defaults.salesLedger?._id || "",
+        debit: 0,
+        credit: subtotal,
+      },
+    ];
+
+    adjustmentRows.forEach((row) => {
+      const signedAmount = Number(row.calculatedAmount || 0);
+      if (!row.ledgerId || signedAmount === 0) return;
+      lines.push({
+        ledgerId: row.ledgerId,
+        debit: signedAmount > 0 ? signedAmount : 0,
+        credit: signedAmount < 0 ? Math.abs(signedAmount) : 0,
+      });
+    });
+
     const payload = {
       voucherTypeId,
       voucherName: "POS Voucher",
@@ -926,25 +1031,7 @@ export default function PosVoucherPage({
             designation: selectedSalesPerson.personalDetails?.designation || "",
           }
         : {},
-      lines: [
-        ...(cashPayment > 0 && defaults.cashLedger?._id
-          ? [
-              {
-                ledgerId: defaults.cashLedger._id,
-                debit: cashPayment,
-                credit: 0,
-              },
-            ]
-          : []),
-        ...(cardPayment > 0 && primaryBankLedgerId
-          ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
-          : []),
-        {
-          ledgerId: defaults.salesLedger?._id || "",
-          debit: 0,
-          credit: totalAmount,
-        },
-      ],
+      lines,
       inventoryLines: validRows.map((row) => {
         const item = items.find((entry) => entry._id === row.itemId);
         const gross = Number(row.qty || 0) * Number(row.rate || 0);
@@ -970,13 +1057,25 @@ export default function PosVoucherPage({
         };
       }),
       posMeta: {
-        discountType: form.discountType,
-        discountValue: Number(form.discountValue || 0),
-        invoiceDiscount,
+        additionalAdjustments: adjustmentRows.map((row) => ({
+          ledgerId: row.ledgerId,
+          ledgerName: row.ledger?.name || "",
+          nature: "EXPENSE",
+          mode: row.mode || "fixed",
+          value: Number(row.value || 0),
+          amount: row.calculatedAmount,
+        })),
+        additionalExpenseLedgerId: adjustmentRows[0]?.ledgerId || null,
+        additionalExpenseMode: adjustmentRows[0]?.mode || "fixed",
+        additionalExpenseValue: Number(adjustmentRows[0]?.value || 0),
+        additionalExpenseAmount,
+        discountType: "fixed",
+        discountValue: 0,
+        invoiceDiscount: 0,
         subtotal,
         totalAmount,
         rewardEarned: rewardToEarn,
-        rewardRedeemed: redeemPoints,
+        rewardRedeemed,
         cashAmount: cashPayment,
         cardAmount: cardPayment,
         cashTendered: Number(form.cashTendered || 0),
@@ -1011,9 +1110,15 @@ export default function PosVoucherPage({
             }
           : {},
         salesLedgerId: defaults.salesLedger?._id || "",
-        discountType: form.discountType,
-        discountValue: Number(form.discountValue || 0),
-        redeemedPoints: redeemPoints,
+        additionalAdjustments: adjustmentRows.map((row) => ({
+          ledgerId: row.ledgerId,
+          ledgerName: row.ledger?.name || "",
+          nature: "EXPENSE",
+          mode: row.mode || "fixed",
+          value: Number(row.value || 0),
+          amount: row.calculatedAmount,
+        })),
+        redeemedPoints: rewardRedeemed,
         payments: {
           card: cardPayment,
           cash: cashPayment,
@@ -1486,59 +1591,92 @@ export default function PosVoucherPage({
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
                 <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">
-                        Discount Type
-                      </label>
-                      <select
-                        data-vnav="true"
-                        className={inputClass}
-                        value={form.discountType}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            discountType: event.target.value,
-                          }))
-                        }
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        Additional Expense
+                      </h3>
+                      <button
+                        type="button"
+                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        onClick={addAdjustmentRow}
                       >
-                        <option value="fixed">Fixed</option>
-                        <option value="percentage">Percentage</option>
-                      </select>
+                        Add+
+                      </button>
                     </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">
-                        Discount Value
-                      </label>
-                      <input
-                        type="number"
-                        data-vnav="true"
-                        className={numberInputClass}
-                        value={form.discountValue}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            discountValue: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">
-                        Redeem Points
-                      </label>
-                      <input
-                        type="number"
-                        data-vnav="true"
-                        className={numberInputClass}
-                        value={form.redeemPoints}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            redeemPoints: event.target.value,
-                          }))
-                        }
-                      />
+                    <div className="space-y-3">
+                      {(form.additionalRows || []).map((row, index) => {
+                        return (
+                          <div
+                            key={`adjustment-${index}`}
+                            className="grid gap-3 md:grid-cols-[minmax(0,1.8fr)_140px_180px_44px]"
+                          >
+                            <div>
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <label className="text-sm font-semibold text-slate-700">
+                                  Expense Ledger
+                                </label>
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                                >
+                                  Add+
+                                </button>
+                              </div>
+                              <SearchableSelect
+                                options={expenseLedgerOptions}
+                                value={row.ledgerId}
+                                onChange={(newValue) =>
+                                  updateAdjustmentRow(index, "ledgerId", newValue)
+                                }
+                                placeholder="Search expense ledger"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                Discount Type
+                              </label>
+                              <select
+                                data-vnav="true"
+                                className={inputClass}
+                                value={row.mode || "fixed"}
+                                onChange={(event) =>
+                                  updateAdjustmentRow(index, "mode", event.target.value)
+                                }
+                              >
+                                <option value="fixed">Fixed</option>
+                                <option value="percentage">Percentage</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                Amount
+                              </label>
+                              <input
+                                type="number"
+                                data-vnav="true"
+                                className={numberInputClass}
+                                value={row.value}
+                                disabled={!row.ledgerId}
+                                placeholder="Select ledger first"
+                                onChange={(event) =>
+                                  updateAdjustmentRow(index, "value", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
+                                onClick={() => removeAdjustmentRow(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   <div>
@@ -1621,16 +1759,11 @@ export default function PosVoucherPage({
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Total Discount</span>
-                  <span>
-                    {formatMoney(
-                      rowDiscountTotal + invoiceDiscount,
-                      currency.symbol,
-                    )}
-                  </span>
+                  <span>{formatMoney(rowDiscountTotal, currency.symbol)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Redeemed Points</span>
-                  <span>{formatMoney(redeemPoints, currency.symbol)}</span>
+                  <span>Additional Expense</span>
+                  <span>{formatMoney(additionalExpenseAmount, currency.symbol)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-200 pt-4 font-semibold text-emerald-600">
                   <span>Total Amount</span>
