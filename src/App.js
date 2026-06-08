@@ -148,6 +148,21 @@ function RequireEmployeeSession({ children }) {
   return children;
 }
 
+function RequireActiveCompany({ children }) {
+  const { companyId, loading } = useActiveCompany();
+  const location = useLocation();
+
+  if (loading) {
+    return null;
+  }
+
+  if (!companyId) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return children;
+}
+
 function RequireRoleAccess({ children }) {
   const location = useLocation();
   const user = readStoredUser();
@@ -182,7 +197,6 @@ function AppShell() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/dashboard/manufacturing" element={<ManufacturingDashboardPage />} />
             <Route path="/shortcuts" element={<ShortcutReferencePage />} />
-
             <Route path="/masters/create/group" element={<Groups />} />
             <Route path="/masters/alter/group" element={<Groups />} />
             <Route path="/masters/create/ledger" element={<Ledgers />} />
@@ -721,11 +735,13 @@ export default function App() {
         <Route
           path="/*"
           element={
-            <RequireEmployeeSession>
-              <RequireRoleAccess>
-                <AppShell />
-              </RequireRoleAccess>
-            </RequireEmployeeSession>
+            <RequireActiveCompany>
+              <RequireEmployeeSession>
+                <RequireRoleAccess>
+                  <AppShell />
+                </RequireRoleAccess>
+              </RequireEmployeeSession>
+            </RequireActiveCompany>
           }
         />
       </Routes>
