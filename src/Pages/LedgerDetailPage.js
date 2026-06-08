@@ -145,9 +145,7 @@ export default function LedgerDetailPage() {
       const accountNames = [entry.debitAccountName, entry.creditAccountName]
         .filter(Boolean)
         .join(" / ");
-      const particulars = `${entry.voucherName}${
-        entry.voucherNumber ? ` ${entry.voucherNumber}` : ""
-      }${accountNames ? ` ${accountNames}` : entry.counterpart ? ` ${entry.counterpart}` : ""}`.trim();
+      const particulars = `${entry.voucherName}`;
 
       if (Number(entry.debit || 0) > 0) {
         debitRows.push({
@@ -234,7 +232,7 @@ export default function LedgerDetailPage() {
 
       doc.setDrawColor(60);
       doc.setLineWidth(0.25);
-      doc.line(leftX, y - 3, pageWidth - marginX, y - 3);
+      doc.line(leftX, y - 6, pageWidth - marginX, y - 6);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.text("Date", leftX + 4, y);
@@ -244,7 +242,7 @@ export default function LedgerDetailPage() {
       doc.text("Particulars", rightX + 28, y);
       doc.text("Credit Amount", amountRightRight, y, { align: "right" });
       doc.line(verticalDividerX, y - 6, verticalDividerX, pageHeight - 36);
-      return y + 4;
+      return y + 6;
     }
 
     let y = drawHeader();
@@ -293,15 +291,15 @@ export default function LedgerDetailPage() {
 
     if (closingBalance > 0) {
       y += 8;
-      doc.line(leftX, y - 3, amountRightLeft, y - 3);
-      doc.line(rightX, y - 3, amountRightRight, y - 3);
+      doc.line(leftX, y - 4, amountRightLeft, y - 4);
+      doc.line(rightX, y - 4, amountRightRight, y - 4);
       doc.setFont("helvetica", "normal");
-      // doc.text(
-      //   `Closing Balance (${closingOnDebit ? "DR" : "CR"})`,
-      //   pageWidth / 2,
-      //   y,
-      //   { align: "right" },
-      // );
+      doc.text(
+        `Closing Balance`,
+        pageWidth / 14,
+        y,
+        { align: "left" },
+      );
       if (closingOnDebit) {
         doc.text(formatPlainAmount(closingBalance, selectedCompany), amountRightLeft, y, {
           align: "right",
@@ -313,12 +311,12 @@ export default function LedgerDetailPage() {
       }
     }
 
-    y += 8;
-    doc.line(leftX, y - 3, amountRightLeft, y - 3);
-    doc.line(rightX, y - 3, amountRightRight, y - 3);
-    doc.setFont("helvetica", "bold");
-    doc.text(formatPlainAmount(debitFinal, selectedCompany), amountRightLeft, y, { align: "right" });
-    doc.text(formatPlainAmount(creditFinal, selectedCompany), amountRightRight, y, { align: "right" });
+    // y += 8;
+    // doc.line(leftX, y - 3, amountRightLeft, y - 3);
+    // doc.line(rightX, y - 3, amountRightRight, y - 3);
+    // doc.setFont("helvetica", "bold");
+    // doc.text(formatPlainAmount(debitFinal, selectedCompany), amountRightLeft, y, { align: "right" });
+    // doc.text(formatPlainAmount(creditFinal, selectedCompany), amountRightRight, y, { align: "right" });
 
     y += 16;
     doc.setFont("helvetica", "normal");
