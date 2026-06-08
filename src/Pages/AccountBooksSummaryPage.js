@@ -187,21 +187,21 @@ export default function AccountBooksSummaryPage({ mode = "group" }) {
       return;
     }
 
-const debitRows = rowsForPdf
-  .filter((row) => Number(row.debit || 0) > 0)
-  .map((row) => ({
-    date: formatShortDate(toDate),
-    particulars: row.name,
-    amount: Number(row.debit || 0),
-  }));
+    const debitRows = rowsForPdf
+      .filter((row) => Number(row.debit || 0) > 0)
+      .map((row) => ({
+        date: formatShortDate(toDate),
+        particulars: row.name,
+        amount: Number(row.debit || 0),
+      }));
 
-const creditRows = rowsForPdf
-  .filter((row) => Number(row.credit || 0) > 0)
-  .map((row) => ({
-    date: formatShortDate(toDate),
-    particulars: row.name,
-    amount: Number(row.credit || 0),
-  }));
+    const creditRows = rowsForPdf
+      .filter((row) => Number(row.credit || 0) > 0)
+      .map((row) => ({
+        date: formatShortDate(toDate),
+        particulars: row.name,
+        amount: Number(row.credit || 0),
+      }));
 
     const debitTotal = debitRows.reduce(
       (sum, row) => sum + Number(row.amount || 0),
