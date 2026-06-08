@@ -472,17 +472,22 @@ export default function ProfitLoss() {
                           group.ledgers.map((ledger) => ({
                             label: ledger.ledgerName,
                             value: ledger.amount,
+                            ledgerId: ledger.ledgerId,
+                            ledgerName: ledger.ledgerName,
                           }))
                         ).length > 0
                           ? filteredIncomeGroups.flatMap((group) =>
                               group.ledgers.map((ledger) => ({
                                 label: ledger.ledgerName,
                                 value: ledger.amount,
+                                ledgerId: ledger.ledgerId,
+                                ledgerName: ledger.ledgerName,
                               }))
                             )
                           : [{ label: "Other Income", value: 0 }]
                       }
                       company={selectedCompany}
+                      onRowClick={openLedgerDetail}
                     />
                     <LedgerBlock
                       heading="Expenses"
@@ -491,10 +496,13 @@ export default function ProfitLoss() {
                           group.ledgers.map((ledger) => ({
                             label: ledger.ledgerName,
                             value: ledger.amount,
+                            ledgerId: ledger.ledgerId,
+                            ledgerName: ledger.ledgerName,
                           }))
                         )
                       }
                       company={selectedCompany}
+                      onRowClick={openLedgerDetail}
                     />
                   </StatementPanel>
                 </section>
