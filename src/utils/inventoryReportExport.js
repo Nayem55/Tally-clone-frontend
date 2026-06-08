@@ -124,42 +124,240 @@ export function exportInventoryReportExcel({
 }
 
 export function exportInventoryReportPdf({
-  title,
+  title = "Inventory Report",
   company,
   fromDate,
   toDate,
-  scope = "",
+  scope,
   summary = [],
   columns = [],
   rows = [],
-  landscape = true,
 }) {
-  const doc = createPdf(title, company, fromDate, toDate, scope, landscape);
-  let startY = scope ? 39 : 34;
-
-  if (summary.length) {
-    autoTable(doc, {
-      startY,
-      head: [["Metric", "Value"]],
-      body: summary.map((item) => [item.label, item.value]),
-      styles: { fontSize: 9, cellPadding: 2.6, lineColor: [220, 226, 235] },
-      headStyles: { fillColor: [20, 99, 255], textColor: 255, fontStyle: "bold" },
-      theme: "grid",
-      tableWidth: 110,
-    });
-    startY = doc.lastAutoTable.finalY + 6;
-  }
-
-  autoTable(doc, {
-    startY,
-    head: [columns.map((column) => column.label)],
-    body: rows.map((row) => columns.map((column) => row[column.key] ?? "")),
-    styles: { fontSize: 8.4, cellPadding: 2.4, lineColor: [220, 226, 235] },
-    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
-    theme: "grid",
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
   });
 
-  savePdf(doc, title, company);
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  const marginX = 12;
+  const companyName = company?.name || "Company";
+  const companyAddress = company?.address || company?.companyAddress || "";
+  const generatedAt = new Date().toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  function safeText(value) {
+    return value === null || value === undefined || value === "" ? "-" : String(value);
+  }
+
+  function safeFileName(value) {
+    return String(value || "inventory-report")
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+  }
+
+  function getValue(row, key) {
+    return row?.[key] ?? "";
+  }
+
+  const compactColumns = columns.filter((column) =>
+    [
+      "particulars",
+      "openingQty",
+      "openingValue",
+      "inwardQty",
+      "inwardValue",
+      "outwardQty",
+      "outwardValue",
+      "closingQty",
+      "closingValue",
+    ].includes(column.key)
+  );
+
+  const finalColumns =
+    compactColumns.length > 0
+      ? compactColumns
+      : columns;
+
+  const tableHead = [
+    finalColumns.map((column) => {
+      const labelMap = {
+        particulars: "Particulars",
+        openingQty: "Open Qty",
+        openingValue: "Open Value",
+        inwardQty: "In Qty",
+        inwardValue: "In Value",
+        outwardQty: "Out Qty",
+        outwardValue: "Out Value",
+        closingQty: "Close Qty",
+        closingValue: "Close Value",
+      };
+
+      return labelMap[column.key] || column.label || column.key;
+    }),
+  ];
+
+  const tableBody = rows.map((row) =>
+    finalColumns.map((column) => safeText(getValue(row, column.key)))
+  );
+
+  const totalsRow = finalColumns.map((column, index) => {
+    if (index === 0) return "TOTAL";
+
+    const key = column.key;
+    const total = rows.reduce((sum, row) => {
+      const raw = String(row?.[key] || "").replace(/[^\d.-]/g, "");
+      const numeric = Number(raw);
+      return Number.isFinite(numeric) ? sum + numeric : sum;
+    }, 0);
+
+    if (!total) return "";
+    return total.toLocaleString("en-IN", {
+      minimumFractionDigits: key.toLowerCase().includes("value") ? 2 : 0,
+      maximumFractionDigits: 2,
+    });
+  });
+
+  function drawHeader() {
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 24, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(companyName, marginX, 10);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    if (companyAddress) {
+      doc.text(companyAddress, marginX, 15);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("INVENTORY REPORT", pageWidth - marginX, 10, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Generated: ${generatedAt}`, pageWidth - marginX, 15, {
+      align: "right",
+    });
+  }
+
+  drawHeader();
+
+  let y = 34;
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(title, marginX, y);
+
+  y += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Period: ${safeText(fromDate)} to ${safeText(toDate)}`, marginX, y);
+
+  if (scope) {
+    doc.text(`Scope: ${scope}`, pageWidth - marginX, y, { align: "right" });
+  }
+
+  y += 10;
+
+  const cardGap = 4;
+  const cardCount = Math.min(summary.length, 4);
+  const cardWidth = (pageWidth - marginX * 2 - cardGap * (cardCount - 1)) / cardCount;
+  const cardHeight = 18;
+
+  summary.slice(0, 4).forEach((item, index) => {
+    const x = marginX + index * (cardWidth + cardGap);
+
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 2, 2, "FD");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(safeText(item.label), x + 4, y + 6);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(safeText(item.value), x + 4, y + 13);
+  });
+
+  y += cardHeight + 10;
+
+  autoTable(doc, {
+    startY: y,
+    head: tableHead,
+    body: tableBody,
+    foot: rows.length ? [totalsRow] : [],
+    theme: "grid",
+    margin: { left: marginX, right: marginX },
+    styles: {
+      font: "helvetica",
+      fontSize: 7.5,
+      cellPadding: 2.2,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.15,
+      textColor: [30, 41, 59],
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      halign: "center",
+      fontSize: 7.2,
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: "bold",
+      fontSize: 7.8,
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    columnStyles: finalColumns.reduce((styles, column, index) => {
+      styles[index] = {
+        halign: column.key === "particulars" ? "left" : "right",
+        cellWidth: column.key === "particulars" ? 45 : "auto",
+      };
+      return styles;
+    }, {}),
+    didDrawPage(data) {
+      if (data.pageNumber > 1) {
+        drawHeader();
+      }
+
+      const pageNo = doc.internal.getNumberOfPages();
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+
+      doc.line(marginX, pageHeight - 12, pageWidth - marginX, pageHeight - 12);
+      doc.text("Generated from Inventory Management System", marginX, pageHeight - 7);
+      doc.text(`Page ${pageNo}`, pageWidth - marginX, pageHeight - 7, {
+        align: "right",
+      });
+    },
+  });
+
+  doc.save(`${safeFileName(title)}-${safeFileName(fromDate)}-to-${safeFileName(toDate)}.pdf`);
 }
 
 export { formatMoney, formatNumber, formatDate };
