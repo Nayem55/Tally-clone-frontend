@@ -138,6 +138,76 @@ function LedgerBlock({ heading, rows, company, negative = false, onRowClick }) {
   );
 }
 
+function GroupedLedgerBlock({
+  heading,
+  groups,
+  company,
+  expandedGroups,
+  onToggleGroup,
+  onRowClick,
+}) {
+  return (
+    <div>
+      <h3 className="text-[15px] font-semibold text-slate-900">{heading}</h3>
+      <div className="mt-3 space-y-3">
+        {(groups || []).length > 0 ? (
+          groups.map((group) => {
+            const isExpanded = Boolean(expandedGroups?.[group.groupName]);
+            return (
+              <div key={group.groupName} className="rounded-xl border border-slate-100 bg-slate-50/50">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2 text-left transition hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
+                  onClick={() => onToggleGroup?.(group.groupName)}
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronDown
+                      className={`h-4 w-4 text-slate-500 transition-transform ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                    />
+                    <span className="font-medium text-slate-800">{group.groupName}</span>
+                  </div>
+                  <span className={Number(group.amount || 0) < 0 ? "text-rose-600" : "text-slate-900"}>
+                    {formatSignedAmount(group.amount, company)}
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div className="space-y-2 border-t border-slate-100 px-3 py-2">
+                    {group.ledgers.map((ledger) => (
+                      <button
+                        key={`${group.groupName}-${ledger.ledgerId}`}
+                        type="button"
+                        data-report-nav="true"
+                        data-focus-key={`pl-ledger-${ledger.ledgerId}`}
+                        className="flex w-full items-center justify-between gap-4 rounded-lg px-2 py-1 text-left text-[14px] transition hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                        onClick={() =>
+                          onRowClick?.({
+                            label: ledger.ledgerName,
+                            value: ledger.amount,
+                            ledgerId: ledger.ledgerId,
+                            ledgerName: ledger.ledgerName,
+                          })
+                        }
+                      >
+                        <span className="pl-5 font-medium text-blue-700">{ledger.ledgerName}</span>
+                        <span className={Number(ledger.amount || 0) < 0 ? "text-rose-600" : "text-slate-900"}>
+                          {formatSignedAmount(ledger.amount, company)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-lg text-[14px] text-slate-500">No data available.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ProfitLoss() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -156,6 +226,8 @@ export default function ProfitLoss() {
   const [costCenter, setCostCenter] = useState("All");
   const [report, setReport] = useState({ incomes: [], expenses: [], totals: {}, trading: {} });
   const [loading, setLoading] = useState(false);
+  const [expandedIncomeGroups, setExpandedIncomeGroups] = useState({});
+  const [expandedExpenseGroups, setExpandedExpenseGroups] = useState({});
 
   useEffect(() => {
     async function loadReport() {
@@ -190,6 +262,9 @@ export default function ProfitLoss() {
       .map((group) => ({
         ...group,
         ledgers: group.ledgers.filter((ledger) => String(ledger.ledgerId) === ledgerFilter),
+        amount: group.ledgers
+          .filter((ledger) => String(ledger.ledgerId) === ledgerFilter)
+          .reduce((sum, ledger) => sum + Number(ledger.amount || 0), 0),
       }))
       .filter((group) => group.ledgers.length > 0);
   }, [incomeGroups, ledgerFilter]);
@@ -200,9 +275,22 @@ export default function ProfitLoss() {
       .map((group) => ({
         ...group,
         ledgers: group.ledgers.filter((ledger) => String(ledger.ledgerId) === ledgerFilter),
+        amount: group.ledgers
+          .filter((ledger) => String(ledger.ledgerId) === ledgerFilter)
+          .reduce((sum, ledger) => sum + Number(ledger.amount || 0), 0),
       }))
       .filter((group) => group.ledgers.length > 0);
   }, [expenseGroups, ledgerFilter]);
+
+  useEffect(() => {
+    if (!ledgerFilter) return;
+    setExpandedIncomeGroups(
+      Object.fromEntries(filteredIncomeGroups.map((group) => [group.groupName, true]))
+    );
+    setExpandedExpenseGroups(
+      Object.fromEntries(filteredExpenseGroups.map((group) => [group.groupName, true]))
+    );
+  }, [ledgerFilter, filteredIncomeGroups, filteredExpenseGroups]);
 
   const sales = Number(report.trading?.netSales || 0);
   const grossProfit = Number(report.trading?.grossProfit || 0);
@@ -235,6 +323,20 @@ export default function ProfitLoss() {
     navigate(`/reports/account-books/ledger-detail?${params.toString()}`, {
       state: buildReportReturnState(location, `pl-ledger-${row.ledgerId}`),
     });
+  }
+
+  function toggleIncomeGroup(groupName) {
+    setExpandedIncomeGroups((current) => ({
+      ...current,
+      [groupName]: !current[groupName],
+    }));
+  }
+
+  function toggleExpenseGroup(groupName) {
+    setExpandedExpenseGroups((current) => ({
+      ...current,
+      [groupName]: !current[groupName],
+    }));
   }
 
   useReportKeyboardNav(
@@ -465,43 +567,20 @@ export default function ProfitLoss() {
                     totalValue={formatSignedAmount(report.totals?.netProfit, selectedCompany)}
                     totalNegative={Number(report.totals?.netProfit || 0) < 0}
                   >
-                    <LedgerBlock
+                    <GroupedLedgerBlock
                       heading="Other Income"
-                      rows={
-                        filteredIncomeGroups.flatMap((group) =>
-                          group.ledgers.map((ledger) => ({
-                            label: ledger.ledgerName,
-                            value: ledger.amount,
-                            ledgerId: ledger.ledgerId,
-                            ledgerName: ledger.ledgerName,
-                          }))
-                        ).length > 0
-                          ? filteredIncomeGroups.flatMap((group) =>
-                              group.ledgers.map((ledger) => ({
-                                label: ledger.ledgerName,
-                                value: ledger.amount,
-                                ledgerId: ledger.ledgerId,
-                                ledgerName: ledger.ledgerName,
-                              }))
-                            )
-                          : [{ label: "Other Income", value: 0 }]
-                      }
+                      groups={filteredIncomeGroups}
                       company={selectedCompany}
+                      expandedGroups={expandedIncomeGroups}
+                      onToggleGroup={toggleIncomeGroup}
                       onRowClick={openLedgerDetail}
                     />
-                    <LedgerBlock
+                    <GroupedLedgerBlock
                       heading="Expenses"
-                      rows={
-                        filteredExpenseGroups.flatMap((group) =>
-                          group.ledgers.map((ledger) => ({
-                            label: ledger.ledgerName,
-                            value: ledger.amount,
-                            ledgerId: ledger.ledgerId,
-                            ledgerName: ledger.ledgerName,
-                          }))
-                        )
-                      }
+                      groups={filteredExpenseGroups}
                       company={selectedCompany}
+                      expandedGroups={expandedExpenseGroups}
+                      onToggleGroup={toggleExpenseGroup}
                       onRowClick={openLedgerDetail}
                     />
                   </StatementPanel>
