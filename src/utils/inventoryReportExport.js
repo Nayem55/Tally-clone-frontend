@@ -171,6 +171,10 @@ export function exportInventoryReportPdf({
   const compactColumns = columns.filter((column) =>
     [
       "particulars",
+      "item",
+      "group",
+      "name",
+      "context",
       "openingQty",
       "openingValue",
       "inwardQty",
@@ -183,7 +187,7 @@ export function exportInventoryReportPdf({
   );
 
   const finalColumns =
-    compactColumns.length > 0
+    columns.length > 9 && compactColumns.length > 0
       ? compactColumns
       : columns;
 
@@ -191,6 +195,10 @@ export function exportInventoryReportPdf({
     finalColumns.map((column) => {
       const labelMap = {
         particulars: "Particulars",
+        item: "Item",
+        group: "Group",
+        name: "Particulars",
+        context: "Context",
         openingQty: "Open Qty",
         openingValue: "Open Value",
         inwardQty: "In Qty",
@@ -333,8 +341,18 @@ export function exportInventoryReportPdf({
     },
     columnStyles: finalColumns.reduce((styles, column, index) => {
       styles[index] = {
-        halign: column.key === "particulars" ? "left" : "right",
-        cellWidth: column.key === "particulars" ? 45 : "auto",
+        halign: ["particulars", "item", "group", "name", "context", "date", "voucher", "direction"].includes(column.key)
+          ? "left"
+          : "right",
+        cellWidth: ["particulars", "item", "name"].includes(column.key)
+          ? 45
+          : ["group", "context", "voucher"].includes(column.key)
+            ? 34
+            : column.key === "date"
+              ? 22
+              : column.key === "direction"
+                ? 22
+                : "auto",
       };
       return styles;
     }, {}),
