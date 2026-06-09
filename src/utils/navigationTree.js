@@ -153,7 +153,7 @@ export const menuTree = [
           },
         ],
       },
-      { label: "Alter Vouchers", to: "/transactions/alter-vouchers" },
+      // { label: "Alter Vouchers", to: "/transactions/alter-vouchers" },
     ],
   },
   {
