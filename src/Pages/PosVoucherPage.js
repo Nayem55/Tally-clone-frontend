@@ -8,7 +8,6 @@ import {
   History,
   Plus,
   Printer,
-  Receipt,
   ScanLine,
   ShoppingCart,
   Trash2,
@@ -75,12 +74,6 @@ function formatMoney(value, symbol = "Tk") {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-
-function toWords(value) {
-  const amount = Math.round(Number(value || 0));
-  if (!amount) return "Zero only";
-  return `${amount.toLocaleString("en-IN")} only`;
 }
 
 function normalizeMonthDayInput(value = "") {
@@ -612,9 +605,10 @@ export default function PosVoucherPage({
     (s, r) => s + r.calculatedAmount,
     0,
   );
-  const rewardRedeemed = Number(
-    (rowDiscountTotal + Math.max(additionalExpenseAmount, 0)).toFixed(2),
+  const totalDiscountAmount = Number(
+    (rowDiscountTotal + additionalExpenseAmount).toFixed(2),
   );
+  const rewardRedeemed = 0;
   const totalAmount = Math.max(
     0,
     Number((subtotal - additionalExpenseAmount).toFixed(2)),
@@ -690,7 +684,7 @@ export default function PosVoucherPage({
       adjustmentLines: adjustmentRows
         .filter((r) => Number(r.calculatedAmount || 0) !== 0)
         .map((r) => ({
-          label: r.ledger?.name || "Additional Expense",
+          label: r.ledger?.name || "Additional Discount",
           value: fmt(r.calculatedAmount),
         })),
       totalText: fmt(totalAmount),
@@ -1106,9 +1100,7 @@ export default function PosVoucherPage({
       (r) => !r.ledgerId && Number(r.value || 0) !== 0,
     );
     if (incompleteAdj)
-      return alert("Please select an expense ledger before entering a value.");
-    if (rewardRedeemed > Number(activeCustomer?.rewardPoints || 0))
-      return alert("Customer does not have enough reward points.");
+      return alert("Please select a discount ledger before entering a value.");
     if (
       Number((cardPayment + cashPayment).toFixed(2)) !==
       Number(totalAmount.toFixed(2))
@@ -1820,7 +1812,7 @@ export default function PosVoucherPage({
                   <div>
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-[13px] font-semibold text-slate-700">
-                        Additional expense / discount
+                        Additional discount
                       </span>
                       <button
                         type="button"
@@ -1837,7 +1829,7 @@ export default function PosVoucherPage({
                           className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_120px_140px_32px]"
                         >
                           <Field
-                            label="Expense ledger"
+                            label="Discount ledger"
                             action={
                               <AddLink
                                 onClick={() =>
@@ -1854,7 +1846,7 @@ export default function PosVoucherPage({
                               onChange={(v) =>
                                 updateAdjustmentRow(index, "ledgerId", v)
                               }
-                              placeholder="Search ledger…"
+                              placeholder="Search discount ledger..."
                             />
                           </Field>
                           <Field label="Type">
@@ -1938,10 +1930,10 @@ export default function PosVoucherPage({
                       <div className="flex justify-between">
                         <span className="text-slate-500">Item discount</span>
                         <span className="text-rose-600">
-                          − {formatMoney(rowDiscountTotal, currency.symbol)}
+                          − {formatMoney(Math.abs(totalDiscountAmount), currency.symbol)}
                         </span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="hidden">
                         <span className="text-slate-500">Adj. expense</span>
                         <span
                           className={
@@ -1968,19 +1960,6 @@ export default function PosVoucherPage({
                         {rewardToEarn.toLocaleString("en-IN")} pts
                       </span>
                     </div>
-                  </div>
-
-                  {/* Total payable hero */}
-                  <div className="mt-3 rounded-lg bg-blue-600 px-4 py-4 text-center text-white">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
-                      Total payable
-                    </p>
-                    <p className="mt-1.5 text-3xl font-semibold">
-                      {formatMoney(totalAmount, currency.symbol)}
-                    </p>
-                    <p className="mt-1 text-[12px] opacity-70">
-                      {toWords(totalAmount)}
-                    </p>
                   </div>
                 </div>
               </div>
@@ -2149,10 +2128,10 @@ export default function PosVoucherPage({
                 <div className="flex justify-between">
                   <span className="text-slate-500">Discount</span>
                   <span className="text-rose-600">
-                    − {formatMoney(rowDiscountTotal, currency.symbol)}
+                    − {formatMoney(Math.abs(totalDiscountAmount), currency.symbol)}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="hidden">
                   <span className="text-slate-500">Adj. expense</span>
                   <span>
                     {formatMoney(additionalExpenseAmount, currency.symbol)}
@@ -2198,3 +2177,4 @@ export default function PosVoucherPage({
     </div>
   );
 }
+
