@@ -43,6 +43,7 @@ import {
 const POS_TEMPLATE_SHEET = "POS Voucher";
 const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
 const emptyAdjustmentRow = { ledgerId: "", mode: "fixed", value: "" };
+const emptyBankPaymentRow = { ledgerId: "", amount: "" };
 
 function formatMaskedPhone(value = "") {
   const digits = String(value || "").replace(/\D/g, "");
@@ -268,7 +269,7 @@ export default function PosVoucherPage({
     anniversary: "",
     note: "",
     additionalRows: [emptyAdjustmentRow],
-    cardPayment: "",
+    bankPayments: [{ ...emptyBankPaymentRow }],
     cashPayment: "",
     cashTendered: "",
     rows: [],
@@ -474,7 +475,26 @@ export default function PosVoucherPage({
                 { ...emptyAdjustmentRow },
               ]
             : [{ ...emptyAdjustmentRow }],
-        cardPayment: String(voucher.posMeta?.cardAmount || ""),
+        bankPayments:
+          Array.isArray(voucher.posMeta?.bankPayments) &&
+          voucher.posMeta.bankPayments.length > 0
+            ? voucher.posMeta.bankPayments.map((row) => ({
+                ledgerId: String(row.ledgerId || ""),
+                amount: String(row.amount || ""),
+              }))
+            : Number(voucher.posMeta?.cardAmount || 0) > 0
+              ? [
+                  {
+                    ledgerId: String(
+                      voucher.posMeta?.bankLedgerId ||
+                        defaults.bankLedger?._id ||
+                        defaults.bankLedgers?.[0]?._id ||
+                        "",
+                    ),
+                    amount: String(voucher.posMeta?.cardAmount || ""),
+                  },
+                ]
+              : [{ ...emptyBankPaymentRow }],
         cashPayment: String(voucher.posMeta?.cashAmount || ""),
         cashTendered: String(voucher.posMeta?.cashTendered || ""),
         rows: (voucher.inventoryLines || []).map((line) => ({
@@ -541,6 +561,25 @@ export default function PosVoucherPage({
       (l) => String(l._id) === String(form.salesLedger || ""),
     ) ||
     null;
+  const bankLedgerOptions = useMemo(() => {
+    const defaultBankLedgers = Array.isArray(defaults.bankLedgers)
+      ? defaults.bankLedgers
+      : defaults.bankLedger
+        ? [defaults.bankLedger]
+        : [];
+    const bankLedgers =
+      defaultBankLedgers.length > 0
+        ? defaultBankLedgers
+        : allLedgers.filter(
+            (l) =>
+              String(l.group?.name || "").trim().toLowerCase() ===
+              "bank accounts",
+          );
+    return bankLedgers.map((l) => ({
+      value: String(l._id),
+      label: l.name,
+    }));
+  }, [allLedgers, defaults.bankLedger, defaults.bankLedgers]);
 
   const expenseLedgerOptions = useMemo(
     () =>
@@ -561,6 +600,20 @@ export default function PosVoucherPage({
     (c) => c.phone === form.phone.replace(/\D/g, ""),
   );
   const activeCustomer = customerInsight.customer || selectedCustomer || null;
+  const customerPhoneOptions = useMemo(
+    () =>
+      customerSuggestions.map((customer) => ({
+        value: customer.phone || "",
+        label: customer.phone
+          ? `${customer.phone}`
+          : customer.name || "Customer",
+        meta:
+          customer.rewardPoints !== undefined
+            ? `${Number(customer.rewardPoints || 0).toLocaleString("en-IN")} pts`
+            : "",
+      })),
+    [customerSuggestions],
+  );
 
   const filteredItems = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -618,7 +671,17 @@ export default function PosVoucherPage({
     (s, r) => s + Number(r.mrpRate || r.rate || 0) * Number(r.qty || 0),
     0,
   );
-  const cardPayment = Number(form.cardPayment || 0);
+  const bankPayments = (form.bankPayments || [])
+    .filter((row) => row.ledgerId && Number(row.amount || 0) > 0)
+    .map((row) => ({
+      ...row,
+      ledger: ledgerMap.get(String(row.ledgerId || "")) || null,
+      amount: Number(row.amount || 0),
+    }));
+  const bankPaymentTotal = bankPayments.reduce(
+    (sum, row) => sum + Number(row.amount || 0),
+    0,
+  );
   const cashPayment = Number(form.cashPayment || 0);
   const changeAmount = Math.max(
     0,
@@ -690,9 +753,10 @@ export default function PosVoucherPage({
       totalText: fmt(totalAmount),
       totalQtyText: String(totalItems),
       payments: [
-        ...(cardPayment > 0
-          ? [{ label: "Card :", value: fmt(cardPayment) }]
-          : []),
+        ...bankPayments.map((row) => ({
+          label: `${row.ledger?.name || "Bank"} :`,
+          value: fmt(row.amount),
+        })),
         { label: "Cash :", value: fmt(cashPayment) },
         { label: "Cash Tendered :", value: fmt(form.cashTendered || 0) },
         { label: "Balance :", value: fmt(changeAmount) },
@@ -712,7 +776,7 @@ export default function PosVoucherPage({
     totalAmount,
     totalItems,
     adjustmentRows,
-    cardPayment,
+    bankPayments,
     cashPayment,
     changeAmount,
     customerLine,
@@ -720,20 +784,16 @@ export default function PosVoucherPage({
 
   /* ── auto payment split ── */
   useEffect(() => {
-    const safeCard = Math.min(
-      Math.max(0, Number(form.cardPayment || 0)),
+    const safeBankTotal = Math.min(
+      Math.max(0, Number(bankPaymentTotal || 0)),
       totalAmount,
     );
-    const autoCash = Math.max(0, Number((totalAmount - safeCard).toFixed(2)));
-    const nextCard = safeCard > 0 ? String(safeCard) : "";
+    const autoCash = Math.max(0, Number((totalAmount - safeBankTotal).toFixed(2)));
     const nextCash = String(autoCash);
-    if (
-      Number(form.cardPayment || 0) !== safeCard ||
-      String(form.cashPayment) !== nextCash
-    ) {
-      setForm((c) => ({ ...c, cardPayment: nextCard, cashPayment: nextCash }));
+    if (String(form.cashPayment) !== nextCash) {
+      setForm((c) => ({ ...c, cashPayment: nextCash }));
     }
-  }, [totalAmount, form.cardPayment]);
+  }, [totalAmount, bankPaymentTotal, form.cashPayment]);
 
   /* ── global scanner ── */
   useEffect(() => {
@@ -925,6 +985,35 @@ export default function PosVoucherPage({
     });
   };
 
+  const addBankPaymentRow = () => {
+    setForm((c) => ({
+      ...c,
+      bankPayments: [...(c.bankPayments || []), { ...emptyBankPaymentRow }],
+    }));
+  };
+
+  const updateBankPaymentRow = (index, field, value) => {
+    setForm((c) => {
+      const nextRows = [...(c.bankPayments || [{ ...emptyBankPaymentRow }])];
+      nextRows[index] = {
+        ...(nextRows[index] || emptyBankPaymentRow),
+        [field]: value,
+      };
+      return { ...c, bankPayments: nextRows };
+    });
+  };
+
+  const removeBankPaymentRow = (index) => {
+    setForm((c) => {
+      const nextRows = (c.bankPayments || []).filter((_, i) => i !== index);
+      return {
+        ...c,
+        bankPayments:
+          nextRows.length > 0 ? nextRows : [{ ...emptyBankPaymentRow }],
+      };
+    });
+  };
+
   const applyCustomer = (customer) => {
     setForm((c) => ({
       ...c,
@@ -1059,7 +1148,7 @@ export default function PosVoucherPage({
       anniversary: "",
       note: "",
       additionalRows: [{ ...emptyAdjustmentRow }],
-      cardPayment: "",
+      bankPayments: [{ ...emptyBankPaymentRow }],
       cashPayment: "0",
       cashTendered: "",
       rows: [],
@@ -1101,21 +1190,27 @@ export default function PosVoucherPage({
     );
     if (incompleteAdj)
       return alert("Please select a discount ledger before entering a value.");
+    const incompleteBankPayment = (form.bankPayments || []).find(
+      (row) => !row.ledgerId && Number(row.amount || 0) !== 0,
+    );
+    if (incompleteBankPayment) {
+      return alert("Please select a bank ledger before entering a bank payment amount.");
+    }
     if (
-      Number((cardPayment + cashPayment).toFixed(2)) !==
+      Number((bankPaymentTotal + cashPayment).toFixed(2)) !==
       Number(totalAmount.toFixed(2))
     )
-      return alert("Cash + card payment must match total payable");
+      return alert("Cash + bank payment must match total payable");
 
-    const primaryBankLedgerId =
-      defaults.bankLedger?._id || defaults.bankLedgers?.[0]?._id || "";
     const lines = [
       ...(cashPayment > 0 && defaults.cashLedger?._id
         ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
         : []),
-      ...(cardPayment > 0 && primaryBankLedgerId
-        ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
-        : []),
+      ...bankPayments.map((row) => ({
+        ledgerId: row.ledgerId,
+        debit: row.amount,
+        credit: 0,
+      })),
       {
         ledgerId: form.salesLedger || defaults.salesLedger?._id || "",
         debit: 0,
@@ -1200,7 +1295,12 @@ export default function PosVoucherPage({
         rewardEarned: rewardToEarn,
         rewardRedeemed,
         cashAmount: cashPayment,
-        cardAmount: cardPayment,
+        cardAmount: bankPaymentTotal,
+        bankPayments: bankPayments.map((row) => ({
+          ledgerId: row.ledgerId,
+          ledgerName: row.ledger?.name || "",
+          amount: row.amount,
+        })),
         cashTendered: Number(form.cashTendered || 0),
         changeAmount,
       },
@@ -1245,7 +1345,10 @@ export default function PosVoucherPage({
         })),
         redeemedPoints: rewardRedeemed,
         payments: {
-          card: cardPayment,
+          bankPayments: bankPayments.map((row) => ({
+            ledgerId: row.ledgerId,
+            amount: row.amount,
+          })),
           cash: cashPayment,
           cashTendered: Number(form.cashTendered || 0),
         },
@@ -1445,80 +1548,26 @@ export default function PosVoucherPage({
                 {/* Phone */}
                 <div className="relative lg:col-span-3">
                   <Field label="Mobile number">
-                    <div className="relative">
-                      <input
-                        data-vnav="true"
-                        className={inputBase + " pr-9"}
-                        value={form.phone}
-                        onFocus={() => setShowCustomerSuggestions(true)}
-                        onChange={(e) => {
-                          setForm((c) => ({ ...c, phone: e.target.value }));
-                          setShowCustomerSuggestions(true);
-                          setActiveCustomerIndex(0);
-                        }}
-                        onKeyDown={(e) => {
-                          if (
-                            !showCustomerSuggestions ||
-                            customerSuggestions.length === 0
-                          )
-                            return;
-
-                          if (e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setActiveCustomerIndex((i) =>
-                              Math.min(i + 1, customerSuggestions.length - 1),
-                            );
-                          }
-
-                          if (e.key === "ArrowUp") {
-                            e.preventDefault();
-                            setActiveCustomerIndex((i) => Math.max(i - 1, 0));
-                          }
-
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            applyCustomer(
-                              customerSuggestions[activeCustomerIndex],
-                            );
-                          }
-
-                          if (e.key === "Escape") {
-                            setShowCustomerSuggestions(false);
-                          }
-                        }}
-                        placeholder="01XXXXXXXXX"
-                      />
-                      <UserSearch className="pointer-events-none absolute right-2.5 top-2 h-4 w-4 text-blue-500" />
-                    </div>
+                    <SearchableSelect
+                      options={customerPhoneOptions}
+                      value={form.phone}
+                      allowCustomValue
+                      onChange={(value) => {
+                        const selected = customerSuggestions.find(
+                          (customer) => String(customer.phone || "") === String(value),
+                        );
+                        if (selected) {
+                          applyCustomer(selected);
+                          return;
+                        }
+                        setForm((c) => ({ ...c, phone: value }));
+                        setShowCustomerSuggestions(true);
+                        setActiveCustomerIndex(0);
+                      }}
+                      placeholder="Search or enter mobile number"
+                      inputClassName="rounded border-slate-200 bg-slate-50 text-[13px] focus:border-blue-500 focus:bg-white"
+                    />
                   </Field>
-                  {/* {showCustomerSuggestions &&
-                    customerSuggestions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-                        {customerSuggestions.map((customer) => (
-                          <button
-                            key={customer._id}
-                            type="button"
-                            className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
-                            onClick={() => applyCustomer(customer)}
-                          >
-                            <div>
-                              <p className="text-[13px] font-medium text-slate-900">
-                                {customer.name}
-                              </p>
-                              <p className="text-[11px] text-slate-400">
-                                {customer.phone}
-                              </p>
-                            </div>
-                            <span className="rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                              {Number(
-                                customer.rewardPoints || 0,
-                              ).toLocaleString("en-IN")}{" "}
-                              pts
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )} */}
                 </div>
 
                 {/* Name */}
@@ -2004,27 +2053,57 @@ export default function PosVoucherPage({
                 details
               </h2>
               <div className="space-y-3">
-                <Field
-                  label={
-                    <span>
-                      Card payment{" "}
-                      <span className="text-[10px] text-slate-400">(F5)</span>
-                    </span>
-                  }
-                >
-                  <div className="relative">
-                    <CreditCard className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
-                    <input
-                      type="number"
-                      data-vnav="true"
-                      className={numInput + " pl-8"}
-                      value={form.cardPayment}
-                      onChange={(e) =>
-                        setForm((c) => ({ ...c, cardPayment: e.target.value }))
-                      }
-                    />
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <Label>Bank payment</Label>
+                    <button
+                      type="button"
+                      onClick={addBankPaymentRow}
+                      className="inline-flex items-center gap-1 rounded border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                    >
+                      <Plus className="h-3 w-3" /> Add bank
+                    </button>
                   </div>
-                </Field>
+                  <div className="space-y-2">
+                    {(form.bankPayments || [{ ...emptyBankPaymentRow }]).map(
+                      (row, index) => (
+                        <div
+                          key={`bank-${index}`}
+                          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_96px_28px]"
+                        >
+                          <SearchableSelect
+                            options={bankLedgerOptions}
+                            value={row.ledgerId}
+                            onChange={(value) =>
+                              updateBankPaymentRow(index, "ledgerId", value)
+                            }
+                            placeholder="Select bank ledger"
+                            inputClassName="rounded border-slate-200 bg-slate-50 text-[13px] focus:border-blue-500 focus:bg-white"
+                          />
+                          <input
+                            type="number"
+                            data-vnav="true"
+                            className={numInput}
+                            value={row.amount}
+                            disabled={!row.ledgerId}
+                            placeholder={row.ledgerId ? "0.00" : "Bank first"}
+                            onChange={(e) =>
+                              updateBankPaymentRow(index, "amount", e.target.value)
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeBankPaymentRow(index)}
+                            className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                            aria-label="Remove bank payment"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
                 <Field
                   label={
                     <span>

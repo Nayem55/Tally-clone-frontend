@@ -15,6 +15,7 @@ export default function SearchableSelect({
   optionClassName = "",
   dataNav = true,
   allowClear = false,
+  allowCustomValue = false,
   disabled = false,
 }) {
   const rootRef = useRef(null);
@@ -37,8 +38,13 @@ export default function SearchableSelect({
     if ((value === "" || value === null || value === undefined) && treatEmptyValueAsUnselected) {
       return null;
     }
-    return normalizedOptions.find((option) => String(option.value) === String(value)) || null;
-  }, [normalizedOptions, treatEmptyValueAsUnselected, value]);
+    const matchedOption =
+      normalizedOptions.find((option) => String(option.value) === String(value)) || null;
+    if (!matchedOption && allowCustomValue && value) {
+      return { value, label: String(value) };
+    }
+    return matchedOption;
+  }, [allowCustomValue, normalizedOptions, treatEmptyValueAsUnselected, value]);
 
   useEffect(() => {
     setQuery(selectedOption?.label || "");
@@ -121,6 +127,9 @@ export default function SearchableSelect({
           onChange={(event) => {
             if (disabled) return;
             setQuery(event.target.value);
+            if (allowCustomValue) {
+              onChange(event.target.value);
+            }
             if (selectedOption && event.target.value !== selectedOption.label && allowClear) {
               onChange("");
             }
