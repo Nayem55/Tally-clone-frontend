@@ -104,6 +104,7 @@ export default function PosVoucherPage({
   const [priceLevels, setPriceLevels] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [allLedgers, setAllLedgers] = useState([]);
+  const [salesLedgers, setSalesLedgers] = useState([]);
   const [defaults, setDefaults] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [importBusy, setImportBusy] = useState(false);
@@ -122,6 +123,7 @@ export default function PosVoucherPage({
     customerName: "",
     phone: "",
     salesPersonId: "",
+    salesLedger: "",
     address: "",
     note: "",
     additionalRows: [emptyAdjustmentRow],
@@ -154,6 +156,7 @@ export default function PosVoucherPage({
         defaultResponse,
         employeeResponse,
         balanceResponse,
+        salesLedgerResponse,
       ] = await Promise.all([
         api.get(`/companies/${effectiveCompanyId}/voucher-types`),
         api.get(`/companies/${effectiveCompanyId}/items`),
@@ -163,16 +166,22 @@ export default function PosVoucherPage({
         api.get(`/companies/${effectiveCompanyId}/ledgers/with-balances`, {
           params: { to: form.date },
         }),
+        api.get(`/companies/${effectiveCompanyId}/ledgers/by-group?names=Sales Accounts`),
       ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
       setEmployees(employeeResponse.data || []);
       setAllLedgers(balanceResponse.data || []);
+      setSalesLedgers(salesLedgerResponse.data || []);
       setDefaults(defaultResponse.data || {});
       const voucherType = voucherTypeResponse.data.find(
         (row) => row.name.toLowerCase() === "pos voucher",
       );
       setVoucherTypeId(voucherType?._id || "");
+      setForm((prev) => ({
+        ...prev,
+        salesLedger: prev.salesLedger || defaultResponse.data?.salesLedger?._id || "",
+      }));
     }
     loadMasters();
   }, [effectiveCompanyId, form.date]);
@@ -273,11 +282,22 @@ export default function PosVoucherPage({
     let alive = true;
 
     async function loadVoucherForEdit() {
-      if (!effectiveCompanyId || !editVoucherId || items.length === 0) return;
+      if (!effectiveCompanyId || !editVoucherId || items.length === 0 || allLedgers.length === 0) return;
       const response = await api.get(
         `/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`,
       );
       const voucher = response.data;
+      const selectedSalesLedgerId =
+        (voucher.lines || []).find((line) => {
+          if (!(Number(line.credit || 0) > 0)) return false;
+          const ledger = allLedgers.find(
+            (entry) => String(entry._id) === String(line.ledgerId || ""),
+          );
+          return (
+            String(ledger?.group?.name || "").trim().toLowerCase() ===
+            "sales accounts"
+          );
+        })?.ledgerId || "";
       if (!alive) return;
       setForm({
         number: voucher.number || "",
@@ -287,6 +307,9 @@ export default function PosVoucherPage({
         customerName: voucher.customerSnapshot?.name || "",
         phone: voucher.customerSnapshot?.phone || "",
         salesPersonId: String(voucher.salesMeta?.employeeId || ""),
+        salesLedger: String(
+          selectedSalesLedgerId || voucher.posMeta?.salesLedgerId || defaults.salesLedger?._id || ""
+        ),
         address: voucher.customerSnapshot?.address || "",
         note: voucher.narration || "",
         additionalRows:
@@ -319,7 +342,7 @@ export default function PosVoucherPage({
     return () => {
       alive = false;
     };
-  }, [effectiveCompanyId, editVoucherId, items.length]);
+  }, [effectiveCompanyId, editVoucherId, items.length, allLedgers, defaults.salesLedger?._id]);
 
   const selectedCompany = companies.find(
     (company) => String(company._id) === String(effectiveCompanyId),
@@ -332,6 +355,14 @@ export default function PosVoucherPage({
   const salesEmployees = useMemo(
     () => employees.filter(employeeBelongsToSalesRole),
     [employees],
+  );
+  const salesLedgerOptions = useMemo(
+    () =>
+      salesLedgers.map((ledger) => ({
+        value: String(ledger._id),
+        label: ledger.name,
+      })),
+    [salesLedgers],
   );
   const salesEmployeeOptions = useMemo(
     () =>
@@ -352,6 +383,10 @@ export default function PosVoucherPage({
     () => new Map(allLedgers.map((ledger) => [String(ledger._id), ledger])),
     [allLedgers],
   );
+  const selectedSalesLedger =
+    ledgerMap.get(String(form.salesLedger || "")) ||
+    salesLedgers.find((ledger) => String(ledger._id) === String(form.salesLedger || "")) ||
+    null;
   const expenseLedgerOptions = useMemo(
     () =>
       allLedgers
@@ -962,6 +997,8 @@ export default function PosVoucherPage({
     if (!form.customerName.trim()) return alert("Customer name is required");
     if (form.phone.replace(/\D/g, "").length < 6)
       return alert("Valid phone number is required");
+    if (!form.salesLedger && !defaults.salesLedger?._id)
+      return alert("Please select a sales ledger");
     if (validRows.length === 0) return alert("Please add at least one item");
     const incompleteAdjustment = (form.additionalRows || []).find(
       (row) => !row.ledgerId && Number(row.value || 0) !== 0,
@@ -995,7 +1032,7 @@ export default function PosVoucherPage({
         ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
         : []),
       {
-        ledgerId: defaults.salesLedger?._id || "",
+        ledgerId: form.salesLedger || defaults.salesLedger?._id || "",
         debit: 0,
         credit: subtotal,
       },
@@ -1057,6 +1094,7 @@ export default function PosVoucherPage({
         };
       }),
       posMeta: {
+        salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
         additionalAdjustments: adjustmentRows.map((row) => ({
           ledgerId: row.ledgerId,
           ledgerName: row.ledger?.name || "",
@@ -1109,7 +1147,7 @@ export default function PosVoucherPage({
                 selectedSalesPerson.personalDetails?.designation || "",
             }
           : {},
-        salesLedgerId: defaults.salesLedger?._id || "",
+        salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
         additionalAdjustments: adjustmentRows.map((row) => ({
           ledgerId: row.ledgerId,
           ledgerName: row.ledger?.name || "",
@@ -1285,6 +1323,34 @@ export default function PosVoucherPage({
                     setForm((current) => ({ ...current, date: value }))
                   }
                 />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Select Sales Ledger
+                  </label>
+                  <button
+                    type="button"
+                    className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                    onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                  >
+                    Add+
+                  </button>
+                </div>
+                <SearchableSelect
+                  options={salesLedgerOptions}
+                  value={form.salesLedger}
+                  onChange={(newValue) =>
+                    setForm((current) => ({
+                      ...current,
+                      salesLedger: newValue,
+                    }))
+                  }
+                  placeholder="Search sales ledger"
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  Selected: {selectedSalesLedger?.name || "Select a ledger under Sales Accounts"}
+                </p>
               </div>
             </div>
           </div>

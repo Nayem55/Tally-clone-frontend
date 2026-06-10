@@ -309,6 +309,10 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
     () => priceLevels.map((level) => ({ value: level._id, label: level.name || level.code })),
     [priceLevels]
   );
+  const salesLedgerOptions = useMemo(
+    () => salesLedgers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
+    [salesLedgers]
+  );
   const itemOptions = useMemo(
     () => [
       { value: END_OF_LIST, label: "End of List", meta: "" },
@@ -1065,6 +1069,27 @@ export default function SalesVoucher({ companyId, editVoucherId = "" }) {
               {priceLevels.find((level) => String(level._id) === String(activePriceLevelId))?.name ||
                 priceLevels.find((level) => String(level._id) === String(activePriceLevelId))?.code ||
                 (partyLedger?.priceLevelId ? "Party Fixed Price Level" : "Party Default / Not Applicable")}
+            </p>
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">Select Sales Ledger</label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+              >
+                Add+
+              </button>
+            </div>
+            <SearchableSelect
+              options={salesLedgerOptions}
+              value={form.salesLedger}
+              onChange={(newValue) => setForm((prev) => ({ ...prev, salesLedger: newValue }))}
+              placeholder="Search sales ledger"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Selected: {salesLedger?.name || "Select a ledger under Sales Accounts"}
             </p>
           </div>
         </div>
