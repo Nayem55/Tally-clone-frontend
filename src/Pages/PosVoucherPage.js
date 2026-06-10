@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  ChevronDown,
   CreditCard,
   Download,
+  Focus,
+  History,
+  Plus,
   Printer,
-  Search,
+  Receipt,
+  ScanLine,
   ShoppingCart,
   Trash2,
   Upload,
-  UserRoundSearch,
+  UserSearch,
   X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -32,19 +37,13 @@ import {
   exportWorkbookToFile,
   normalizeExcelNameKey,
   normalizeExcelText,
-  normalizeImportedExcelDate,
   padExcelRows,
-  parseFieldValueMap,
   parseWorksheetRows,
 } from "../utils/voucherExcel";
 
 const POS_TEMPLATE_SHEET = "POS Voucher";
 const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
-const emptyAdjustmentRow = {
-  ledgerId: "",
-  mode: "fixed",
-  value: "",
-};
+const emptyAdjustmentRow = { ledgerId: "", mode: "fixed", value: "" };
 
 function formatMaskedPhone(value = "") {
   const digits = String(value || "").replace(/\D/g, "");
@@ -64,7 +63,11 @@ function formatInvoiceTime24(value) {
 }
 
 function employeeBelongsToSalesRole(employee = {}) {
-  return String(employee.under || "").trim().toLowerCase() === "sales";
+  return (
+    String(employee.under || "")
+      .trim()
+      .toLowerCase() === "sales"
+  );
 }
 
 function formatMoney(value, symbol = "Tk") {
@@ -81,11 +84,145 @@ function toWords(value) {
 }
 
 function normalizeMonthDayInput(value = "") {
-  const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+  const digits = String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 4);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
+/* ─── tiny shared primitives ─────────────────────────────────────── */
+
+function Label({ children, htmlFor }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+    >
+      {children}
+    </label>
+  );
+}
+
+function Field({ label, htmlFor, action, children }) {
+  return (
+    <div>
+      {(label || action) && (
+        <div className="mb-1 flex items-center justify-between gap-2">
+          {label && <Label htmlFor={htmlFor}>{label}</Label>}
+          {action}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function AddLink({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 rounded border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+    >
+      <Plus className="h-3 w-3" /> Add
+    </button>
+  );
+}
+
+const inputBase =
+  "w-full rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500/20 placeholder:text-slate-400";
+const numInput = inputBase + " text-right";
+const readonlyInput =
+  inputBase + " cursor-not-allowed bg-slate-100 text-slate-500";
+
+/* ─── Voucher-number field with dropdown suggestion ─────────────── */
+function VoucherNumberInput({ value, onChange, suggestedNumber }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  const suggestions = useMemo(() => {
+    const base = suggestedNumber || value;
+    if (!base) return [];
+    const match = base.match(/^(.*?)(\d+)$/);
+    if (!match) return [{ label: base, sub: "Current" }];
+    const prefix = match[1];
+    const num = parseInt(match[2], 10);
+    const pad = match[2].length;
+    return [
+      { label: base, sub: "Next auto number" },
+      ...(num > 1
+        ? [
+            {
+              label: `${prefix}${String(num - 1).padStart(pad, "0")}`,
+              sub: "Previous",
+            },
+          ]
+        : []),
+    ];
+  }, [suggestedNumber, value]);
+
+  useEffect(() => {
+    function outside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, []);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="flex">
+        <input
+          data-vnav="true"
+          className={inputBase + " rounded-r-none pr-8"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => suggestions.length > 0 && setOpen(true)}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center justify-center rounded-r border border-l-0 border-slate-200 bg-slate-50 px-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+          aria-label="Show number suggestions"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {open && suggestions.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded border border-slate-200 bg-white shadow-lg overflow-hidden">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(s.label);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] hover:bg-slate-50 ${
+                i === 0 ? "bg-blue-50/60" : ""
+              }`}
+            >
+              <span className="font-medium text-slate-900">{s.label}</span>
+              <span className="text-[11px] text-slate-400">{s.sub}</span>
+              {i === 0 && (
+                <span className="ml-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                  Auto
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main Page ──────────────────────────────────────────────────── */
 export default function PosVoucherPage({
   editVoucherId = "",
   companyIdOverride = "",
@@ -102,9 +239,10 @@ export default function PosVoucherPage({
   const { companies, companyId } = useActiveCompany();
   const effectiveCompanyId = companyIdOverride || companyId;
   const companyName =
-    companies.find((entry) => String(entry._id) === String(effectiveCompanyId))
-      ?.name || "";
+    companies.find((e) => String(e._id) === String(effectiveCompanyId))?.name ||
+    "";
   const isEditMode = Boolean(editVoucherId);
+
   const [voucherTypeId, setVoucherTypeId] = useState("");
   const [items, setItems] = useState([]);
   const [priceLevels, setPriceLevels] = useState([]);
@@ -123,6 +261,8 @@ export default function PosVoucherPage({
   });
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [activeCustomerIndex, setActiveCustomerIndex] = useState(0);
+
   const [form, setForm] = useState({
     number: "",
     date: formatDateForInput(new Date()),
@@ -149,11 +289,7 @@ export default function PosVoucherPage({
     disabled: isEditMode,
   });
 
-  const inputClass =
-    "w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-[14px] outline-none focus:border-[#3f83f8]";
-  const numberInputClass =
-    "w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 text-right text-[14px] outline-none focus:border-[#3f83f8]";
-
+  /* ── master data load ── */
   useEffect(() => {
     async function loadMasters() {
       if (!effectiveCompanyId) return;
@@ -174,7 +310,9 @@ export default function PosVoucherPage({
         api.get(`/companies/${effectiveCompanyId}/ledgers/with-balances`, {
           params: { to: form.date },
         }),
-        api.get(`/companies/${effectiveCompanyId}/ledgers/by-group?names=Sales Accounts`),
+        api.get(
+          `/companies/${effectiveCompanyId}/ledgers/by-group?names=Sales Accounts`,
+        ),
       ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
@@ -183,12 +321,13 @@ export default function PosVoucherPage({
       setSalesLedgers(salesLedgerResponse.data || []);
       setDefaults(defaultResponse.data || {});
       const voucherType = voucherTypeResponse.data.find(
-        (row) => row.name.toLowerCase() === "pos voucher",
+        (r) => r.name.toLowerCase() === "pos voucher",
       );
       setVoucherTypeId(voucherType?._id || "");
       setForm((prev) => ({
         ...prev,
-        salesLedger: prev.salesLedger || defaultResponse.data?.salesLedger?._id || "",
+        salesLedger:
+          prev.salesLedger || defaultResponse.data?.salesLedger?._id || "",
       }));
     }
     loadMasters();
@@ -202,7 +341,12 @@ export default function PosVoucherPage({
   }, [suggestedNumber, isEditMode]);
 
   useEffect(() => {
-    if (isEditMode || !effectiveCompanyId || !location.state?.restorePosVoucherDraft) return;
+    if (
+      isEditMode ||
+      !effectiveCompanyId ||
+      !location.state?.restorePosVoucherDraft
+    )
+      return;
     try {
       const raw = window.sessionStorage.getItem(POS_VOUCHER_RETURN_STORAGE_KEY);
       if (!raw) return;
@@ -212,32 +356,29 @@ export default function PosVoucherPage({
       setForm(draft.form);
       setStatusMessage(draft.statusMessage || null);
       window.sessionStorage.removeItem(POS_VOUCHER_RETURN_STORAGE_KEY);
-    } catch (error) {
-      console.error("Unable to restore POS voucher draft:", error);
+    } catch (err) {
+      console.error("Unable to restore POS voucher draft:", err);
     }
   }, [effectiveCompanyId, isEditMode, location.state]);
 
+  /* ── customer phone search ── */
   useEffect(() => {
     const phone = form.phone.replace(/\D/g, "");
     if (!effectiveCompanyId || phone.length < 6) {
       setCustomerSuggestions([]);
       return;
     }
-
     const handle = setTimeout(async () => {
-      const response = await api.get(
-        `/companies/${effectiveCompanyId}/customers`,
-        {
-          params: { phone, limit: 8 },
-        },
-      );
-      setCustomerSuggestions(response.data);
+      const res = await api.get(`/companies/${effectiveCompanyId}/customers`, {
+        params: { phone, limit: 8 },
+      });
+      setCustomerSuggestions(res.data);
       setShowCustomerSuggestions(true);
     }, 250);
-
     return () => clearTimeout(handle);
   }, [effectiveCompanyId, form.phone]);
 
+  /* ── purchase history ── */
   useEffect(() => {
     const phone = form.phone.replace(/\D/g, "");
     if (!effectiveCompanyId || phone.length < 6) {
@@ -245,36 +386,32 @@ export default function PosVoucherPage({
       setHistoryLoading(false);
       return;
     }
-
     let alive = true;
     setHistoryLoading(true);
     const handle = setTimeout(async () => {
       try {
-        const response = await api.get(
+        const res = await api.get(
           `/companies/${effectiveCompanyId}/customers/purchase-history`,
-          {
-            params: { phone },
-          },
+          { params: { phone } },
         );
         if (!alive) return;
         setCustomerInsight({
-          customer: response.data?.customer || null,
-          purchases: response.data?.purchases || [],
+          customer: res.data?.customer || null,
+          purchases: res.data?.purchases || [],
         });
-      } catch (error) {
-        if (!alive) return;
-        setCustomerInsight({ customer: null, purchases: [] });
+      } catch {
+        if (alive) setCustomerInsight({ customer: null, purchases: [] });
       } finally {
         if (alive) setHistoryLoading(false);
       }
     }, 250);
-
     return () => {
       alive = false;
       clearTimeout(handle);
     };
   }, [effectiveCompanyId, form.phone]);
 
+  /* ── auto-focus date on mount ── */
   useEffect(() => {
     const handle = window.requestAnimationFrame(() => {
       const target = containerRef.current?.querySelector(
@@ -286,24 +423,31 @@ export default function PosVoucherPage({
     return () => window.cancelAnimationFrame(handle);
   }, []);
 
+  /* ── load voucher for edit ── */
   useEffect(() => {
     let alive = true;
-
     async function loadVoucherForEdit() {
-      if (!effectiveCompanyId || !editVoucherId || items.length === 0 || allLedgers.length === 0) return;
-      const response = await api.get(
+      if (
+        !effectiveCompanyId ||
+        !editVoucherId ||
+        items.length === 0 ||
+        allLedgers.length === 0
+      )
+        return;
+      const res = await api.get(
         `/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`,
       );
-      const voucher = response.data;
+      const voucher = res.data;
       const selectedSalesLedgerId =
         (voucher.lines || []).find((line) => {
           if (!(Number(line.credit || 0) > 0)) return false;
           const ledger = allLedgers.find(
-            (entry) => String(entry._id) === String(line.ledgerId || ""),
+            (e) => String(e._id) === String(line.ledgerId || ""),
           );
           return (
-            String(ledger?.group?.name || "").trim().toLowerCase() ===
-            "sales accounts"
+            String(ledger?.group?.name || "")
+              .trim()
+              .toLowerCase() === "sales accounts"
           );
         })?.ledgerId || "";
       if (!alive) return;
@@ -316,7 +460,10 @@ export default function PosVoucherPage({
         phone: voucher.customerSnapshot?.phone || "",
         salesPersonId: String(voucher.salesMeta?.employeeId || ""),
         salesLedger: String(
-          selectedSalesLedgerId || voucher.posMeta?.salesLedgerId || defaults.salesLedger?._id || ""
+          selectedSalesLedgerId ||
+            voucher.posMeta?.salesLedgerId ||
+            defaults.salesLedger?._id ||
+            "",
         ),
         address: voucher.customerSnapshot?.address || "",
         birthDate: voucher.customerSnapshot?.birthDate || "",
@@ -337,90 +484,90 @@ export default function PosVoucherPage({
         cardPayment: String(voucher.posMeta?.cardAmount || ""),
         cashPayment: String(voucher.posMeta?.cashAmount || ""),
         cashTendered: String(voucher.posMeta?.cashTendered || ""),
-        rows:
-          (voucher.inventoryLines || []).map((line) => ({
-            itemId: String(line.itemId || ""),
-            qty: String(line.qty || 1),
-            rate: Number(line.rate || 0),
-            mrpRate: Number(line.mrpRate || line.rate || 0),
-            discountPercent: Number(line.discountValue || 0),
-          })) || [],
+        rows: (voucher.inventoryLines || []).map((line) => ({
+          itemId: String(line.itemId || ""),
+          qty: String(line.qty || 1),
+          rate: Number(line.rate || 0),
+          mrpRate: Number(line.mrpRate || line.rate || 0),
+          discountPercent: Number(line.discountValue || 0),
+        })),
       });
     }
-
     loadVoucherForEdit();
     return () => {
       alive = false;
     };
-  }, [effectiveCompanyId, editVoucherId, items.length, allLedgers, defaults.salesLedger?._id]);
+  }, [
+    effectiveCompanyId,
+    editVoucherId,
+    items.length,
+    allLedgers,
+    defaults.salesLedger?._id,
+  ]);
 
+  /* ── derived data ── */
   const selectedCompany = companies.find(
-    (company) => String(company._id) === String(effectiveCompanyId),
+    (c) => String(c._id) === String(effectiveCompanyId),
   );
   const currency = getCompanyCurrency(selectedCompany);
   const mrpPriceLevelId =
-    priceLevels.find(
-      (level) => String(level.code || "").toUpperCase() === "MRP",
-    )?._id || "";
+    priceLevels.find((l) => String(l.code || "").toUpperCase() === "MRP")
+      ?._id || "";
+
   const salesEmployees = useMemo(
     () => employees.filter(employeeBelongsToSalesRole),
     [employees],
   );
+
   const salesLedgerOptions = useMemo(
-    () =>
-      salesLedgers.map((ledger) => ({
-        value: String(ledger._id),
-        label: ledger.name,
-      })),
+    () => salesLedgers.map((l) => ({ value: String(l._id), label: l.name })),
     [salesLedgers],
   );
   const salesEmployeeOptions = useMemo(
     () =>
-      salesEmployees.map((employee) => ({
-        value: String(employee._id),
-        label: employee.name || employee.employeeNumber || "Unnamed Employee",
+      salesEmployees.map((e) => ({
+        value: String(e._id),
+        label: e.name || e.employeeNumber || "Unnamed",
       })),
     [salesEmployees],
   );
   const selectedSalesPerson = useMemo(
     () =>
       salesEmployees.find(
-        (employee) => String(employee._id) === String(form.salesPersonId),
+        (e) => String(e._id) === String(form.salesPersonId),
       ) || null,
     [salesEmployees, form.salesPersonId],
   );
   const ledgerMap = useMemo(
-    () => new Map(allLedgers.map((ledger) => [String(ledger._id), ledger])),
+    () => new Map(allLedgers.map((l) => [String(l._id), l])),
     [allLedgers],
   );
   const selectedSalesLedger =
     ledgerMap.get(String(form.salesLedger || "")) ||
-    salesLedgers.find((ledger) => String(ledger._id) === String(form.salesLedger || "")) ||
+    salesLedgers.find(
+      (l) => String(l._id) === String(form.salesLedger || ""),
+    ) ||
     null;
+
   const expenseLedgerOptions = useMemo(
     () =>
       allLedgers
         .filter(
-          (ledger) =>
-            String(ledger.group?.nature || "").toUpperCase() === "EXPENSE",
+          (l) => String(l.group?.nature || "").toUpperCase() === "EXPENSE",
         )
-        .map((ledger) => ({
-          value: String(ledger._id),
-          label: ledger.name,
-        })),
+        .map((l) => ({ value: String(l._id), label: l.name })),
     [allLedgers],
   );
   const itemNameMap = useMemo(
-    () => new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
+    () =>
+      new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
     [items],
   );
+
   const selectedCustomer = customerSuggestions.find(
-      (customer) => customer.phone === form.phone.replace(/\D/g, ""),
-    );
-  const activeCustomer =
-    customerInsight.customer ||
-    selectedCustomer ||
-    null;
+    (c) => c.phone === form.phone.replace(/\D/g, ""),
+  );
+  const activeCustomer = customerInsight.customer || selectedCustomer || null;
 
   const filteredItems = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -429,169 +576,25 @@ export default function PosVoucherPage({
       .filter((item) =>
         [item.name, item.alias, item.barcode, ...(item.secondaryAliases || [])]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query)),
+          .some((v) => String(v).toLowerCase().includes(query)),
       )
       .slice(0, 8);
   }, [items, searchTerm]);
 
+  /* ── calculations ── */
   const lineAmount = (row) => {
     const gross = Number(row.qty || 0) * Number(row.rate || 0);
     const discount = gross * (Number(row.discountPercent || 0) / 100);
     return Number((gross - discount).toFixed(2));
   };
 
-  const focusSearchInput = () => {
-    window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select?.();
-    });
-  };
-
-  const findItemByScanValue = (value) => {
-    const code = String(value || "").trim().toLowerCase();
-    if (!code) return null;
-
-    return (
-      items.find(
-        (item) =>
-          String(item.barcode || "").trim().toLowerCase() === code ||
-          String(item.alias || "").trim().toLowerCase() === code ||
-          (item.secondaryAliases || []).some(
-            (alias) => String(alias || "").trim().toLowerCase() === code,
-          ),
-      ) ||
-      items.find(
-        (item) => String(item.name || "").trim().toLowerCase() === code,
-      ) ||
-      null
-    );
-  };
-
-  const addItemById = (itemId) => {
-    const item = items.find((entry) => entry._id === itemId);
-    if (!item) return;
-    const mrpRate = resolveItemRateByDate(item, mrpPriceLevelId, form.date);
-
-    setForm((current) => {
-      const existingIndex = current.rows.findIndex(
-        (row) => String(row.itemId) === String(item._id),
-      );
-
-      if (existingIndex >= 0) {
-        const nextRows = [...current.rows];
-        const existingRow = nextRows[existingIndex];
-        nextRows[existingIndex] = {
-          ...existingRow,
-          qty: String(Number(existingRow.qty || 0) + 1),
-        };
-        return { ...current, rows: nextRows };
-      }
-
-      return {
-        ...current,
-        rows: [
-          ...current.rows,
-          {
-            itemId: item._id,
-            qty: "1",
-            rate: mrpRate,
-            mrpRate,
-            discountPercent: 0,
-          },
-        ],
-      };
-    });
-
-    setSearchTerm("");
-    focusSearchInput();
-  };
-
-  const handleBarcodeSubmit = (value) => {
-    const scanValue = String(value || "").trim();
-    if (!scanValue) return false;
-
-    const exactItem = findItemByScanValue(scanValue);
-    if (exactItem) {
-      addItemById(exactItem._id);
-      return true;
-    }
-
-    const singleFilteredItem =
-      filteredItems.length === 1 ? filteredItems[0] : null;
-
-    if (singleFilteredItem) {
-      addItemById(singleFilteredItem._id);
-      return true;
-    }
-
-    setSearchTerm(scanValue);
-    focusSearchInput();
-    return false;
-  };
-
-  const addRow = () => {
-    focusSearchInput();
-  };
-
-  const addAdjustmentRow = () => {
-    setForm((current) => ({
-      ...current,
-      additionalRows: [
-        ...(current.additionalRows || []),
-        { ...emptyAdjustmentRow },
-      ],
-    }));
-  };
-
-  const updateRow = (index, field, value) => {
-    setForm((current) => {
-      const nextRows = [...current.rows];
-      const row = { ...nextRows[index], [field]: value };
-      nextRows[index] = row;
-      return { ...current, rows: nextRows };
-    });
-  };
-
-  const removeRow = (index) => {
-    setForm((current) => ({
-      ...current,
-      rows: current.rows.filter((_, idx) => idx !== index),
-    }));
-    focusSearchInput();
-  };
-
-  const updateAdjustmentRow = (index, field, value) => {
-    setForm((current) => {
-      const nextRows = [...(current.additionalRows || [])];
-      nextRows[index] = {
-        ...(nextRows[index] || emptyAdjustmentRow),
-        [field]: value,
-      };
-      return { ...current, additionalRows: nextRows };
-    });
-  };
-
-  const removeAdjustmentRow = (index) => {
-    setForm((current) => {
-      const nextRows = (current.additionalRows || []).filter(
-        (_, rowIndex) => rowIndex !== index,
-      );
-      return {
-        ...current,
-        additionalRows:
-          nextRows.length > 0 ? nextRows : [{ ...emptyAdjustmentRow }],
-      };
-    });
-  };
-
-  const validRows = form.rows.filter(
-    (row) => row.itemId && Number(row.qty) > 0,
-  );
-  const subtotal = validRows.reduce((sum, row) => sum + lineAmount(row), 0);
-  const rowDiscountTotal = validRows.reduce((sum, row) => {
-    const gross = Number(row.qty || 0) * Number(row.rate || 0);
-    return sum + gross * (Number(row.discountPercent || 0) / 100);
+  const validRows = form.rows.filter((r) => r.itemId && Number(r.qty) > 0);
+  const subtotal = validRows.reduce((s, r) => s + lineAmount(r), 0);
+  const rowDiscountTotal = validRows.reduce((s, r) => {
+    const gross = Number(r.qty || 0) * Number(r.rate || 0);
+    return s + gross * (Number(r.discountPercent || 0) / 100);
   }, 0);
+
   const adjustmentRows = (form.additionalRows || [])
     .map((row) => {
       const ledger = ledgerMap.get(String(row.ledgerId || "")) || null;
@@ -601,16 +604,12 @@ export default function PosVoucherPage({
         mode === "percentage"
           ? Number(((subtotal * rawValue) / 100).toFixed(2))
           : Number(rawValue.toFixed(2));
-      return {
-        ...row,
-        ledger,
-        nature: "EXPENSE",
-        calculatedAmount,
-      };
+      return { ...row, ledger, nature: "EXPENSE", calculatedAmount };
     })
-    .filter((row) => row.ledgerId);
+    .filter((r) => r.ledgerId);
+
   const additionalExpenseAmount = adjustmentRows.reduce(
-    (sum, row) => sum + row.calculatedAmount,
+    (s, r) => s + r.calculatedAmount,
     0,
   );
   const rewardRedeemed = Number(
@@ -620,13 +619,9 @@ export default function PosVoucherPage({
     0,
     Number((subtotal - additionalExpenseAmount).toFixed(2)),
   );
-  const totalItems = validRows.reduce(
-    (sum, row) => sum + Number(row.qty || 0),
-    0,
-  );
+  const totalItems = validRows.reduce((s, r) => s + Number(r.qty || 0), 0);
   const rewardToEarn = validRows.reduce(
-    (sum, row) =>
-      sum + Number(row.mrpRate || row.rate || 0) * Number(row.qty || 0),
+    (s, r) => s + Number(r.mrpRate || r.rate || 0) * Number(r.qty || 0),
     0,
   );
   const cardPayment = Number(form.cardPayment || 0);
@@ -635,22 +630,19 @@ export default function PosVoucherPage({
     0,
     Number(form.cashTendered || 0) - cashPayment,
   );
-  const customerLine = [
-    form.customerName,
-    formatMaskedPhone(form.phone),
-  ]
+  const customerLine = [form.customerName, formatMaskedPhone(form.phone)]
     .filter(Boolean)
     .join(" ");
   const customerPurchases = customerInsight.purchases || [];
+
+  /* ── print data ── */
   const printData = useMemo(() => {
     const voucherDate = form.date ? new Date(form.date) : new Date();
-    const formatCompactMoney = (value) =>
-      Number(value || 0).toLocaleString("en-IN", {
+    const fmt = (v) =>
+      Number(v || 0).toLocaleString("en-IN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-    const promotionAmount = rowDiscountTotal;
-
     return {
       documentTitle: `POS Invoice - ${form.number || "Preview"}`,
       voucherTitle: "Invoice",
@@ -658,7 +650,11 @@ export default function PosVoucherPage({
         selectedCompany?.mailingName || selectedCompany?.name || "Company",
       companyLines: [
         selectedCompany?.address || "",
-        [selectedCompany?.city, selectedCompany?.state, selectedCompany?.country]
+        [
+          selectedCompany?.city,
+          selectedCompany?.state,
+          selectedCompany?.country,
+        ]
           .filter(Boolean)
           .join(", "),
         selectedCompany?.mobile
@@ -679,42 +675,35 @@ export default function PosVoucherPage({
       userName: "Admin",
       buyerLine: customerLine || "POS Sales",
       items: validRows.map((row) => {
-        const item = items.find((entry) => entry._id === row.itemId);
+        const item = items.find((e) => e._id === row.itemId);
         return {
           description: item?.name || "-",
           qty: String(Number(row.qty || 0)),
-          rate: formatCompactMoney(row.rate),
-          amount: formatCompactMoney(lineAmount(row)),
+          rate: fmt(row.rate),
+          amount: fmt(lineAmount(row)),
         };
       }),
       discountLine:
-        promotionAmount > 0
-          ? {
-              label: "Product Promotion (-)",
-              value: formatCompactMoney(promotionAmount),
-            }
+        rowDiscountTotal > 0
+          ? { label: "Product Promotion (-)", value: fmt(rowDiscountTotal) }
           : null,
       adjustmentLines: adjustmentRows
-        .filter((row) => Number(row.calculatedAmount || 0) !== 0)
-        .map((row) => ({
-          label: row.ledger?.name || "Additional Expense",
-          value: formatCompactMoney(row.calculatedAmount),
+        .filter((r) => Number(r.calculatedAmount || 0) !== 0)
+        .map((r) => ({
+          label: r.ledger?.name || "Additional Expense",
+          value: fmt(r.calculatedAmount),
         })),
-      totalText: formatCompactMoney(totalAmount),
+      totalText: fmt(totalAmount),
       totalQtyText: String(totalItems),
       payments: [
         ...(cardPayment > 0
-          ? [{ label: "Card :", value: formatCompactMoney(cardPayment) }]
+          ? [{ label: "Card :", value: fmt(cardPayment) }]
           : []),
-        { label: "Cash :", value: formatCompactMoney(cashPayment) },
-        {
-          label: "Cash Tendered :",
-          value: formatCompactMoney(form.cashTendered || 0),
-        },
-        { label: "Balance :", value: formatCompactMoney(changeAmount) },
-        { label: "Total Paid", value: formatCompactMoney(totalAmount) },
+        { label: "Cash :", value: fmt(cashPayment) },
+        { label: "Cash Tendered :", value: fmt(form.cashTendered || 0) },
+        { label: "Balance :", value: fmt(changeAmount) },
+        { label: "Total Paid", value: fmt(totalAmount) },
       ],
-      // customerLine,
       footerLines: [
         "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.",
         `Thank you for shopping at ${selectedCompany?.name || "our store"}. Your business is greatly appreciated.`,
@@ -722,11 +711,7 @@ export default function PosVoucherPage({
     };
   }, [
     selectedCompany,
-    form.number,
-    form.date,
-    form.customerName,
-    form.phone,
-    form.cashTendered,
+    form,
     validRows,
     items,
     rowDiscountTotal,
@@ -739,35 +724,28 @@ export default function PosVoucherPage({
     customerLine,
   ]);
 
+  /* ── auto payment split ── */
   useEffect(() => {
-    const safeCardPayment = Math.min(
+    const safeCard = Math.min(
       Math.max(0, Number(form.cardPayment || 0)),
       totalAmount,
     );
-    const autoCashPayment = Math.max(
-      0,
-      Number((totalAmount - safeCardPayment).toFixed(2)),
-    );
-    const nextCardPayment = safeCardPayment > 0 ? String(safeCardPayment) : "";
-    const nextCashPayment = String(autoCashPayment);
-
+    const autoCash = Math.max(0, Number((totalAmount - safeCard).toFixed(2)));
+    const nextCard = safeCard > 0 ? String(safeCard) : "";
+    const nextCash = String(autoCash);
     if (
-      Number(form.cardPayment || 0) !== safeCardPayment ||
-      String(form.cashPayment) !== nextCashPayment
+      Number(form.cardPayment || 0) !== safeCard ||
+      String(form.cashPayment) !== nextCash
     ) {
-      setForm((current) => ({
-        ...current,
-        cardPayment: nextCardPayment,
-        cashPayment: nextCashPayment,
-      }));
+      setForm((c) => ({ ...c, cardPayment: nextCard, cashPayment: nextCash }));
     }
-  }, [totalAmount, form.cardPayment, form.cashPayment]);
+  }, [totalAmount, form.cardPayment]);
 
+  /* ── global scanner ── */
   useEffect(() => {
     const handleGlobalScannerInput = (event) => {
       if (showSaveConfirm) return;
       if (event.ctrlKey || event.altKey || event.metaKey) return;
-
       const activeElement = document.activeElement;
       const activeTag = activeElement?.tagName?.toLowerCase();
       const isSearchFocused = activeElement === searchInputRef.current;
@@ -780,73 +758,182 @@ export default function PosVoucherPage({
       if (event.key === "Enter") {
         const bufferedCode = scannerBufferRef.current.trim();
         scannerBufferRef.current = "";
-
         if (scannerTimerRef.current) {
           window.clearTimeout(scannerTimerRef.current);
           scannerTimerRef.current = null;
         }
-
         if (bufferedCode.length >= 4) {
           event.preventDefault();
           handleBarcodeSubmit(bufferedCode);
           return;
         }
-
         if (isSearchFocused && searchTerm.trim()) {
           event.preventDefault();
           handleBarcodeSubmit(searchTerm);
           return;
         }
-
         return;
       }
-
       if (event?.key?.length !== 1) return;
-
       const now = Date.now();
       const elapsed = now - scannerLastKeyTimeRef.current;
       scannerLastKeyTimeRef.current = now;
-
-      if (elapsed > 80) {
-        scannerBufferRef.current = "";
-      }
-
+      if (elapsed > 80) scannerBufferRef.current = "";
       scannerBufferRef.current += event.key;
-
-      if (scannerTimerRef.current) {
-        window.clearTimeout(scannerTimerRef.current);
-      }
-
+      if (scannerTimerRef.current) window.clearTimeout(scannerTimerRef.current);
       scannerTimerRef.current = window.setTimeout(() => {
         scannerBufferRef.current = "";
         scannerTimerRef.current = null;
       }, 120);
-
-      const looksLikeScannerInput =
+      const looksLikeScanner =
         scannerBufferRef.current.length >= 4 && elapsed > 0 && elapsed <= 80;
-
-      if (looksLikeScannerInput && !isSearchFocused) {
-        searchInputRef.current?.focus();
-      }
-
-      if (looksLikeScannerInput && !isSearchFocused && !isTypingInEditable) {
+      if (looksLikeScanner && !isSearchFocused) searchInputRef.current?.focus();
+      if (looksLikeScanner && !isSearchFocused && !isTypingInEditable)
         setSearchTerm(scannerBufferRef.current);
-      }
     };
-
     window.addEventListener("keydown", handleGlobalScannerInput, true);
-
     return () => {
       window.removeEventListener("keydown", handleGlobalScannerInput, true);
-      if (scannerTimerRef.current) {
-        window.clearTimeout(scannerTimerRef.current);
-      }
+      if (scannerTimerRef.current) window.clearTimeout(scannerTimerRef.current);
     };
   }, [filteredItems, items, searchTerm, showSaveConfirm]);
 
+  /* ── helpers ── */
+  const focusSearchInput = () => {
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select?.();
+    });
+  };
+
+  const findItemByScanValue = (value) => {
+    const code = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (!code) return null;
+    return (
+      items.find(
+        (item) =>
+          String(item.barcode || "")
+            .trim()
+            .toLowerCase() === code ||
+          String(item.alias || "")
+            .trim()
+            .toLowerCase() === code ||
+          (item.secondaryAliases || []).some(
+            (a) =>
+              String(a || "")
+                .trim()
+                .toLowerCase() === code,
+          ),
+      ) ||
+      items.find(
+        (item) =>
+          String(item.name || "")
+            .trim()
+            .toLowerCase() === code,
+      ) ||
+      null
+    );
+  };
+
+  const addItemById = (itemId) => {
+    const item = items.find((e) => e._id === itemId);
+    if (!item) return;
+    const mrpRate = resolveItemRateByDate(item, mrpPriceLevelId, form.date);
+    setForm((current) => {
+      const existingIndex = current.rows.findIndex(
+        (r) => String(r.itemId) === String(item._id),
+      );
+      if (existingIndex >= 0) {
+        const nextRows = [...current.rows];
+        nextRows[existingIndex] = {
+          ...nextRows[existingIndex],
+          qty: String(Number(nextRows[existingIndex].qty || 0) + 1),
+        };
+        return { ...current, rows: nextRows };
+      }
+      return {
+        ...current,
+        rows: [
+          ...current.rows,
+          {
+            itemId: item._id,
+            qty: "1",
+            rate: mrpRate,
+            mrpRate,
+            discountPercent: 0,
+          },
+        ],
+      };
+    });
+    setSearchTerm("");
+    focusSearchInput();
+  };
+
+  const handleBarcodeSubmit = (value) => {
+    const scanValue = String(value || "").trim();
+    if (!scanValue) return false;
+    const exactItem = findItemByScanValue(scanValue);
+    if (exactItem) {
+      addItemById(exactItem._id);
+      return true;
+    }
+    const single = filteredItems.length === 1 ? filteredItems[0] : null;
+    if (single) {
+      addItemById(single._id);
+      return true;
+    }
+    setSearchTerm(scanValue);
+    focusSearchInput();
+    return false;
+  };
+
+  const addAdjustmentRow = () => {
+    setForm((c) => ({
+      ...c,
+      additionalRows: [...(c.additionalRows || []), { ...emptyAdjustmentRow }],
+    }));
+  };
+
+  const updateRow = (index, field, value) => {
+    setForm((c) => {
+      const nextRows = [...c.rows];
+      nextRows[index] = { ...nextRows[index], [field]: value };
+      return { ...c, rows: nextRows };
+    });
+  };
+
+  const removeRow = (index) => {
+    setForm((c) => ({ ...c, rows: c.rows.filter((_, i) => i !== index) }));
+    focusSearchInput();
+  };
+
+  const updateAdjustmentRow = (index, field, value) => {
+    setForm((c) => {
+      const nextRows = [...(c.additionalRows || [])];
+      nextRows[index] = {
+        ...(nextRows[index] || emptyAdjustmentRow),
+        [field]: value,
+      };
+      return { ...c, additionalRows: nextRows };
+    });
+  };
+
+  const removeAdjustmentRow = (index) => {
+    setForm((c) => {
+      const nextRows = (c.additionalRows || []).filter((_, i) => i !== index);
+      return {
+        ...c,
+        additionalRows:
+          nextRows.length > 0 ? nextRows : [{ ...emptyAdjustmentRow }],
+      };
+    });
+  };
+
   const applyCustomer = (customer) => {
-    setForm((current) => ({
-      ...current,
+    setForm((c) => ({
+      ...c,
       customerName: customer.name || "",
       phone: customer.phone || "",
       address: customer.address || "",
@@ -854,9 +941,11 @@ export default function PosVoucherPage({
       anniversary: customer.anniversary || "",
     }));
     setShowCustomerSuggestions(false);
+    setActiveCustomerIndex(0);
     focusSearchInput();
   };
 
+  /* ── excel helpers ── */
   const buildTemplateWorkbook = () => {
     const workbook = XLSX.utils.book_new();
     const rows = [
@@ -885,13 +974,15 @@ export default function PosVoucherPage({
 
   const handleExportTemplate = () => {
     const workbook = buildTemplateWorkbook();
-    const companySlug =
-      normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") || "company";
-    exportWorkbookToFile(workbook, `${companySlug}-pos-voucher-import-template.xlsx`);
+    const slug =
+      normalizeExcelNameKey(companyName).replace(/[^a-z0-9]+/g, "-") ||
+      "company";
+    exportWorkbookToFile(workbook, `${slug}-pos-voucher-import-template.xlsx`);
     setStatusMessage({
       tone: "success",
-      title: "Demo Excel exported",
-      description: "Fill the same structure and import it back to load item rows into the form.",
+      title: "Template exported",
+      description:
+        "Fill the same structure and import it back to load items into the form.",
     });
   };
 
@@ -905,55 +996,56 @@ export default function PosVoucherPage({
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const rows = parseWorksheetRows(workbook, POS_TEMPLATE_SHEET);
       const headerIndex = rows.findIndex(
-        (row) =>
-          normalizeExcelText(row[0]) === "Item Name" &&
-          normalizeExcelText(row[1]) === "Qty",
+        (r) =>
+          normalizeExcelText(r[0]) === "Item Name" &&
+          normalizeExcelText(r[1]) === "Qty",
       );
       if (headerIndex === -1) throw new Error("POS item table is missing.");
-
       const importedRows = rows
         .slice(headerIndex + 1)
-        .map((row) => ({
-          itemName: normalizeExcelText(row[0]),
-          qty: normalizeExcelText(row[1]),
-          rate: normalizeExcelText(row[2]),
-          discountPercent: normalizeExcelText(row[3]),
+        .map((r) => ({
+          itemName: normalizeExcelText(r[0]),
+          qty: normalizeExcelText(r[1]),
+          rate: normalizeExcelText(r[2]),
+          discountPercent: normalizeExcelText(r[3]),
         }))
-        .filter((row) => row.itemName || row.qty || row.rate || row.discountPercent);
-      if (!importedRows.length) throw new Error("At least one POS item row is required.");
-
+        .filter((r) => r.itemName || r.qty || r.rate || r.discountPercent);
+      if (!importedRows.length)
+        throw new Error("At least one item row is required.");
       const resolvedRows = importedRows.map((row, index) => {
         const item = itemNameMap.get(normalizeExcelNameKey(row.itemName));
-        if (!item) throw new Error(`Row ${index + 1}: Item "${row.itemName}" was not found.`);
+        if (!item)
+          throw new Error(
+            `Row ${index + 1}: Item "${row.itemName}" not found.`,
+          );
         const qty = Number(row.qty || 0);
         const rate =
           Number(row.rate || 0) ||
           Number(resolveItemRateByDate(item, mrpPriceLevelId, form.date) || 0);
         const discountPercent = Number(row.discountPercent || 0);
-        if (!(qty > 0)) throw new Error(`Row ${index + 1}: Qty must be greater than 0.`);
-        if (!(rate > 0)) throw new Error(`Row ${index + 1}: Rate must be greater than 0.`);
+        if (!(qty > 0)) throw new Error(`Row ${index + 1}: Qty must be > 0.`);
+        if (!(rate > 0)) throw new Error(`Row ${index + 1}: Rate must be > 0.`);
         return {
           itemId: item._id,
           qty: String(qty),
           rate,
-          mrpRate: Number(resolveItemRateByDate(item, mrpPriceLevelId, form.date) || rate),
+          mrpRate: Number(
+            resolveItemRateByDate(item, mrpPriceLevelId, form.date) || rate,
+          ),
           discountPercent: String(discountPercent || ""),
         };
       });
-      setForm((current) => ({
-        ...current,
-        rows: resolvedRows,
-      }));
+      setForm((c) => ({ ...c, rows: resolvedRows }));
       setStatusMessage({
         tone: "success",
-        title: "POS items loaded from Excel",
-        description: `${resolvedRows.length} item row(s) were loaded into the form. Review customer and payment details, then save manually.`,
+        title: "Items loaded from Excel",
+        description: `${resolvedRows.length} row(s) loaded. Review customer and payment details, then save.`,
       });
-    } catch (error) {
+    } catch (err) {
       setStatusMessage({
         tone: "error",
         title: "Import failed",
-        description: error?.message || "Unable to import POS voucher from Excel.",
+        description: err?.message || "Unable to import.",
       });
     } finally {
       setImportBusy(false);
@@ -989,16 +1081,11 @@ export default function PosVoucherPage({
     try {
       window.sessionStorage.setItem(
         POS_VOUCHER_RETURN_STORAGE_KEY,
-        JSON.stringify({
-          companyId: effectiveCompanyId,
-          form,
-          statusMessage,
-        }),
+        JSON.stringify({ companyId: effectiveCompanyId, form, statusMessage }),
       );
-    } catch (error) {
-      console.error("Unable to store POS voucher draft:", error);
+    } catch (err) {
+      console.error(err);
     }
-
     navigate(path, {
       state: {
         returnTo: `${location.pathname}${location.search || ""}`,
@@ -1015,33 +1102,24 @@ export default function PosVoucherPage({
     if (!form.salesLedger && !defaults.salesLedger?._id)
       return alert("Please select a sales ledger");
     if (validRows.length === 0) return alert("Please add at least one item");
-    const incompleteAdjustment = (form.additionalRows || []).find(
-      (row) => !row.ledgerId && Number(row.value || 0) !== 0,
+    const incompleteAdj = (form.additionalRows || []).find(
+      (r) => !r.ledgerId && Number(r.value || 0) !== 0,
     );
-    if (incompleteAdjustment) {
+    if (incompleteAdj)
       return alert("Please select an expense ledger before entering a value.");
-    }
-    if (rewardRedeemed > Number(activeCustomer?.rewardPoints || 0)) {
-      return alert("Customer does not have enough reward points for this discount.");
-    }
+    if (rewardRedeemed > Number(activeCustomer?.rewardPoints || 0))
+      return alert("Customer does not have enough reward points.");
     if (
       Number((cardPayment + cashPayment).toFixed(2)) !==
       Number(totalAmount.toFixed(2))
-    ) {
-      return alert("Cash payment + card payment must match total payable");
-    }
+    )
+      return alert("Cash + card payment must match total payable");
 
     const primaryBankLedgerId =
       defaults.bankLedger?._id || defaults.bankLedgers?.[0]?._id || "";
     const lines = [
       ...(cashPayment > 0 && defaults.cashLedger?._id
-        ? [
-            {
-              ledgerId: defaults.cashLedger._id,
-              debit: cashPayment,
-              credit: 0,
-            },
-          ]
+        ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
         : []),
       ...(cardPayment > 0 && primaryBankLedgerId
         ? [{ ledgerId: primaryBankLedgerId, debit: cardPayment, credit: 0 }]
@@ -1052,14 +1130,13 @@ export default function PosVoucherPage({
         credit: subtotal,
       },
     ];
-
     adjustmentRows.forEach((row) => {
-      const signedAmount = Number(row.calculatedAmount || 0);
-      if (!row.ledgerId || signedAmount === 0) return;
+      const amount = Number(row.calculatedAmount || 0);
+      if (!row.ledgerId || amount === 0) return;
       lines.push({
         ledgerId: row.ledgerId,
-        debit: signedAmount > 0 ? signedAmount : 0,
-        credit: signedAmount < 0 ? Math.abs(signedAmount) : 0,
+        debit: amount > 0 ? amount : 0,
+        credit: amount < 0 ? Math.abs(amount) : 0,
       });
     });
 
@@ -1087,10 +1164,9 @@ export default function PosVoucherPage({
         : {},
       lines,
       inventoryLines: validRows.map((row) => {
-        const item = items.find((entry) => entry._id === row.itemId);
+        const item = items.find((e) => e._id === row.itemId);
         const gross = Number(row.qty || 0) * Number(row.rate || 0);
-        const discountValue = Number(row.discountPercent || 0);
-        const discountAmount = gross * (discountValue / 100);
+        const dv = Number(row.discountPercent || 0);
         return {
           itemId: row.itemId,
           itemName: item?.name || "",
@@ -1098,9 +1174,9 @@ export default function PosVoucherPage({
           billedQty: Number(row.qty || 0),
           rate: Number(row.rate || 0),
           mrpRate: Number(row.mrpRate || row.rate || 0),
-          discount: discountAmount,
+          discount: gross * (dv / 100),
           discountType: "percent",
-          discountValue,
+          discountValue: dv,
           amount: lineAmount(row),
           groupId: item?.groupId || null,
           groupName: item?.groupName || "",
@@ -1112,13 +1188,13 @@ export default function PosVoucherPage({
       }),
       posMeta: {
         salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
-        additionalAdjustments: adjustmentRows.map((row) => ({
-          ledgerId: row.ledgerId,
-          ledgerName: row.ledger?.name || "",
+        additionalAdjustments: adjustmentRows.map((r) => ({
+          ledgerId: r.ledgerId,
+          ledgerName: r.ledger?.name || "",
           nature: "EXPENSE",
-          mode: row.mode || "fixed",
-          value: Number(row.value || 0),
-          amount: row.calculatedAmount,
+          mode: r.mode || "fixed",
+          value: Number(r.value || 0),
+          amount: r.calculatedAmount,
         })),
         additionalExpenseLedgerId: adjustmentRows[0]?.ledgerId || null,
         additionalExpenseMode: adjustmentRows[0]?.mode || "fixed",
@@ -1167,13 +1243,13 @@ export default function PosVoucherPage({
             }
           : {},
         salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
-        additionalAdjustments: adjustmentRows.map((row) => ({
-          ledgerId: row.ledgerId,
-          ledgerName: row.ledger?.name || "",
+        additionalAdjustments: adjustmentRows.map((r) => ({
+          ledgerId: r.ledgerId,
+          ledgerName: r.ledger?.name || "",
           nature: "EXPENSE",
-          mode: row.mode || "fixed",
-          value: Number(row.value || 0),
-          amount: row.calculatedAmount,
+          mode: r.mode || "fixed",
+          value: Number(r.value || 0),
+          amount: r.calculatedAmount,
         })),
         redeemedPoints: rewardRedeemed,
         payments: {
@@ -1182,7 +1258,7 @@ export default function PosVoucherPage({
           cashTendered: Number(form.cashTendered || 0),
         },
         items: validRows.map((row) => {
-          const item = items.find((entry) => entry._id === row.itemId);
+          const item = items.find((e) => e._id === row.itemId);
           return {
             itemId: row.itemId,
             qty: Number(row.qty || 0),
@@ -1212,6 +1288,7 @@ export default function PosVoucherPage({
     }
   };
 
+  /* ── enter-key navigation ── */
   const handleEnterNavigation = (event) => {
     if (
       event.key !== "Enter" ||
@@ -1222,486 +1299,510 @@ export default function PosVoucherPage({
     )
       return;
     if (showSaveConfirm) return;
-
     const target = event.target;
-    const tagName = target.tagName?.toLowerCase();
-
-    if (tagName === "button") return;
-
+    if (target.tagName?.toLowerCase() === "button") return;
     if (target === searchInputRef.current) {
       event.preventDefault();
       handleBarcodeSubmit(searchTerm);
       return;
     }
-
     event.preventDefault();
-
     const fields = Array.from(
       containerRef.current?.querySelectorAll(
         "[data-vnav='true'], [data-voucher-date='true']",
       ) || [],
-    ).filter((field) => {
-      const isDisabled =
-        field.disabled || field.getAttribute("aria-disabled") === "true";
-      const isHidden = field.type === "hidden" || field.offsetParent === null;
-      return !isDisabled && !isHidden;
-    });
-
+    ).filter(
+      (f) =>
+        !f.disabled &&
+        f.getAttribute("aria-disabled") !== "true" &&
+        f.type !== "hidden" &&
+        f.offsetParent !== null,
+    );
     const currentIndex = fields.indexOf(target);
-    const nextField = fields[currentIndex + 1] || fields[0];
-
-    nextField?.focus();
-    nextField?.select?.();
+    const next = fields[currentIndex + 1] || fields[0];
+    next?.focus();
+    next?.select?.();
   };
 
   useVoucherShortcuts({
     shortcuts: voucherShortcuts,
     containerRef,
-    onAddRow: addRow,
+    onAddRow: () => focusSearchInput(),
     onSaveRequest: () => setShowSaveConfirm(true),
   });
 
+  /* ─────────────────────────────────────────────────────────────────
+     RENDER
+  ───────────────────────────────────────────────────────────────── */
   return (
     <div
       ref={containerRef}
       onKeyDownCapture={handleEnterNavigation}
-      className="min-h-screen bg-slate-100 p-4 sm:p-6"
+      className="min-h-screen bg-slate-100 p-4"
     >
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 sm:h-14 sm:w-14">
-                <ShoppingCart className="h-7 w-7" />
-              </div>
-              <div>
-                <h1 className="text-[24px] font-bold text-slate-900 sm:text-3xl">
-                  POS Sales Voucher
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">
-                  Fast checkout with customer lookup, rewards, redemption, and
-                  barcode scanner billing.
-                </p>
-              </div>
+      <div className="mx-auto max-w-[1480px] space-y-4">
+        {/* ── Page header ── */}
+        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <ShoppingCart className="h-5 w-5" />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {!isEditMode ? (
-                <div className="flex flex-col gap-3 md:col-span-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                  <button
-                    type="button"
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
-                    onClick={handleExportTemplate}
-                  >
-                    <Download className="h-4 w-4" />
-                    Export Demo Excel
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 sm:w-auto"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={importBusy}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {importBusy ? "Importing..." : "Import Excel"}
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    onChange={handleImportFile}
+            <div>
+              <h1 className="text-base font-semibold text-slate-900">
+                POS Sales Voucher
+              </h1>
+              <p className="text-[12px] text-slate-500">
+                Fast checkout · barcode scanner · reward points
+              </p>
+            </div>
+          </div>
+          {!isEditMode && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleExportTemplate}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Download className="h-3.5 w-3.5" /> Export template
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Upload className="h-3.5 w-3.5" />{" "}
+                {importBusy ? "Importing…" : "Import Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleImportFile}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ── Status message ── */}
+        {statusMessage && (
+          <div
+            className={`rounded-xl border px-4 py-3 text-[13px] ${statusMessage.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
+          >
+            <p className="font-semibold">{statusMessage.title}</p>
+            <p className="mt-0.5">{statusMessage.description}</p>
+          </div>
+        )}
+
+        {/* ── Voucher info strip ── */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Voucher no.">
+              <VoucherNumberInput
+                value={form.number}
+                onChange={(v) => setForm((c) => ({ ...c, number: v }))}
+                suggestedNumber={suggestedNumber}
+              />
+            </Field>
+            <Field label="Voucher date">
+              <TallyDateInput
+                data-voucher-date="true"
+                data-vnav="true"
+                className={inputBase}
+                value={form.date}
+                onChange={(v) => setForm((c) => ({ ...c, date: v }))}
+              />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field
+                label="Sales ledger"
+                action={
+                  <AddLink
+                    onClick={() =>
+                      navigateToCreateMaster("/masters/create/ledger")
+                    }
                   />
-                </div>
-              ) : null}
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Voucher No.
-                </label>
-                <input
-                  data-vnav="true"
-                  className={inputClass}
-                  value={form.number}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      number: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Voucher Date
-                </label>
-                <TallyDateInput
-                  data-voucher-date="true"
-                  data-vnav="true"
-                  className={inputClass}
-                  value={form.date}
-                  onChange={(value) =>
-                    setForm((current) => ({ ...current, date: value }))
-                  }
-                />
-              </div>
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="text-sm font-semibold text-slate-700">
-                    Select Sales Ledger
-                  </label>
-                  <button
-                    type="button"
-                    className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                    onClick={() => navigateToCreateMaster("/masters/create/ledger")}
-                  >
-                    Add+
-                  </button>
-                </div>
+                }
+              >
                 <SearchableSelect
                   options={salesLedgerOptions}
                   value={form.salesLedger}
-                  onChange={(newValue) =>
-                    setForm((current) => ({
-                      ...current,
-                      salesLedger: newValue,
-                    }))
-                  }
-                  placeholder="Search sales ledger"
+                  onChange={(v) => setForm((c) => ({ ...c, salesLedger: v }))}
+                  placeholder="Search sales ledger…"
                 />
-                <p className="mt-2 text-xs text-slate-500">
-                  Selected: {selectedSalesLedger?.name || "Select a ledger under Sales Accounts"}
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {selectedSalesLedger?.name || "No ledger selected"}
                 </p>
-              </div>
+              </Field>
             </div>
           </div>
-        </section>
+        </div>
 
-        {statusMessage ? (
-          <section
-            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${
-              statusMessage.tone === "error"
-                ? "border-rose-200 bg-rose-50 text-rose-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700"
-            }`}
-          >
-            <p className="font-semibold">{statusMessage.title}</p>
-            <p className="mt-1">{statusMessage.description}</p>
-          </section>
-        ) : null}
-
-        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-6">
-            <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
-              <h2 className="text-xl font-bold text-slate-900">
-                Customer Details
+        {/* ── Main two-column layout ── */}
+        <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          {/* ── Left column ── */}
+          <div className="space-y-4">
+            {/* Customer card */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                <UserSearch className="h-4 w-4 text-slate-400" /> Customer
+                details
               </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
+                {/* Phone */}
+                <div className="relative lg:col-span-3">
+                  <Field label="Mobile number">
+                    <div className="relative">
+                      <input
+                        data-vnav="true"
+                        className={inputBase + " pr-9"}
+                        value={form.phone}
+                        onFocus={() => setShowCustomerSuggestions(true)}
+                        onChange={(e) => {
+                          setForm((c) => ({ ...c, phone: e.target.value }));
+                          setShowCustomerSuggestions(true);
+                          setActiveCustomerIndex(0);
+                        }}
+                        onKeyDown={(e) => {
+                          if (
+                            !showCustomerSuggestions ||
+                            customerSuggestions.length === 0
+                          )
+                            return;
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-6">
-                <div className="relative">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Mobile Number
-                  </label>
-                  <div className="relative">
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            setActiveCustomerIndex((i) =>
+                              Math.min(i + 1, customerSuggestions.length - 1),
+                            );
+                          }
+
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            setActiveCustomerIndex((i) => Math.max(i - 1, 0));
+                          }
+
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            applyCustomer(
+                              customerSuggestions[activeCustomerIndex],
+                            );
+                          }
+
+                          if (e.key === "Escape") {
+                            setShowCustomerSuggestions(false);
+                          }
+                        }}
+                        placeholder="01XXXXXXXXX"
+                      />
+                      <UserSearch className="pointer-events-none absolute right-2.5 top-2 h-4 w-4 text-blue-500" />
+                    </div>
+                  </Field>
+                  {/* {showCustomerSuggestions &&
+                    customerSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                        {customerSuggestions.map((customer) => (
+                          <button
+                            key={customer._id}
+                            type="button"
+                            className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
+                            onClick={() => applyCustomer(customer)}
+                          >
+                            <div>
+                              <p className="text-[13px] font-medium text-slate-900">
+                                {customer.name}
+                              </p>
+                              <p className="text-[11px] text-slate-400">
+                                {customer.phone}
+                              </p>
+                            </div>
+                            <span className="rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                              {Number(
+                                customer.rewardPoints || 0,
+                              ).toLocaleString("en-IN")}{" "}
+                              pts
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )} */}
+                </div>
+
+                {/* Name */}
+                <div className="lg:col-span-3">
+                  <Field label="Customer name">
                     <input
                       data-vnav="true"
-                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] px-2 py-1.5 pr-11 text-[14px] outline-none focus:border-[#3f83f8]"
-                      value={form.phone}
-                      onFocus={() => setShowCustomerSuggestions(true)}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          phone: event.target.value,
-                        }))
+                      className={inputBase}
+                      value={form.customerName}
+                      onChange={(e) =>
+                        setForm((c) => ({ ...c, customerName: e.target.value }))
                       }
+                      placeholder="Full name"
                     />
-                    <UserRoundSearch className="absolute right-3 top-2.5 h-4 w-4 text-blue-600" />
-                  </div>
-                  {showCustomerSuggestions && customerSuggestions.length > 0 ? (
-                    <div className="absolute z-30 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
-                      {customerSuggestions.map((customer) => (
-                        <button
-                          key={customer._id}
-                          type="button"
-                          className="flex w-full items-start justify-between rounded-lg px-3 py-2 text-left hover:bg-slate-50"
-                          onClick={() => applyCustomer(customer)}
-                        >
-                          <div>
-                            <p className="font-medium text-slate-900">
-                              {customer.name}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {customer.phone}
-                            </p>
-                          </div>
-                          <p className="text-xs text-emerald-600">
-                            {Number(customer.rewardPoints || 0).toLocaleString(
-                              "en-IN",
-                            )}{" "}
-                            pts
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="lg:col-span-2">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Customer Name
-                  </label>
-                  <input
-                    data-vnav="true"
-                    className={inputClass}
-                    value={form.customerName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        customerName: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="text-sm font-semibold text-slate-700">
-                      Sales Person
-                    </label>
-                    <button
-                      type="button"
-                      className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                      onClick={() => navigateToCreateMaster("/masters/create/employee")}
-                    >
-                      Add+
-                    </button>
-                  </div>
-                  <SearchableSelect
-                    options={[
-                      { label: "Select sales person" },
-                      ...salesEmployeeOptions,
-                    ]}
-                    value={form.salesPersonId}
-                    onChange={(newValue) =>
-                      setForm((current) => ({
-                        ...current,
-                        salesPersonId: newValue,
-                      }))
-                    }
-                    placeholder="Search sales person"
-                  />
-                  <p className="mt-2 text-xs text-slate-500">
-                    {selectedSalesPerson?.employeeNumber
-                      ? `Employee No.: ${selectedSalesPerson.employeeNumber}`
-                      : "Only employees under Sales are shown here."}
-                  </p>
+                  </Field>
                 </div>
 
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-                    <p className="text-sm font-medium text-emerald-700">
-                      Available Reward Points
+                {/* Sales person */}
+                <div className="lg:col-span-3">
+                  <Field
+                    label="Sales person"
+                    action={
+                      <AddLink
+                        onClick={() =>
+                          navigateToCreateMaster("/masters/create/employee")
+                        }
+                      />
+                    }
+                  >
+                    <SearchableSelect
+                      options={[
+                        { label: "Select sales person", value: "" },
+                        ...salesEmployeeOptions,
+                      ]}
+                      value={form.salesPersonId}
+                      onChange={(v) =>
+                        setForm((c) => ({ ...c, salesPersonId: v }))
+                      }
+                      placeholder="Search…"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {selectedSalesPerson?.employeeNumber
+                        ? `Emp. no. ${selectedSalesPerson.employeeNumber}`
+                        : "Sales dept. employees only"}
                     </p>
-                    <p className="mt-2 text-2xl font-bold text-emerald-700">
+                  </Field>
+                </div>
+
+                {/* Reward badge */}
+                <div className="flex items-end lg:col-span-3">
+                  <div className="w-full rounded-lg bg-emerald-50 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                      Reward points
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-emerald-700">
                       {Number(activeCustomer?.rewardPoints || 0).toLocaleString(
                         "en-IN",
                       )}
                     </p>
                   </div>
-                <div className="lg:col-span-4">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Address (Optional)
-                  </label>
-                  <input
-                    data-vnav="true"
-                    className={inputClass}
-                    value={form.address}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        address: event.target.value,
-                      }))
-                    }
-                  />
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Birth Date (Optional)
-                  </label>
-                  <input
-                    data-vnav="true"
-                    inputMode="numeric"
-                    maxLength={5}
-                    placeholder="dd/mm"
-                    className={inputClass}
-                    value={form.birthDate}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        birthDate: normalizeMonthDayInput(event.target.value),
-                      }))
-                    }
-                  />
+
+                {/* Address */}
+                <div className="sm:col-span-2 lg:col-span-8">
+                  <Field label="Address (optional)">
+                    <input
+                      data-vnav="true"
+                      className={inputBase}
+                      value={form.address}
+                      onChange={(e) =>
+                        setForm((c) => ({ ...c, address: e.target.value }))
+                      }
+                      placeholder="Street, area…"
+                    />
+                  </Field>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Anniversary (Optional)
-                  </label>
-                  <input
-                    data-vnav="true"
-                    inputMode="numeric"
-                    maxLength={5}
-                    placeholder="dd/mm"
-                    className={inputClass}
-                    value={form.anniversary}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        anniversary: normalizeMonthDayInput(event.target.value),
-                      }))
-                    }
-                  />
+
+                {/* Birth date */}
+                <div className="lg:col-span-2">
+                  <Field label="Birth date (dd/mm)">
+                    <input
+                      data-vnav="true"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="dd/mm"
+                      className={inputBase}
+                      value={form.birthDate}
+                      onChange={(e) =>
+                        setForm((c) => ({
+                          ...c,
+                          birthDate: normalizeMonthDayInput(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+
+                {/* Anniversary */}
+                <div className="lg:col-span-2">
+                  <Field label="Anniversary (dd/mm)">
+                    <input
+                      data-vnav="true"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="dd/mm"
+                      className={inputBase}
+                      value={form.anniversary}
+                      onChange={(e) =>
+                        setForm((c) => ({
+                          ...c,
+                          anniversary: normalizeMonthDayInput(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
-              <div className="flex flex-col gap-4 lg:flex-row">
+            {/* Items card */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row">
                 <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <ScanLine className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
                   <input
                     ref={searchInputRef}
                     data-vnav="true"
                     data-barcode-search="true"
-                    className="w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-10 pr-4 text-[14px] outline-none focus:border-[#3f83f8]"
-                    placeholder="Scan barcode or search item by name / code"
+                    className={inputBase + " pl-8"}
+                    placeholder="Scan barcode or search item by name / code…"
                     value={searchTerm}
                     onFocus={() => {
                       scannerBufferRef.current = "";
                     }}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
-                      event.preventDefault();
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
                       handleBarcodeSubmit(searchTerm);
                     }}
                   />
-                  {searchTerm && filteredItems.length > 0 ? (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
+                  {searchTerm && filteredItems.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
                       {filteredItems.map((item) => (
                         <button
                           key={item._id}
                           type="button"
-                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                          className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
                           onClick={() => addItemById(item._id)}
                         >
                           <div>
-                            <p className="font-medium text-slate-900">
+                            <p className="text-[13px] font-medium text-slate-900">
                               {item.name}
                             </p>
-                            <p className="text-xs text-slate-500">
-                              {item.barcode || item.alias || "-"}
+                            <p className="text-[11px] text-slate-400">
+                              {item.barcode || item.alias || "—"}
                             </p>
                           </div>
-                          <span className="text-xs text-emerald-600">Add</span>
+                          <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                            Add
+                          </span>
                         </button>
                       ))}
                     </div>
-                  ) : null}
+                  )}
                 </div>
                 <button
                   type="button"
-                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[13px] font-medium text-blue-700 hover:bg-blue-100"
                   onClick={focusSearchInput}
                 >
-                  Focus Scanner
+                  <Focus className="h-3.5 w-3.5" /> Focus scanner
                 </button>
               </div>
 
-              <div className="mt-5 overflow-visible rounded-2xl border border-slate-200">
-                <table className="min-w-full text-sm table-head">
-                  <thead className="bg-slate-50 text-left text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">#</th>
-                      <th className="px-4 py-3 font-medium">Item Name</th>
-                      <th className="px-4 py-3 font-medium">Code</th>
-                      <th className="px-4 py-3 font-medium">Qty</th>
-                      <th className="px-4 py-3 font-medium">Rate</th>
-                      <th className="px-4 py-3 font-medium">Disc %</th>
-                      <th className="px-4 py-3 text-right font-medium">
+              {/* Items table */}
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="min-w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="w-8 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        #
+                      </th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Item
+                      </th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Code
+                      </th>
+                      <th className="w-24 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Qty
+                      </th>
+                      <th className="w-28 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Rate
+                      </th>
+                      <th className="w-24 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Disc %
+                      </th>
+                      <th className="w-28 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                         Amount
                       </th>
-                      <th className="px-4 py-3"></th>
+                      <th className="w-10 px-3 py-2.5"></th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {form?.rows?.length === 0 ? (
+                  <tbody className="divide-y divide-slate-100">
+                    {form.rows.length === 0 ? (
                       <tr>
                         <td
                           colSpan={8}
-                          className="px-4 py-10 text-center text-sm text-slate-500"
+                          className="px-4 py-10 text-center text-[13px] text-slate-400"
                         >
-                          Scan barcode or search item above to add products.
+                          Scan a barcode or search above to add items
                         </td>
                       </tr>
                     ) : (
                       form.rows.map((row, index) => {
-                        const item = items.find(
-                          (entry) => entry._id === row.itemId,
-                        );
+                        const item = items.find((e) => e._id === row.itemId);
                         return (
-                          <tr key={index} className="border-t border-slate-100">
-                            <td className="px-4 py-4 align-top text-slate-500">
+                          <tr key={index} className="group hover:bg-slate-50">
+                            <td className="px-3 py-2 text-slate-400">
                               {index + 1}
                             </td>
-                            <td className="px-4 py-4 align-top font-medium text-slate-900">
-                              {item?.name || "-"}
+                            <td className="px-3 py-2 font-medium text-slate-900">
+                              {item?.name || "—"}
                             </td>
-                            <td className="px-4 py-4 align-top text-slate-600">
-                              {item?.barcode || item?.alias || "-"}
+                            <td className="px-3 py-2 text-slate-500">
+                              {item?.barcode || item?.alias || "—"}
                             </td>
-                            <td className="px-4 py-4 align-top">
+                            <td className="px-3 py-2">
                               <input
                                 type="number"
                                 data-vnav="true"
-                                className={numberInputClass}
+                                className={numInput + " w-full"}
                                 value={row.qty}
-                                onChange={(event) =>
-                                  updateRow(index, "qty", event.target.value)
+                                onChange={(e) =>
+                                  updateRow(index, "qty", e.target.value)
                                 }
                               />
                             </td>
-                            <td className="px-4 py-4 align-top">
+                            <td className="px-3 py-2">
                               <input
                                 type="number"
                                 data-vnav="true"
-                                className={numberInputClass}
+                                className={numInput + " w-full"}
                                 value={row.rate}
-                                onChange={(event) =>
-                                  updateRow(index, "rate", event.target.value)
+                                onChange={(e) =>
+                                  updateRow(index, "rate", e.target.value)
                                 }
                               />
                             </td>
-                            <td className="px-4 py-4 align-top">
+                            <td className="px-3 py-2">
                               <input
                                 type="number"
                                 data-vnav="true"
-                                className={numberInputClass}
+                                className={numInput + " w-full"}
                                 value={row.discountPercent}
-                                onChange={(event) =>
+                                onChange={(e) =>
                                   updateRow(
                                     index,
                                     "discountPercent",
-                                    event.target.value,
+                                    e.target.value,
                                   )
                                 }
                               />
                             </td>
-                            <td className="px-4 py-4 align-top text-right font-semibold text-slate-900">
+                            <td className="px-3 py-2 text-right font-medium text-slate-900">
                               {formatMoney(lineAmount(row), currency.symbol)}
                             </td>
-                            <td className="px-4 py-4 align-top text-right">
+                            <td className="px-3 py-2 text-right">
                               <button
                                 type="button"
-                                className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
                                 onClick={() => removeRow(index)}
+                                className="rounded p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                                aria-label="Remove row"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </td>
                           </tr>
@@ -1712,308 +1813,368 @@ export default function PosVoucherPage({
                 </table>
               </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+              {/* Below-table: adjustments + summary side by side */}
+              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                {/* Adjustments + note */}
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-slate-900">
-                        Additional Expense
-                      </h3>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold text-slate-700">
+                        Additional expense / discount
+                      </span>
                       <button
                         type="button"
-                        className="rounded-md border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                         onClick={addAdjustmentRow}
+                        className="inline-flex items-center gap-1 rounded border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
                       >
-                        Add+
+                        <Plus className="h-3 w-3" /> Add row
                       </button>
                     </div>
-                    <div className="space-y-3">
-                      {(form.additionalRows || []).map((row, index) => {
-                        return (
-                          <div
-                            key={`adjustment-${index}`}
-                            className="grid gap-3 md:grid-cols-[minmax(0,1.8fr)_140px_180px_44px]"
+                    <div className="space-y-2">
+                      {(form.additionalRows || []).map((row, index) => (
+                        <div
+                          key={`adj-${index}`}
+                          className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_120px_140px_32px]"
+                        >
+                          <Field
+                            label="Expense ledger"
+                            action={
+                              <AddLink
+                                onClick={() =>
+                                  navigateToCreateMaster(
+                                    "/masters/create/ledger",
+                                  )
+                                }
+                              />
+                            }
                           >
-                            <div>
-                              <div className="mb-2 flex items-center justify-between gap-3">
-                                <label className="text-sm font-semibold text-slate-700">
-                                  Expense Ledger
-                                </label>
-                                <button
-                                  type="button"
-                                  className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                                  onClick={() => navigateToCreateMaster("/masters/create/ledger")}
-                                >
-                                  Add+
-                                </button>
-                              </div>
-                              <SearchableSelect
-                                options={expenseLedgerOptions}
-                                value={row.ledgerId}
-                                onChange={(newValue) =>
-                                  updateAdjustmentRow(index, "ledgerId", newValue)
-                                }
-                                placeholder="Search expense ledger"
-                              />
-                            </div>
-                            <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                                Discount Type
-                              </label>
-                              <select
-                                data-vnav="true"
-                                className={inputClass}
-                                value={row.mode || "fixed"}
-                                onChange={(event) =>
-                                  updateAdjustmentRow(index, "mode", event.target.value)
-                                }
-                              >
-                                <option value="fixed">Fixed</option>
-                                <option value="percentage">Percentage</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                                Amount
-                              </label>
-                              <input
-                                type="number"
-                                data-vnav="true"
-                                className={numberInputClass}
-                                value={row.value}
-                                disabled={!row.ledgerId}
-                                placeholder="Select ledger first"
-                                onChange={(event) =>
-                                  updateAdjustmentRow(index, "value", event.target.value)
-                                }
-                              />
-                            </div>
-                            <div className="flex items-end">
-                              <button
-                                type="button"
-                                className="rounded-lg p-2 text-rose-500 hover:bg-rose-50"
-                                onClick={() => removeAdjustmentRow(index)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                            <SearchableSelect
+                              options={expenseLedgerOptions}
+                              value={row.ledgerId}
+                              onChange={(v) =>
+                                updateAdjustmentRow(index, "ledgerId", v)
+                              }
+                              placeholder="Search ledger…"
+                            />
+                          </Field>
+                          <Field label="Type">
+                            <select
+                              data-vnav="true"
+                              className={inputBase}
+                              value={row.mode || "fixed"}
+                              onChange={(e) =>
+                                updateAdjustmentRow(
+                                  index,
+                                  "mode",
+                                  e.target.value,
+                                )
+                              }
+                            >
+                              <option value="fixed">Fixed</option>
+                              <option value="percentage">Percentage</option>
+                            </select>
+                          </Field>
+                          <Field label="Amount">
+                            <input
+                              type="number"
+                              data-vnav="true"
+                              className={numInput}
+                              value={row.value}
+                              disabled={!row.ledgerId}
+                              placeholder={
+                                row.ledgerId ? "0.00" : "Select ledger first"
+                              }
+                              onChange={(e) =>
+                                updateAdjustmentRow(
+                                  index,
+                                  "value",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </Field>
+                          <div className="flex items-end pb-0.5">
+                            <button
+                              type="button"
+                              onClick={() => removeAdjustmentRow(index)}
+                              className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">
-                      Note (Optional)
-                    </label>
+                  <Field label="Note (optional)">
                     <textarea
-                      rows={4}
+                      rows={3}
                       data-vnav="true"
-                      className="min-h-28 w-full border border-[#c8d2de] bg-[#EEF5FF] px-3 py-2 text-[14px] outline-none focus:border-[#3f83f8]"
+                      className={inputBase + " resize-y"}
                       value={form.note}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          note: event.target.value,
-                        }))
+                      onChange={(e) =>
+                        setForm((c) => ({ ...c, note: e.target.value }))
                       }
+                      placeholder="Remarks, delivery instructions…"
                     />
+                  </Field>
+                </div>
+
+                {/* Amount summary */}
+                <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                      Order summary
+                    </p>
+                    <div className="space-y-2 text-[13px]">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Items (qty)</span>
+                        <span>{totalItems}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Subtotal</span>
+                        <span>{formatMoney(subtotal, currency.symbol)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Item discount</span>
+                        <span className="text-rose-600">
+                          − {formatMoney(rowDiscountTotal, currency.symbol)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Adj. expense</span>
+                        <span
+                          className={
+                            additionalExpenseAmount > 0
+                              ? "text-rose-600"
+                              : "text-emerald-600"
+                          }
+                        >
+                          {additionalExpenseAmount > 0 ? "−" : "+"}{" "}
+                          {formatMoney(
+                            Math.abs(additionalExpenseAmount),
+                            currency.symbol,
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-200 pt-2.5 text-[14px] font-semibold text-slate-900">
+                        <span>Total payable</span>
+                        <span>{formatMoney(totalAmount, currency.symbol)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex justify-between border-t border-dashed border-slate-200 pt-3 text-[12px]">
+                      <span className="text-slate-400">Reward to earn</span>
+                      <span className="font-medium text-emerald-600">
+                        {rewardToEarn.toLocaleString("en-IN")} pts
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Total payable hero */}
+                  <div className="mt-3 rounded-lg bg-blue-600 px-4 py-4 text-center text-white">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
+                      Total payable
+                    </p>
+                    <p className="mt-1.5 text-3xl font-semibold">
+                      {formatMoney(totalAmount, currency.symbol)}
+                    </p>
+                    <p className="mt-1 text-[12px] opacity-70">
+                      {toWords(totalAmount)}
+                    </p>
                   </div>
                 </div>
-
-                <div className="rounded-3xl border border-blue-100 bg-blue-50 px-6 py-6 text-center">
-                  <p className="text-sm font-medium text-blue-700">
-                    Total Payable
-                  </p>
-                  <p className="mt-3 text-5xl font-bold text-blue-700">
-                    {formatMoney(totalAmount, currency.symbol)}
-                  </p>
-                  <p className="mt-3 text-sm text-blue-700">
-                    {toWords(totalAmount)}
-                  </p>
-                </div>
               </div>
-            </section>
+            </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            {/* Action bar */}
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 onClick={() => previewPosInvoiceDocument(printData)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
               >
-                <Printer className="h-4 w-4" />
-                Print Preview
+                <Printer className="h-4 w-4" /> Print preview
               </button>
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-4 text-sm font-semibold text-white hover:bg-emerald-700"
                 onClick={() => setShowSaveConfirm(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-3 text-[13px] font-semibold text-white hover:bg-emerald-700"
               >
-                <Check className="h-4 w-4" />
-                Complete Sale (F10)
+                <Check className="h-4 w-4" /> Complete sale
+                <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-bold">
+                  F10
+                </span>
               </button>
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-4 text-sm font-semibold text-rose-600 hover:bg-rose-50"
-                onClick={resetForm}
+                onClick={() => resetForm()}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white py-3 text-[13px] font-medium text-rose-600 hover:bg-rose-50"
               >
-                <X className="h-4 w-4" />
-                Cancel
+                <X className="h-4 w-4" /> Cancel
               </button>
             </div>
           </div>
+          {/* end left col */}
 
-          <aside className="space-y-6 2xl:sticky 2xl:top-24">
-            <section
-              data-print-hide="true"
-              className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
-            >
-              <h3 className="text-lg font-semibold text-slate-900">
-                Amount Summary
-              </h3>
-              <div className="mt-4 space-y-4 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>Total Items</span>
-                  <span>{totalItems}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Subtotal</span>
-                  <span>{formatMoney(subtotal, currency.symbol)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Total Discount</span>
-                  <span>{formatMoney(rowDiscountTotal, currency.symbol)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Additional Expense</span>
-                  <span>{formatMoney(additionalExpenseAmount, currency.symbol)}</span>
-                </div>
-                <div className="flex items-center justify-between border-t border-slate-200 pt-4 font-semibold text-emerald-600">
-                  <span>Total Amount</span>
-                  <span>{formatMoney(totalAmount, currency.symbol)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Reward to Earn</span>
-                  <span>{rewardToEarn.toLocaleString("en-IN")} pts</span>
+          {/* ── Right sidebar ── */}
+          <aside className="space-y-4 2xl:sticky 2xl:top-4">
+            {/* Payment */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                <CreditCard className="h-4 w-4 text-slate-400" /> Payment
+                details
+              </h2>
+              <div className="space-y-3">
+                <Field
+                  label={
+                    <span>
+                      Card payment{" "}
+                      <span className="text-[10px] text-slate-400">(F5)</span>
+                    </span>
+                  }
+                >
+                  <div className="relative">
+                    <CreditCard className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="number"
+                      data-vnav="true"
+                      className={numInput + " pl-8"}
+                      value={form.cardPayment}
+                      onChange={(e) =>
+                        setForm((c) => ({ ...c, cardPayment: e.target.value }))
+                      }
+                    />
+                  </div>
+                </Field>
+                <Field
+                  label={
+                    <span>
+                      Cash{" "}
+                      <span className="text-[10px] text-slate-400">(auto)</span>
+                    </span>
+                  }
+                >
+                  <input
+                    type="number"
+                    data-vnav="true"
+                    readOnly
+                    className={readonlyInput + " text-right"}
+                    value={form.cashPayment}
+                  />
+                </Field>
+                <Field label="Cash tendered">
+                  <input
+                    type="number"
+                    data-vnav="true"
+                    className={numInput}
+                    value={form.cashTendered}
+                    onChange={(e) =>
+                      setForm((c) => ({ ...c, cashTendered: e.target.value }))
+                    }
+                  />
+                </Field>
+                <div className="rounded-lg bg-emerald-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                    Change to return
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-emerald-700">
+                    {formatMoney(changeAmount, currency.symbol)}
+                  </p>
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Purchase History
-                </h3>
-                {activeCustomer?.name ? (
-                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+            {/* Purchase history */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                  <History className="h-4 w-4 text-slate-400" /> Purchase
+                  history
+                </h2>
+                {activeCustomer?.name && (
+                  <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
                     {activeCustomer.name}
                   </span>
-                ) : null}
+                )}
               </div>
-              <div className="mt-4 h-[360px] overflow-y-auto pr-1">
+              <div className="max-h-72 overflow-y-auto pr-0.5">
                 {historyLoading ? (
-                  <p className="text-sm text-slate-500">Loading purchase history...</p>
+                  <p className="text-[13px] text-slate-400">Loading…</p>
                 ) : customerPurchases.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    Select or type a customer number to see past POS purchases here.
+                  <p className="text-[13px] text-slate-400">
+                    Enter a phone number to view past purchases.
                   </p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {customerPurchases.map((purchase, index) => (
                       <div
-                        key={`${purchase.voucherId || "purchase"}-${index}`}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                        key={`${purchase.voucherId || "p"}-${index}`}
+                        className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5"
                       >
-                        <p className="text-sm font-semibold text-slate-900">
-                          {purchase.itemName || "-"} x {Number(purchase.qty || 0).toLocaleString("en-IN")}
+                        <p className="text-[13px] font-medium text-slate-900">
+                          {purchase.itemName || "—"} ×{" "}
+                          {Number(purchase.qty || 0).toLocaleString("en-IN")}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Purchase Date:{" "}
+                        <p className="mt-0.5 text-[11px] text-slate-400">
                           {purchase.purchaseDate
                             ? new Date(purchase.purchaseDate)
                                 .toLocaleDateString("en-GB")
                                 .replace(/\//g, "-")
-                            : "-"}
+                            : "—"}
                         </p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                Payment Details
-              </h3>
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Card Payment (F5)
-                  </label>
-                  <div className="relative">
-                    <CreditCard className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input
-                      type="number"
-                      data-vnav="true"
-                      className="w-full border border-[#c8d2de] bg-[#EEF5FF] py-1.5 pl-10 pr-4 text-right text-[14px] outline-none focus:border-[#3f83f8]"
-                      value={form.cardPayment}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          cardPayment: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
+            {/* Receipt summary (mobile / sidebar) */}
+            <div
+              className="rounded-xl border border-slate-200 bg-white p-4"
+              data-print-hide="true"
+            >
+              <h2 className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                <Receipt className="h-4 w-4 text-slate-400" /> Amount summary
+              </h2>
+              <div className="space-y-2 text-[13px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Total items</span>
+                  <span>{totalItems}</span>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Cash (Auto)
-                  </label>
-                  <input
-                    type="number"
-                    data-vnav="true"
-                    readOnly
-                    className={`${numberInputClass} cursor-not-allowed text-slate-700`}
-                    value={form.cashPayment}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        cashPayment: event.target.value,
-                      }))
-                    }
-                  />
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span>{formatMoney(subtotal, currency.symbol)}</span>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Cash Tendered
-                  </label>
-                  <input
-                    type="number"
-                    data-vnav="true"
-                    className={numberInputClass}
-                    value={form.cashTendered}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        cashTendered: event.target.value,
-                      }))
-                    }
-                  />
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Discount</span>
+                  <span className="text-rose-600">
+                    − {formatMoney(rowDiscountTotal, currency.symbol)}
+                  </span>
                 </div>
-                <div className="rounded-2xl bg-emerald-50 px-4 py-4">
-                  <p className="text-sm font-medium text-emerald-700">Change</p>
-                  <p className="mt-2 text-2xl font-bold text-emerald-700">
-                    {formatMoney(changeAmount, currency.symbol)}
-                  </p>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Adj. expense</span>
+                  <span>
+                    {formatMoney(additionalExpenseAmount, currency.symbol)}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-slate-100 pt-2 font-semibold text-emerald-700">
+                  <span>Total amount</span>
+                  <span>{formatMoney(totalAmount, currency.symbol)}</span>
+                </div>
+                <div className="flex justify-between pt-1 text-[12px]">
+                  <span className="text-slate-400">Reward to earn</span>
+                  <span className="text-emerald-600">
+                    {rewardToEarn.toLocaleString("en-IN")} pts
+                  </span>
                 </div>
               </div>
-            </section>
+            </div>
           </aside>
         </div>
       </div>
 
+      {/* ── Save confirm modal ── */}
       <SaveVoucherModal
         open={showSaveConfirm}
         onClose={() => {
@@ -2032,7 +2193,7 @@ export default function PosVoucherPage({
           });
         }}
         title="Complete POS sale?"
-        description="We are ready to post this POS voucher. You can save it now or save and open a clean printable bill immediately."
+        description="Post this POS voucher. You can save now or save and print the bill immediately."
       />
     </div>
   );
