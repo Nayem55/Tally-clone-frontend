@@ -1416,7 +1416,7 @@ export default function PosVoucherPage({
             </Field>
             <div className="sm:col-span-2">
               <Field
-                label="Sales ledger"
+                label="Select Sales ledger"
                 action={
                   <AddLink
                     onClick={() =>
@@ -1993,7 +1993,7 @@ export default function PosVoucherPage({
                 onClick={() => previewPosInvoiceDocument(printData)}
                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
               >
-                <Printer className="h-4 w-4" /> Print preview
+                <Printer className="h-4 w-4" /> Print Now
               </button>
               <button
                 type="button"
