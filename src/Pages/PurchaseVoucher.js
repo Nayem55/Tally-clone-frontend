@@ -375,6 +375,17 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
     () => suppliers.map((ledger) => ({ value: ledger._id, label: ledger.name })),
     [suppliers],
   );
+  const purchaseLedgerOptions = useMemo(
+    () =>
+      allLedgers
+        .filter(
+          (ledger) =>
+            normalizeNameKey(ledger.group?.name) === "purchase accounts" ||
+            normalizeNameKey(ledger.parentGroupName) === "purchase accounts",
+        )
+        .map((ledger) => ({ value: ledger._id, label: ledger.name })),
+    [allLedgers],
+  );
   const itemOptions = useMemo(
     () => [
       { value: END_OF_LIST, label: "End of List", meta: "" },
@@ -937,7 +948,7 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
       ) : null}
 
       <VoucherPanel title="Voucher Header">
-        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">Voucher No.</label>
             <input
@@ -997,6 +1008,31 @@ export default function PurchaseVoucher({ companyId, editVoucherId = "" }) {
                     currency.symbol,
                   )
                 : "-"}
+            </p>
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-slate-700">
+                Select Purchase Ledger
+              </label>
+              <button
+                type="button"
+                className="rounded-md border border-blue-200 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+              >
+                Add+
+              </button>
+            </div>
+            <SearchableSelect
+              options={purchaseLedgerOptions}
+              value={form.purchaseLedger}
+              onChange={(newValue) =>
+                setForm((prev) => ({ ...prev, purchaseLedger: newValue }))
+              }
+              placeholder="Search purchase ledger"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Selected: {purchaseLedger?.name || "Select a ledger under Purchase Accounts"}
             </p>
           </div>
         </div>

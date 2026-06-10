@@ -80,6 +80,12 @@ function toWords(value) {
   return `${amount.toLocaleString("en-IN")} only`;
 }
 
+function normalizeMonthDayInput(value = "") {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
 export default function PosVoucherPage({
   editVoucherId = "",
   companyIdOverride = "",
@@ -125,6 +131,8 @@ export default function PosVoucherPage({
     salesPersonId: "",
     salesLedger: "",
     address: "",
+    birthDate: "",
+    anniversary: "",
     note: "",
     additionalRows: [emptyAdjustmentRow],
     cardPayment: "",
@@ -311,6 +319,8 @@ export default function PosVoucherPage({
           selectedSalesLedgerId || voucher.posMeta?.salesLedgerId || defaults.salesLedger?._id || ""
         ),
         address: voucher.customerSnapshot?.address || "",
+        birthDate: voucher.customerSnapshot?.birthDate || "",
+        anniversary: voucher.customerSnapshot?.anniversary || "",
         note: voucher.narration || "",
         additionalRows:
           Array.isArray(voucher.posMeta?.additionalAdjustments) &&
@@ -840,6 +850,8 @@ export default function PosVoucherPage({
       customerName: customer.name || "",
       phone: customer.phone || "",
       address: customer.address || "",
+      birthDate: customer.birthDate || "",
+      anniversary: customer.anniversary || "",
     }));
     setShowCustomerSuggestions(false);
     focusSearchInput();
@@ -955,7 +967,10 @@ export default function PosVoucherPage({
       customerName: "",
       phone: "",
       salesPersonId: "",
+      salesLedger: defaults.salesLedger?._id || "",
       address: "",
+      birthDate: "",
+      anniversary: "",
       note: "",
       additionalRows: [{ ...emptyAdjustmentRow }],
       cardPayment: "",
@@ -1058,6 +1073,8 @@ export default function PosVoucherPage({
         name: form.customerName,
         phone: form.phone,
         address: form.address,
+        birthDate: form.birthDate,
+        anniversary: form.anniversary,
       },
       salesMeta: selectedSalesPerson
         ? {
@@ -1136,6 +1153,8 @@ export default function PosVoucherPage({
           name: form.customerName,
           phone: form.phone,
           address: form.address,
+          birthDate: form.birthDate,
+          anniversary: form.anniversary,
         },
         salesMeta: selectedSalesPerson
           ? {
@@ -1376,7 +1395,7 @@ export default function PosVoucherPage({
                 Customer Details
               </h2>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-5">
+              <div className="mt-5 grid gap-4 lg:grid-cols-6">
                 <div className="relative">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Mobile Number
@@ -1496,6 +1515,44 @@ export default function PosVoucherPage({
                       setForm((current) => ({
                         ...current,
                         address: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Birth Date (Optional)
+                  </label>
+                  <input
+                    data-vnav="true"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="dd/mm"
+                    className={inputClass}
+                    value={form.birthDate}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        birthDate: normalizeMonthDayInput(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Anniversary (Optional)
+                  </label>
+                  <input
+                    data-vnav="true"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="dd/mm"
+                    className={inputClass}
+                    value={form.anniversary}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        anniversary: normalizeMonthDayInput(event.target.value),
                       }))
                     }
                   />
