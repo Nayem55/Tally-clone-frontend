@@ -2130,7 +2130,7 @@ export default function PosVoucherPage({
             </div>
 
             {/* Receipt summary (mobile / sidebar) */}
-            <div
+            {/* <div
               className="rounded-xl border border-slate-200 bg-white p-4"
               data-print-hide="true"
             >
@@ -2169,7 +2169,7 @@ export default function PosVoucherPage({
                   </span>
                 </div>
               </div>
-            </div>
+            </div> */}
           </aside>
         </div>
       </div>
