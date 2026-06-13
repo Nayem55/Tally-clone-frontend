@@ -2062,14 +2062,32 @@ export default function PosVoucherPage({
                           className={numInput}
                           value={form.redeemAmount}
                           disabled={!form.redeemLedgerId}
+                          min="0"
+                          max={Number(activeCustomer?.rewardPoints || 0)}
                           placeholder={
                             form.redeemLedgerId ? "0.00" : "Select ledger first"
                           }
                           onChange={(e) =>
-                            setForm((c) => ({
-                              ...c,
-                              redeemAmount: e.target.value,
-                            }))
+                            setForm((c) => {
+                              const availableRewardPoints = Number(
+                                activeCustomer?.rewardPoints || 0,
+                              );
+                              const rawValue = e.target.value;
+                              if (rawValue === "") {
+                                return { ...c, redeemAmount: "" };
+                              }
+                              const numericValue = Math.max(
+                                0,
+                                Math.min(
+                                  Number(rawValue || 0),
+                                  availableRewardPoints,
+                                ),
+                              );
+                              return {
+                                ...c,
+                                redeemAmount: String(numericValue),
+                              };
+                            })
                           }
                         />
                       </Field>
@@ -2122,8 +2140,8 @@ export default function PosVoucherPage({
                           - {formatMoney(Math.abs(rewardRedeemed), currency.symbol)}
                         </span>
                       </div>
-                      <div className="flex justify-between border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">
-                        <span className="text-white">Total payable</span>
+                      <div className="flex justify-between items-center border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">
+                        <span className="text-white text-xl">Total payable</span>
                         <span className="text-white">{formatMoney(totalAmount, currency.symbol)}</span>
                       </div>
                     </div>
