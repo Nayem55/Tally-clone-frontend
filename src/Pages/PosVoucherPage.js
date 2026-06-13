@@ -290,6 +290,8 @@ export default function PosVoucherPage({
     anniversary: "",
     note: "",
     additionalRows: [emptyAdjustmentRow],
+    redeemLedgerId: "",
+    redeemAmount: "",
     bankPayments: [{ ...emptyBankPaymentRow }],
     cashPayment: "",
     cashTendered: "",
@@ -496,6 +498,8 @@ export default function PosVoucherPage({
                 { ...emptyAdjustmentRow },
               ]
             : [{ ...emptyAdjustmentRow }],
+        redeemLedgerId: String(voucher.posMeta?.redeemLedgerId || ""),
+        redeemAmount: String(voucher.posMeta?.redeemAmount || ""),
         bankPayments:
           Array.isArray(voucher.posMeta?.bankPayments) &&
           voucher.posMeta.bankPayments.length > 0
@@ -628,10 +632,15 @@ export default function PosVoucherPage({
         label: customer.phone
           ? `${customer.phone}`
           : customer.name || "Customer",
-        meta:
-          customer.rewardPoints !== undefined
-            ? `${Number(customer.rewardPoints || 0).toLocaleString("en-IN")} pts`
-            : "",
+        // meta:
+        //   [
+        //     customer.companyName || "",
+        //     customer.rewardPoints !== undefined
+        //       ? `${Number(customer.rewardPoints || 0).toLocaleString("en-IN")} pts`
+        //       : "",
+        //   ]
+        //     .filter(Boolean)
+        //     .join(" • "),
       })),
     [customerSuggestions],
   );
@@ -679,13 +688,21 @@ export default function PosVoucherPage({
     (s, r) => s + r.calculatedAmount,
     0,
   );
-  const totalDiscountAmount = Number(
-    (rowDiscountTotal + additionalExpenseAmount).toFixed(2),
+  const redeemLedger =
+    ledgerMap.get(String(form.redeemLedgerId || "")) || null;
+  const rewardRedeemed = Number(
+    (
+      form.redeemLedgerId && Number(form.redeemAmount || 0) > 0
+        ? Number(form.redeemAmount || 0)
+        : 0
+    ).toFixed(2),
   );
-  const rewardRedeemed = 0;
+  const totalDiscountAmount = Number(
+    (rowDiscountTotal + additionalExpenseAmount + rewardRedeemed).toFixed(2),
+  );
   const totalAmount = Math.max(
     0,
-    Number((subtotal - additionalExpenseAmount).toFixed(2)),
+    Number((subtotal - additionalExpenseAmount - rewardRedeemed).toFixed(2)),
   );
   const totalItems = validRows.reduce((s, r) => s + Number(r.qty || 0), 0);
   const rewardToEarn = validRows.reduce(
@@ -770,7 +787,17 @@ export default function PosVoucherPage({
         .map((r) => ({
           label: r.ledger?.name || "Additional Discount",
           value: fmt(r.calculatedAmount),
-        })),
+        }))
+        .concat(
+          rewardRedeemed > 0
+            ? [
+                {
+                  label: redeemLedger?.name || "Redeem Points",
+                  value: fmt(rewardRedeemed),
+                },
+              ]
+            : [],
+        ),
       totalText: fmt(totalAmount),
       totalQtyText: String(totalItems),
       payments: [
@@ -797,6 +824,8 @@ export default function PosVoucherPage({
     totalAmount,
     totalItems,
     adjustmentRows,
+    redeemLedger,
+    rewardRedeemed,
     bankPayments,
     cashPayment,
     changeAmount,
@@ -1044,9 +1073,9 @@ export default function PosVoucherPage({
       birthDate: customer.birthDate || "",
       anniversary: customer.anniversary || "",
     }));
-    setShowCustomerSuggestions(false);
-    setActiveCustomerIndex(0);
-    focusSearchInput();
+    // setShowCustomerSuggestions(false);
+    // setActiveCustomerIndex(0);
+    // focusSearchInput();
   };
 
   /* ── excel helpers ── */
@@ -1169,6 +1198,8 @@ export default function PosVoucherPage({
       anniversary: "",
       note: "",
       additionalRows: [{ ...emptyAdjustmentRow }],
+      redeemLedgerId: "",
+      redeemAmount: "",
       bankPayments: [{ ...emptyBankPaymentRow }],
       cashPayment: "0",
       cashTendered: "",
@@ -1211,6 +1242,17 @@ export default function PosVoucherPage({
     );
     if (incompleteAdj)
       return alert("Please select a discount ledger before entering a value.");
+    if (!form.redeemLedgerId && Number(form.redeemAmount || 0) !== 0)
+      return alert(
+        "Please select a redeem discount ledger before entering redeem points.",
+      );
+    if (Number(form.redeemAmount || 0) < 0)
+      return alert("Redeem points cannot be negative.");
+    if (
+      rewardRedeemed > 0 &&
+      rewardRedeemed > Number(activeCustomer?.rewardPoints || 0)
+    )
+      return alert("Customer does not have enough reward points.");
     const incompleteBankPayment = (form.bankPayments || []).find(
       (row) => !row.ledgerId && Number(row.amount || 0) !== 0,
     );
@@ -1247,6 +1289,13 @@ export default function PosVoucherPage({
         credit: amount < 0 ? Math.abs(amount) : 0,
       });
     });
+    if (form.redeemLedgerId && rewardRedeemed > 0) {
+      lines.push({
+        ledgerId: form.redeemLedgerId,
+        debit: rewardRedeemed,
+        credit: 0,
+      });
+    }
 
     const payload = {
       voucherTypeId,
@@ -1311,6 +1360,9 @@ export default function PosVoucherPage({
         discountType: "fixed",
         discountValue: 0,
         invoiceDiscount: 0,
+        redeemLedgerId: form.redeemLedgerId || null,
+        redeemLedgerName: redeemLedger?.name || "",
+        redeemAmount: rewardRedeemed,
         subtotal,
         totalAmount,
         rewardEarned: rewardToEarn,
@@ -1365,6 +1417,8 @@ export default function PosVoucherPage({
           amount: r.calculatedAmount,
         })),
         redeemedPoints: rewardRedeemed,
+        redeemLedgerId: form.redeemLedgerId || null,
+        redeemLedgerName: redeemLedger?.name || "",
         payments: {
           bankPayments: bankPayments.map((row) => ({
             ledgerId: row.ledgerId,
@@ -1968,7 +2022,60 @@ export default function PosVoucherPage({
                       ))}
                     </div>
                   </div>
-                  <Field label="Note (optional)">
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold text-slate-700">
+                        Redeem points
+                      </span>
+                      {/* <span className="text-[12px] text-slate-500">
+                        Available:{" "}
+                        {Number(activeCustomer?.rewardPoints || 0).toLocaleString(
+                          "en-IN",
+                        )}{" "}
+                        pts
+                      </span> */}
+                    </div>
+                    <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_140px]">
+                      <Field
+                        label="Redeem discount ledger"
+                        action={
+                          <AddLink
+                            onClick={() =>
+                              navigateToCreateMaster("/masters/create/ledger")
+                            }
+                          />
+                        }
+                      >
+                        <SearchableSelect
+                          options={expenseLedgerOptions}
+                          value={form.redeemLedgerId}
+                          onChange={(v) =>
+                            setForm((c) => ({ ...c, redeemLedgerId: v }))
+                          }
+                          placeholder="Search redeem ledger..."
+                        />
+                      </Field>
+                      <Field label="Redeem points">
+                        <input
+                          type="number"
+                          data-vnav="true"
+                          className={numInput}
+                          value={form.redeemAmount}
+                          disabled={!form.redeemLedgerId}
+                          placeholder={
+                            form.redeemLedgerId ? "0.00" : "Select ledger first"
+                          }
+                          onChange={(e) =>
+                            setForm((c) => ({
+                              ...c,
+                              redeemAmount: e.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                  {/* <Field label="Note (optional)">
                     <textarea
                       rows={3}
                       data-vnav="true"
@@ -1979,7 +2086,7 @@ export default function PosVoucherPage({
                       }
                       placeholder="Remarks, delivery instructions…"
                     />
-                  </Field>
+                  </Field> */}
                 </div>
 
                 {/* Amount summary */}
@@ -2000,23 +2107,19 @@ export default function PosVoucherPage({
                       <div className="flex justify-between">
                         <span className="text-white">Item discount</span>
                         <span className="text-white">
-                          − {formatMoney(Math.abs(totalDiscountAmount), currency.symbol)}
+                          - {formatMoney(Math.abs(rowDiscountTotal), currency.symbol)}
                         </span>
                       </div>
-                      <div className="hidden">
-                        <span className="text-slate-500">Adj. expense</span>
-                        <span
-                          className={
-                            additionalExpenseAmount > 0
-                              ? "text-white"
-                              : "text-white"
-                          }
-                        >
-                          {additionalExpenseAmount > 0 ? "−" : "+"}{" "}
-                          {formatMoney(
-                            Math.abs(additionalExpenseAmount),
-                            currency.symbol,
-                          )}
+                      <div className="flex justify-between">
+                        <span className="text-white">Additional discount</span>
+                        <span className="text-white">
+                          - {formatMoney(Math.abs(additionalExpenseAmount), currency.symbol)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white">Redeem points</span>
+                        <span className="text-white">
+                          - {formatMoney(Math.abs(rewardRedeemed), currency.symbol)}
                         </span>
                       </div>
                       <div className="flex justify-between border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">

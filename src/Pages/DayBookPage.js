@@ -38,7 +38,7 @@ export default function DayBookPage() {
   const [voucherTypes, setVoucherTypes] = useState([]);
   const [search, setSearch] = useState(searchParams.get("q") || "");
   const [voucherTypeId, setVoucherTypeId] = useState("");
-  const [fromDate, setFromDate] = useState(searchParams.get("from") || monthStart);
+  const [fromDate, setFromDate] = useState(searchParams.get("from") || today);
   const [toDate, setToDate] = useState(searchParams.get("to") || today);
   const requestedCompanyId = searchParams.get("companyId") || "";
   const ledgerQuery = (searchParams.get("ledger") || "").trim().toLowerCase();
