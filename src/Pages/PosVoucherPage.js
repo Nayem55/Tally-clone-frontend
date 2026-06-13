@@ -42,7 +42,7 @@ import {
 
 const POS_TEMPLATE_SHEET = "POS Voucher";
 const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
-const emptyAdjustmentRow = { ledgerId: "", mode: "fixed", value: "" };
+const emptyAdjustmentRow = { ledgerId: "", value: "" };
 const emptyBankPaymentRow = { ledgerId: "", amount: "" };
 
 function formatMaskedPhone(value = "") {
@@ -53,6 +53,27 @@ function formatMaskedPhone(value = "") {
   const suffix = digits.slice(-2);
   const masked = "x".repeat(Math.max(0, digits.length - 5));
   return `${prefix}${masked}${suffix}`;
+}
+
+function parseAdjustmentInput(rawValue, explicitMode = "") {
+  const text = String(rawValue ?? "").trim();
+  if (!text) {
+    return { mode: explicitMode || "fixed", numericValue: 0, calculatedAmount: 0 };
+  }
+
+  const inferredPercentage = text.includes("%");
+  const numericValue = Number(text.replace(/%/g, "").trim() || 0);
+  const mode =
+    explicitMode === "percentage" || explicitMode === "fixed"
+      ? explicitMode
+      : inferredPercentage
+        ? "percentage"
+        : "fixed";
+
+  return {
+    mode,
+    numericValue: Number.isFinite(numericValue) ? numericValue : 0,
+  };
 }
 
 function formatInvoiceTime24(value) {
@@ -489,14 +510,16 @@ export default function PosVoucherPage({
         additionalRows:
           Array.isArray(voucher.posMeta?.additionalAdjustments) &&
           voucher.posMeta.additionalAdjustments.length > 0
-            ? [
-                ...voucher.posMeta.additionalAdjustments.map((row) => ({
-                  ledgerId: String(row.ledgerId || ""),
-                  mode: row.mode || "fixed",
-                  value: String(row.value ?? row.amount ?? ""),
-                })),
-                { ...emptyAdjustmentRow },
-              ]
+              ? [
+                  ...voucher.posMeta.additionalAdjustments.map((row) => ({
+                    ledgerId: String(row.ledgerId || ""),
+                    value:
+                      row.mode === "percentage"
+                        ? `${row.value ?? row.amount ?? ""}%`
+                        : String(row.value ?? row.amount ?? ""),
+                  })),
+                  { ...emptyAdjustmentRow },
+                ]
             : [{ ...emptyAdjustmentRow }],
         redeemLedgerId: String(voucher.posMeta?.redeemLedgerId || ""),
         redeemAmount: String(voucher.posMeta?.redeemAmount || ""),
@@ -674,8 +697,9 @@ export default function PosVoucherPage({
   const adjustmentRows = (form.additionalRows || [])
     .map((row) => {
       const ledger = ledgerMap.get(String(row.ledgerId || "")) || null;
-      const mode = row.mode || "fixed";
-      const rawValue = Number(row.value || 0);
+      const parsedValue = parseAdjustmentInput(row.value, row.mode);
+      const mode = parsedValue.mode;
+      const rawValue = parsedValue.numericValue;
       const calculatedAmount =
         mode === "percentage"
           ? Number(((subtotal * rawValue) / 100).toFixed(2))
@@ -1237,9 +1261,10 @@ export default function PosVoucherPage({
     if (!form.salesLedger && !defaults.salesLedger?._id)
       return alert("Please select a sales ledger");
     if (validRows.length === 0) return alert("Please add at least one item");
-    const incompleteAdj = (form.additionalRows || []).find(
-      (r) => !r.ledgerId && Number(r.value || 0) !== 0,
-    );
+    const incompleteAdj = (form.additionalRows || []).find((r) => {
+      const hasValue = String(r.value ?? "").trim() !== "";
+      return !r.ledgerId && hasValue;
+    });
     if (incompleteAdj)
       return alert("Please select a discount ledger before entering a value.");
     if (!form.redeemLedgerId && Number(form.redeemAmount || 0) !== 0)
@@ -1349,13 +1374,19 @@ export default function PosVoucherPage({
           ledgerId: r.ledgerId,
           ledgerName: r.ledger?.name || "",
           nature: "EXPENSE",
-          mode: r.mode || "fixed",
-          value: Number(r.value || 0),
+          mode: parseAdjustmentInput(r.value, r.mode).mode,
+          value: parseAdjustmentInput(r.value, r.mode).numericValue,
           amount: r.calculatedAmount,
         })),
         additionalExpenseLedgerId: adjustmentRows[0]?.ledgerId || null,
-        additionalExpenseMode: adjustmentRows[0]?.mode || "fixed",
-        additionalExpenseValue: Number(adjustmentRows[0]?.value || 0),
+        additionalExpenseMode: parseAdjustmentInput(
+          adjustmentRows[0]?.value,
+          adjustmentRows[0]?.mode,
+        ).mode,
+        additionalExpenseValue: parseAdjustmentInput(
+          adjustmentRows[0]?.value,
+          adjustmentRows[0]?.mode,
+        ).numericValue,
         additionalExpenseAmount,
         discountType: "fixed",
         discountValue: 0,
@@ -1950,7 +1981,7 @@ export default function PosVoucherPage({
                       {(form.additionalRows || []).map((row, index) => (
                         <div
                           key={`adj-${index}`}
-                          className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_120px_140px_32px]"
+                          className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_260px_32px]"
                         >
                           <Field
                             label="Discount ledger"
@@ -1973,32 +2004,17 @@ export default function PosVoucherPage({
                               placeholder="Search discount ledger..."
                             />
                           </Field>
-                          <Field label="Type">
-                            <select
-                              data-vnav="true"
-                              className={inputBase}
-                              value={row.mode || "fixed"}
-                              onChange={(e) =>
-                                updateAdjustmentRow(
-                                  index,
-                                  "mode",
-                                  e.target.value,
-                                )
-                              }
-                            >
-                              <option value="fixed">Fixed</option>
-                              <option value="percentage">Percentage</option>
-                            </select>
-                          </Field>
-                          <Field label="Amount">
+                          <Field label="Discount">
                             <input
-                              type="number"
+                              type="text"
                               data-vnav="true"
                               className={numInput}
                               value={row.value}
                               disabled={!row.ledgerId}
                               placeholder={
-                                row.ledgerId ? "0.00" : "Select ledger first"
+                                row.ledgerId
+                                  ? "20 or 20%"
+                                  : "Select ledger first"
                               }
                               onChange={(e) =>
                                 updateAdjustmentRow(
@@ -2035,7 +2051,7 @@ export default function PosVoucherPage({
                         pts
                       </span> */}
                     </div>
-                    <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_140px]">
+                    <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_140px_32px]">
                       <Field
                         label="Redeem discount ledger"
                         action={
@@ -2091,6 +2107,21 @@ export default function PosVoucherPage({
                           }
                         />
                       </Field>
+                      <div className="flex items-end pb-0.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((c) => ({
+                              ...c,
+                              redeemLedgerId: "",
+                              redeemAmount: "",
+                            }))
+                          }
+                          className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {/* <Field label="Note (optional)">
