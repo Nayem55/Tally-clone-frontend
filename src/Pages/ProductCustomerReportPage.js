@@ -433,7 +433,10 @@ export default function ProductCustomerReportPage() {
                         <p className="font-semibold text-slate-900">
                           {activeProduct?.itemName || entry.itemName} × {Number(entry.qty).toLocaleString("en-IN")}
                         </p>
-                        <p className="text-sm text-slate-500 mt-1">{formatDisplayDate(entry.purchaseDate)}</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                          {entry.companyName ? `${entry.companyName} ` : ""}
+                          ({formatDisplayDate(entry.purchaseDate)})
+                        </p>
                       </div>
                       <p className="font-semibold text-emerald-600">
                         {formatCurrencyAmount(entry.amount, selectedCompany)}
