@@ -78,6 +78,7 @@ export default function CustomerBehaviourOverviewPage() {
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-900">{customer.name}</div>
                         <div className="text-xs text-slate-400">{customer.phone}</div>
+                        <div className="text-xs text-slate-400">{customer.companyName || "-"}</div>
                       </td>
                       <td className="px-4 py-3">{customer.totalOrders}</td>
                       <td className="px-4 py-3">{formatCurrencyAmount(customer.totalSpent, selectedCompany)}</td>
@@ -107,6 +108,7 @@ export default function CustomerBehaviourOverviewPage() {
                       <div>
                         <p className="font-medium text-slate-900">{row.customerName}</p>
                         <p className="mt-1 flex items-center gap-2 text-xs text-slate-400"><Phone className="h-3.5 w-3.5" /> {row.phone}</p>
+                        <p className="mt-1 text-xs text-slate-400">{row.companyName || "-"}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-slate-900">{formatCurrencyAmount(row.totalAmount, selectedCompany)}</p>
