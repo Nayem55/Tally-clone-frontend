@@ -85,6 +85,27 @@ function normalizeMonthDayInput(value = "") {
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
+function formatLongDisplayDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const day = date.getDate();
+  const mod100 = day % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? "th"
+      : day % 10 === 1
+        ? "st"
+        : day % 10 === 2
+          ? "nd"
+          : day % 10 === 3
+            ? "rd"
+            : "th";
+  const month = date.toLocaleString("en-GB", { month: "long" });
+  const year = date.getFullYear();
+  return `${day}${suffix} ${month} ${year}`;
+}
+
 /* ─── tiny shared primitives ─────────────────────────────────────── */
 
 function Label({ children, htmlFor }) {
@@ -1963,22 +1984,22 @@ export default function PosVoucherPage({
 
                 {/* Amount summary */}
                 <div>
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                  <div className="rounded-lg border border-white bg-blue-900 font-bold p-4">
+                    <p className="mb-3 text-[12px] font-bold uppercase tracking-wide text-white">
                       Order summary
                     </p>
                     <div className="space-y-2 text-[13px]">
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Items (qty)</span>
-                        <span>{totalItems}</span>
+                        <span className="text-white">Items (qty)</span>
+                        <span className="text-white">{totalItems}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Subtotal</span>
-                        <span>{formatMoney(subtotal, currency.symbol)}</span>
+                        <span className="text-white">Subtotal</span>
+                        <span className="text-white">{formatMoney(subtotal, currency.symbol)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Item discount</span>
-                        <span className="text-rose-600">
+                        <span className="text-white">Item discount</span>
+                        <span className="text-white">
                           − {formatMoney(Math.abs(totalDiscountAmount), currency.symbol)}
                         </span>
                       </div>
@@ -1987,8 +2008,8 @@ export default function PosVoucherPage({
                         <span
                           className={
                             additionalExpenseAmount > 0
-                              ? "text-rose-600"
-                              : "text-emerald-600"
+                              ? "text-white"
+                              : "text-white"
                           }
                         >
                           {additionalExpenseAmount > 0 ? "−" : "+"}{" "}
@@ -1998,14 +2019,14 @@ export default function PosVoucherPage({
                           )}
                         </span>
                       </div>
-                      <div className="flex justify-between border-t border-slate-200 pt-2.5 text-[14px] font-semibold text-slate-900">
-                        <span>Total payable</span>
-                        <span>{formatMoney(totalAmount, currency.symbol)}</span>
+                      <div className="flex justify-between border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">
+                        <span className="text-white">Total payable</span>
+                        <span className="text-white">{formatMoney(totalAmount, currency.symbol)}</span>
                       </div>
                     </div>
-                    <div className="mt-3 flex justify-between border-t border-dashed border-slate-200 pt-3 text-[12px]">
+                    <div className="mt-3 flex justify-between border-t border-dashed border-white pt-3 text-[12px]">
                       <span className="text-slate-400">Reward to earn</span>
-                      <span className="font-medium text-emerald-600">
+                      <span className="font-medium text-white">
                         {rewardToEarn.toLocaleString("en-IN")} pts
                       </span>
                     </div>
@@ -2131,11 +2152,11 @@ export default function PosVoucherPage({
                     }
                   />
                 </Field>
-                <div className="rounded-lg bg-emerald-50 px-3 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                <div className="rounded-lg bg-yellow-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-yellow-600">
                     Change to return
                   </p>
-                  <p className="mt-1 text-2xl font-semibold text-emerald-700">
+                  <p className="mt-1 text-2xl font-semibold text-yellow-700">
                     {formatMoney(changeAmount, currency.symbol)}
                   </p>
                 </div>
@@ -2173,12 +2194,8 @@ export default function PosVoucherPage({
                           {purchase.itemName || "—"} ×{" "}
                           {Number(purchase.qty || 0).toLocaleString("en-IN")}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                          {purchase.purchaseDate
-                            ? new Date(purchase.purchaseDate)
-                                .toLocaleDateString("en-GB")
-                                .replace(/\//g, "-")
-                            : "—"}
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {(purchase.companyName || "Unknown company").trim()} ({formatLongDisplayDate(purchase.purchaseDate)})
                         </p>
                       </div>
                     ))}
@@ -2256,4 +2273,3 @@ export default function PosVoucherPage({
     </div>
   );
 }
-
