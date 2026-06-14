@@ -31,6 +31,7 @@ import InventoryVoucherPage from "./Pages/InventoryVoucherPage";
 import StockGroupSummaryPage from "./Pages/StockGroupSummaryPage";
 import PosVoucherPage from "./Pages/PosVoucherPage";
 import CustomerBehaviourOverviewPage from "./Pages/CustomerBehaviourOverviewPage";
+import CustomerBehaviourCustomerDetailPage from "./Pages/CustomerBehaviourCustomerDetailPage";
 import ProductCustomerReportPage from "./Pages/ProductCustomerReportPage";
 import CustomerDimensionReportPage from "./Pages/CustomerDimensionReportPage";
 import StockItemDetailPage from "./Pages/StockItemDetailPage";
@@ -748,6 +749,10 @@ function AppShell() {
             <Route path="/reports/more/analysis/cash-funds-flow" element={Placeholder("Analysis - Cash/Funds Flow", "Cash and funds flow analysis is scaffolded here for a later reporting expansion.")} />
             <Route path="/reports/more/analysis/performance-analysis" element={Placeholder("Performance Analysis", "Performance analysis can be added here once comparative periods and ratio models are finalized.")} />
             <Route path="/reports/customer-behaviour/overview" element={<CustomerBehaviourOverviewPage />} />
+            <Route
+              path="/reports/customer-behaviour/overview/customer"
+              element={<CustomerBehaviourCustomerDetailPage />}
+            />
             <Route path="/reports/customer-behaviour/product-wise" element={<ProductCustomerReportPage />} />
             <Route
               path="/reports/customer-behaviour/stock-group-wise"

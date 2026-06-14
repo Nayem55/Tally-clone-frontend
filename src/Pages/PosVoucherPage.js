@@ -1800,7 +1800,7 @@ export default function PosVoucherPage({
                   options={salesLedgerOptions}
                   value={form.salesLedger}
                   onChange={(v) => setForm((c) => ({ ...c, salesLedger: v }))}
-                  placeholder="Select sales ledger"
+                  placeholder="Select sales ledger"                  
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
                   {selectedSalesLedger?.name || "No ledger selected"}
@@ -1875,13 +1875,13 @@ export default function PosVoucherPage({
                 <div className="lg:col-span-3">
                   <Field
                     label="Sales person"
-                    action={
-                      <AddLink
-                        onClick={() =>
-                          navigateToCreateMaster("/masters/create/employee")
-                        }
-                      />
-                    }
+                    // action={
+                    //   <AddLink
+                    //     onClick={() =>
+                    //       navigateToCreateMaster("/masters/create/employee")
+                    //     }
+                    //   />
+                    // }
                   >
                     <SearchableSelect
                       options={[
@@ -2259,7 +2259,7 @@ export default function PosVoucherPage({
                                 placeholder={
                                   row.ledgerId
                                     ? "0 or 0%"
-                                    : "Select ledger first"
+                                    : ""
                                 }
                                 onChange={(e) =>
                                   updateAdjustmentRow(
@@ -2330,7 +2330,7 @@ export default function PosVoucherPage({
                           placeholder={
                             form.redeemLedgerId
                               ? "Enter points"
-                              : "Select ledger first"
+                              : ""
                           }
                           onChange={(e) =>
                             setForm((c) => {
@@ -2432,7 +2432,7 @@ export default function PosVoucherPage({
                                 placeholder={
                                   row.giftVoucherId && row.ledgerId
                                     ? "0.00"
-                                    : "Select voucher + ledger"
+                                    : ""
                                 }
                                 onChange={(e) =>
                                   updateGiftVoucherRow(
