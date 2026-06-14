@@ -6,6 +6,7 @@ import {
   Download,
   Focus,
   History,
+  PackageOpen,
   Plus,
   Printer,
   ScanLine,
@@ -59,7 +60,11 @@ function formatMaskedPhone(value = "") {
 function parseAdjustmentInput(rawValue, explicitMode = "") {
   const text = String(rawValue ?? "").trim();
   if (!text) {
-    return { mode: explicitMode || "fixed", numericValue: 0, calculatedAmount: 0 };
+    return {
+      mode: explicitMode || "fixed",
+      numericValue: 0,
+      calculatedAmount: 0,
+    };
   }
 
   const inferredPercentage = text.includes("%");
@@ -143,9 +148,9 @@ function Label({ children, htmlFor }) {
 
 function Field({ label, htmlFor, action, children }) {
   return (
-    <div>
+    <div className="min-w-0">
       {(label || action) && (
-        <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="mb-1 flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
           {label && <Label htmlFor={htmlFor}>{label}</Label>}
           {action}
         </div>
@@ -160,7 +165,7 @@ function AddLink({ onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1 rounded border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-50"
     >
       <Plus className="h-3 w-3" /> Add
     </button>
@@ -168,10 +173,10 @@ function AddLink({ onClick }) {
 }
 
 const inputBase =
-  "w-full rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500/20 placeholder:text-slate-400";
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 placeholder:text-slate-400";
 const numInput = inputBase + " text-right";
 const readonlyInput =
-  inputBase + " cursor-not-allowed bg-slate-100 text-slate-500";
+  inputBase + " cursor-not-allowed bg-slate-50 text-slate-500";
 
 /* ─── Voucher-number field with dropdown suggestion ─────────────── */
 function VoucherNumberInput({ value, onChange, suggestedNumber }) {
@@ -516,16 +521,16 @@ export default function PosVoucherPage({
         additionalRows:
           Array.isArray(voucher.posMeta?.additionalAdjustments) &&
           voucher.posMeta.additionalAdjustments.length > 0
-              ? [
-                  ...voucher.posMeta.additionalAdjustments.map((row) => ({
-                    ledgerId: String(row.ledgerId || ""),
-                    value:
-                      row.mode === "percentage"
-                        ? `${row.value ?? row.amount ?? ""}%`
-                        : String(row.value ?? row.amount ?? ""),
-                  })),
-                  { ...emptyAdjustmentRow },
-                ]
+            ? [
+                ...voucher.posMeta.additionalAdjustments.map((row) => ({
+                  ledgerId: String(row.ledgerId || ""),
+                  value:
+                    row.mode === "percentage"
+                      ? `${row.value ?? row.amount ?? ""}%`
+                      : String(row.value ?? row.amount ?? ""),
+                })),
+                { ...emptyAdjustmentRow },
+              ]
             : [{ ...emptyAdjustmentRow }],
         giftVoucherRows:
           Array.isArray(voucher.posMeta?.giftVoucherAdjustments) &&
@@ -638,8 +643,9 @@ export default function PosVoucherPage({
         ? defaultBankLedgers
         : allLedgers.filter(
             (l) =>
-              String(l.group?.name || "").trim().toLowerCase() ===
-              "bank accounts",
+              String(l.group?.name || "")
+                .trim()
+                .toLowerCase() === "bank accounts",
           );
     return bankLedgers.map((l) => ({
       value: String(l._id),
@@ -748,10 +754,7 @@ export default function PosVoucherPage({
       amount: Number(row.amount || 0),
     }))
     .filter(
-      (row) =>
-        row.giftVoucherId &&
-        row.ledgerId &&
-        Number(row.amount || 0) > 0,
+      (row) => row.giftVoucherId && row.ledgerId && Number(row.amount || 0) > 0,
     );
 
   const additionalExpenseAmount = adjustmentRows.reduce(
@@ -762,13 +765,11 @@ export default function PosVoucherPage({
     (s, r) => s + Number(r.amount || 0),
     0,
   );
-  const redeemLedger =
-    ledgerMap.get(String(form.redeemLedgerId || "")) || null;
+  const redeemLedger = ledgerMap.get(String(form.redeemLedgerId || "")) || null;
   const rewardRedeemed = Number(
-    (
-      form.redeemLedgerId && Number(form.redeemAmount || 0) > 0
-        ? Number(form.redeemAmount || 0)
-        : 0
+    (form.redeemLedgerId && Number(form.redeemAmount || 0) > 0
+      ? Number(form.redeemAmount || 0)
+      : 0
     ).toFixed(2),
   );
   const totalDiscountAmount = Number(
@@ -924,7 +925,10 @@ export default function PosVoucherPage({
       Math.max(0, Number(bankPaymentTotal || 0)),
       totalAmount,
     );
-    const autoCash = Math.max(0, Number((totalAmount - safeBankTotal).toFixed(2)));
+    const autoCash = Math.max(
+      0,
+      Number((totalAmount - safeBankTotal).toFixed(2)),
+    );
     const nextCash = String(autoCash);
     if (String(form.cashPayment) !== nextCash) {
       setForm((c) => ({ ...c, cashPayment: nextCash }));
@@ -1348,10 +1352,8 @@ export default function PosVoucherPage({
     });
   };
 
-  const getApiErrorMessage = (
-    err,
-    fallback = "Unable to save POS voucher",
-  ) => err?.response?.data?.message || err?.message || fallback;
+  const getApiErrorMessage = (err, fallback = "Unable to save POS voucher") =>
+    err?.response?.data?.message || err?.message || fallback;
 
   const submit = async (options = {}) => {
     try {
@@ -1367,7 +1369,9 @@ export default function PosVoucherPage({
         return !r.ledgerId && hasValue;
       });
       if (incompleteAdj)
-        return alert("Please select a discount ledger before entering a value.");
+        return alert(
+          "Please select a discount ledger before entering a value.",
+        );
       const incompleteGiftVoucher = (form.giftVoucherRows || []).find((row) => {
         const hasAnyValue =
           String(row.giftVoucherId || "").trim() !== "" ||
@@ -1375,9 +1379,7 @@ export default function PosVoucherPage({
           String(row.amount || "").trim() !== "";
         if (!hasAnyValue) return false;
         return (
-          !row.giftVoucherId ||
-          !row.ledgerId ||
-          !(Number(row.amount || 0) > 0)
+          !row.giftVoucherId || !row.ledgerId || !(Number(row.amount || 0) > 0)
         );
       });
       if (incompleteGiftVoucher) {
@@ -1412,7 +1414,13 @@ export default function PosVoucherPage({
 
       const lines = [
         ...(cashPayment > 0 && defaults.cashLedger?._id
-          ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
+          ? [
+              {
+                ledgerId: defaults.cashLedger._id,
+                debit: cashPayment,
+                credit: 0,
+              },
+            ]
           : []),
         ...bankPayments.map((row) => ({
           ledgerId: row.ledgerId,
@@ -1469,7 +1477,8 @@ export default function PosVoucherPage({
               employeeName: selectedSalesPerson.name || "",
               employeeNumber: selectedSalesPerson.employeeNumber || "",
               department: selectedSalesPerson.otherDetails?.department || "",
-              designation: selectedSalesPerson.personalDetails?.designation || "",
+              designation:
+                selectedSalesPerson.personalDetails?.designation || "",
             }
           : {},
         lines,
@@ -1634,7 +1643,10 @@ export default function PosVoucherPage({
       setStatusMessage({
         tone: "error",
         title: "Unable to save POS voucher",
-        description: getApiErrorMessage(err, "Please check the gift voucher and try again."),
+        description: getApiErrorMessage(
+          err,
+          "Please check the gift voucher and try again.",
+        ),
       });
     }
   };
@@ -1689,20 +1701,20 @@ export default function PosVoucherPage({
     <div
       ref={containerRef}
       onKeyDownCapture={handleEnterNavigation}
-      className="min-h-screen bg-slate-100 p-4 mb-32"
+      className="min-h-screen bg-slate-100 p-3 sm:p-4 mb-32"
     >
-      <div className="mx-auto max-w-[1480px] space-y-4">
+      <div className="mx-auto max-w-[1600px] space-y-4">
         {/* ── Page header ── */}
-        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-[28px] border border-slate-200 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-300 text-emerald-700 shadow-sm">
               <ShoppingCart className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-base font-semibold text-slate-900">
+              <h1 className="text-[18px] font-semibold text-slate-900">
                 POS Sales Voucher
               </h1>
-              <p className="text-[12px] text-slate-500">
+              <p className="text-[13px] text-slate-500">
                 Fast checkout · barcode scanner · reward points
               </p>
             </div>
@@ -1712,7 +1724,7 @@ export default function PosVoucherPage({
               <button
                 type="button"
                 onClick={handleExportTemplate}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Download className="h-3.5 w-3.5" /> Export template
               </button>
@@ -1720,7 +1732,7 @@ export default function PosVoucherPage({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 <Upload className="h-3.5 w-3.5" />{" "}
                 {importBusy ? "Importing…" : "Import Excel"}
@@ -1747,8 +1759,8 @@ export default function PosVoucherPage({
         )}
 
         {/* ── Voucher info strip ── */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-5">
+          <div className="grid gap-4 xl:grid-cols-[340px_320px_minmax(0,1fr)_160px]">
             <Field label="Voucher no.">
               <VoucherNumberInput
                 value={form.number}
@@ -1765,40 +1777,40 @@ export default function PosVoucherPage({
                 onChange={(v) => setForm((c) => ({ ...c, date: v }))}
               />
             </Field>
-            <div className="sm:col-span-2">
-              <Field
-                label="Select Sales ledger"
-                action={
-                  <AddLink
-                    onClick={() =>
-                      navigateToCreateMaster("/masters/create/ledger")
-                    }
-                  />
-                }
-              >
+            <div>
+              <Field label="Sales Ledger">
                 <SearchableSelect
                   options={salesLedgerOptions}
                   value={form.salesLedger}
                   onChange={(v) => setForm((c) => ({ ...c, salesLedger: v }))}
-                  placeholder="Search sales ledger…"
+                  placeholder="Select sales ledger"
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
                   {selectedSalesLedger?.name || "No ledger selected"}
                 </p>
               </Field>
             </div>
+            <div className="flex items-start justify-end xl:pt-[25px]">
+              <button
+                type="button"
+                onClick={() => navigateToCreateMaster("/masters/create/ledger")}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-emerald-600 hover:bg-emerald-50"
+              >
+                <Plus className="h-4 w-4" /> Add New
+              </button>
+            </div>
           </div>
         </div>
 
         {/* ── Main two-column layout ── */}
-        <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           {/* ── Left column ── */}
           <div className="space-y-4">
             {/* Customer card */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+            <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+              <h2 className="mb-5 flex items-center gap-2 text-[15px] font-semibold text-slate-800">
                 <UserSearch className="h-4 w-4 text-slate-400" /> Customer
-                details
+                Information
               </h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
                 {/* Phone */}
@@ -1810,7 +1822,8 @@ export default function PosVoucherPage({
                       allowCustomValue
                       onChange={(value) => {
                         const selected = customerSuggestions.find(
-                          (customer) => String(customer.phone || "") === String(value),
+                          (customer) =>
+                            String(customer.phone || "") === String(value),
                         );
                         if (selected) {
                           applyCustomer(selected);
@@ -1821,7 +1834,7 @@ export default function PosVoucherPage({
                         setActiveCustomerIndex(0);
                       }}
                       placeholder="Search or enter mobile number"
-                      inputClassName="rounded border-slate-200 bg-slate-50 text-[13px] focus:border-blue-500 focus:bg-white"
+                      inputClassName="rounded-xl border-slate-200 bg-white text-[13px] focus:border-emerald-400 focus:bg-white"
                     />
                   </Field>
                 </div>
@@ -1836,7 +1849,7 @@ export default function PosVoucherPage({
                       onChange={(e) =>
                         setForm((c) => ({ ...c, customerName: e.target.value }))
                       }
-                      placeholder="Full name"
+                      placeholder="Enter customer name"
                     />
                   </Field>
                 </div>
@@ -1862,7 +1875,7 @@ export default function PosVoucherPage({
                       onChange={(v) =>
                         setForm((c) => ({ ...c, salesPersonId: v }))
                       }
-                      placeholder="Search…"
+                      placeholder="Select sales person"
                     />
                     <p className="mt-1 text-[11px] text-slate-400">
                       {selectedSalesPerson?.employeeNumber
@@ -1874,14 +1887,17 @@ export default function PosVoucherPage({
 
                 {/* Reward badge */}
                 <div className="flex items-end lg:col-span-3">
-                  <div className="w-full rounded-lg bg-emerald-50 px-3 py-2.5">
+                  <div className="w-full rounded-2xl bg-emerald-50 px-4 py-4">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
-                      Reward points
+                      Reward Points
                     </p>
                     <p className="mt-1 text-2xl font-semibold text-emerald-700">
                       {Number(activeCustomer?.rewardPoints || 0).toLocaleString(
                         "en-IN",
                       )}
+                    </p>
+                    <p className="mt-1 text-[12px] text-emerald-600">
+                      Available Points
                     </p>
                   </div>
                 </div>
@@ -1896,7 +1912,7 @@ export default function PosVoucherPage({
                       onChange={(e) =>
                         setForm((c) => ({ ...c, address: e.target.value }))
                       }
-                      placeholder="Street, area…"
+                      placeholder="Enter address"
                     />
                   </Field>
                 </div>
@@ -1944,7 +1960,7 @@ export default function PosVoucherPage({
             </div>
 
             {/* Items card */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row">
                 <div className="relative flex-1">
                   <ScanLine className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
@@ -1992,7 +2008,7 @@ export default function PosVoucherPage({
                 </div>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[13px] font-medium text-blue-700 hover:bg-blue-100"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] font-medium text-blue-700 hover:bg-blue-100"
                   onClick={focusSearchInput}
                 >
                   <Focus className="h-3.5 w-3.5" /> Focus scanner
@@ -2000,7 +2016,7 @@ export default function PosVoucherPage({
               </div>
 
               {/* Items table */}
-              <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50">
@@ -2033,9 +2049,15 @@ export default function PosVoucherPage({
                       <tr>
                         <td
                           colSpan={8}
-                          className="px-4 py-10 text-center text-[13px] text-slate-400"
+                          className="px-4 py-16 text-center text-[13px] text-slate-400"
                         >
-                          Scan a barcode or search above to add items
+                          <div className="flex flex-col items-center gap-2">
+                            <PackageOpen className="h-10 w-10 text-slate-300" />
+                            <p className="text-[18px] font-medium text-slate-500">
+                              No items added yet
+                            </p>
+                            <p>Scan a barcode or search above to add items</p>
+                          </div>
                         </td>
                       </tr>
                     ) : (
@@ -2111,99 +2133,121 @@ export default function PosVoucherPage({
               </div>
 
               {/* Below-table: adjustments + summary side by side */}
-              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="mt-5 grid gap-5">
                 {/* Adjustments + note */}
-                <div className="space-y-4">
-                  <div>
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-[13px] font-semibold text-slate-700">
-                        Additional discount
-                      </span>
-                      <button
-                        type="button"
-                        onClick={addAdjustmentRow}
-                        className="inline-flex items-center gap-1 rounded border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
-                      >
-                        <Plus className="h-3 w-3" /> Add row
-                      </button>
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">
+                        Discount Adjustments
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Apply discounts, redeem points, or use gift vouchers
+                      </p>
                     </div>
-                    <div className="space-y-2">
-                      {(form.additionalRows || []).map((row, index) => (
-                        <div
-                          key={`adj-${index}`}
-                          className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_260px_32px]"
+                  </div>
+
+                  <div className="grid gap-4 p-5 lg:grid-cols-3">
+                    {/* Additional Discount */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            Discount
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Extra invoice discount
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={addAdjustmentRow}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
                         >
-                          <Field
-                            label="Discount ledger"
-                            action={
-                              <AddLink
-                                onClick={() =>
-                                  navigateToCreateMaster(
-                                    "/masters/create/ledger",
+                          + Add
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {(form.additionalRows || []).map((row, index) => (
+                          <div
+                            key={`adj-${index}`}
+                            className="rounded-xl border border-slate-200 bg-white p-3"
+                          >
+                            <Field
+                              label="Discount Ledger"
+                              action={
+                                <AddLink
+                                  onClick={() =>
+                                    navigateToCreateMaster(
+                                      "/masters/create/ledger",
+                                    )
+                                  }
+                                />
+                              }
+                            >
+                              <SearchableSelect
+                                options={expenseLedgerOptions}
+                                value={row.ledgerId}
+                                onChange={(v) =>
+                                  updateAdjustmentRow(index, "ledgerId", v)
+                                }
+                                placeholder="Select ledger"
+                              />
+                            </Field>
+
+                            <div className="mt-3 flex gap-2">
+                              <input
+                                type="text"
+                                data-vnav="true"
+                                className={numInput + " flex-1"}
+                                value={row.value}
+                                disabled={!row.ledgerId}
+                                placeholder={
+                                  row.ledgerId
+                                    ? "0 or 0%"
+                                    : "Select ledger first"
+                                }
+                                onChange={(e) =>
+                                  updateAdjustmentRow(
+                                    index,
+                                    "value",
+                                    e.target.value,
                                   )
                                 }
                               />
-                            }
-                          >
-                            <SearchableSelect
-                              options={expenseLedgerOptions}
-                              value={row.ledgerId}
-                              onChange={(v) =>
-                                updateAdjustmentRow(index, "ledgerId", v)
-                              }
-                              placeholder="Search discount ledger..."
-                            />
-                          </Field>
-                          <Field label="Discount">
-                            <input
-                              type="text"
-                              data-vnav="true"
-                              className={numInput}
-                              value={row.value}
-                              disabled={!row.ledgerId}
-                              placeholder={
-                                row.ledgerId
-                                  ? "20 or 20%"
-                                  : "Select ledger first"
-                              }
-                              onChange={(e) =>
-                                updateAdjustmentRow(
-                                  index,
-                                  "value",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </Field>
-                          <div className="flex items-end pb-0.5">
-                            <button
-                              type="button"
-                              onClick={() => removeAdjustmentRow(index)}
-                              className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+
+                              <button
+                                type="button"
+                                onClick={() => removeAdjustmentRow(index)}
+                                className="rounded-lg border border-rose-100 px-2 text-rose-500 hover:bg-rose-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-[13px] font-semibold text-slate-700">
-                        Redeem points
-                      </span>
-                      {/* <span className="text-[12px] text-slate-500">
-                        Available:{" "}
-                        {Number(activeCustomer?.rewardPoints || 0).toLocaleString(
-                          "en-IN",
-                        )}{" "}
-                        pts
-                      </span> */}
-                    </div>
-                    <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_260px_32px]">
+
+                    {/* Redeem Points */}
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold text-slate-800">
+                          Redeem Points
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Available:{" "}
+                          {Number(
+                            activeCustomer?.rewardPoints || 0,
+                          ).toLocaleString("en-IN")}{" "}
+                          pts
+                        </p>
+                      </div>
+
                       <Field
-                        label="Redeem discount ledger"
+                        label="Redeem Ledger"
                         action={
                           <AddLink
                             onClick={() =>
@@ -2218,46 +2262,46 @@ export default function PosVoucherPage({
                           onChange={(v) =>
                             setForm((c) => ({ ...c, redeemLedgerId: v }))
                           }
-                          placeholder="Search redeem ledger..."
+                          placeholder="Select redeem ledger"
                         />
                       </Field>
-                      <Field label="Redeem points">
+
+                      <div className="mt-3 flex gap-2">
                         <input
                           type="number"
                           data-vnav="true"
-                          className={numInput}
+                          className={numInput + " flex-1"}
                           value={form.redeemAmount}
                           disabled={!form.redeemLedgerId}
                           min="0"
                           max={Number(activeCustomer?.rewardPoints || 0)}
                           placeholder={
-                            form.redeemLedgerId ? "0.00" : "Select ledger first"
+                            form.redeemLedgerId
+                              ? "Enter points"
+                              : "Select ledger first"
                           }
                           onChange={(e) =>
                             setForm((c) => {
-                              const availableRewardPoints = Number(
+                              const available = Number(
                                 activeCustomer?.rewardPoints || 0,
                               );
-                              const rawValue = e.target.value;
-                              if (rawValue === "") {
-                                return { ...c, redeemAmount: "" };
-                              }
-                              const numericValue = Math.max(
-                                0,
-                                Math.min(
-                                  Number(rawValue || 0),
-                                  availableRewardPoints,
-                                ),
-                              );
+                              const raw = e.target.value;
+
+                              if (raw === "") return { ...c, redeemAmount: "" };
+
                               return {
                                 ...c,
-                                redeemAmount: String(numericValue),
+                                redeemAmount: String(
+                                  Math.max(
+                                    0,
+                                    Math.min(Number(raw || 0), available),
+                                  ),
+                                ),
                               };
                             })
                           }
                         />
-                      </Field>
-                      <div className="flex items-end pb-0.5">
+
                         <button
                           type="button"
                           onClick={() =>
@@ -2267,109 +2311,104 @@ export default function PosVoucherPage({
                               redeemAmount: "",
                             }))
                           }
-                          className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                          className="rounded-lg border border-rose-100 px-2 text-rose-500 hover:bg-rose-50"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-[13px] font-semibold text-slate-700">
-                        Gift vouchers
-                      </span>
-                      {/* <button
-                        type="button"
-                        onClick={addGiftVoucherRow}
-                        className="inline-flex items-center gap-1 rounded border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
-                      >
-                        <Plus className="h-3 w-3" /> Add row
-                      </button> */}
-                    </div>
-                    <div className="space-y-2">
-                      {(form.giftVoucherRows || []).map((row, index) => (
-                        <div
-                          key={`gift-${index}`}
-                          className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_260px_32px]"
-                        >
-                          <Field label="Gift voucher">
-                            <SearchableSelect
-                              options={giftVoucherOptions}
-                              value={row.giftVoucherId}
-                              onChange={(v) =>
-                                updateGiftVoucherRow(index, "giftVoucherId", v)
+
+                    {/* Gift Voucher */}
+                    <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-4">
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold text-slate-800">
+                          Gift Voucher
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Use customer voucher balance
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {(form.giftVoucherRows || []).map((row, index) => (
+                          <div key={`gift-${index}`} className="space-y-3">
+                            <Field label="Gift Voucher">
+                              <SearchableSelect
+                                options={giftVoucherOptions}
+                                value={row.giftVoucherId}
+                                onChange={(v) =>
+                                  updateGiftVoucherRow(
+                                    index,
+                                    "giftVoucherId",
+                                    v,
+                                  )
+                                }
+                                placeholder="Select voucher"
+                              />
+                            </Field>
+
+                            <Field
+                              label="Voucher Ledger"
+                              action={
+                                <AddLink
+                                  onClick={() =>
+                                    navigateToCreateMaster(
+                                      "/masters/create/ledger",
+                                    )
+                                  }
+                                />
                               }
-                              placeholder="Search gift voucher..."
-                            />
-                          </Field>
-                          <Field
-                            label="Gift voucher ledger"
-                            action={
-                              <AddLink
-                                onClick={() =>
-                                  navigateToCreateMaster("/masters/create/ledger")
+                            >
+                              <SearchableSelect
+                                options={allLedgerOptions}
+                                value={row.ledgerId}
+                                onChange={(v) =>
+                                  updateGiftVoucherRow(index, "ledgerId", v)
+                                }
+                                placeholder="Select ledger"
+                              />
+                            </Field>
+
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                data-vnav="true"
+                                className={numInput + " flex-1"}
+                                value={row.amount}
+                                disabled={!row.giftVoucherId || !row.ledgerId}
+                                min="0"
+                                placeholder={
+                                  row.giftVoucherId && row.ledgerId
+                                    ? "0.00"
+                                    : "Select voucher + ledger"
+                                }
+                                onChange={(e) =>
+                                  updateGiftVoucherRow(
+                                    index,
+                                    "amount",
+                                    e.target.value,
+                                  )
                                 }
                               />
-                            }
-                          >
-                            <SearchableSelect
-                              options={allLedgerOptions}
-                              value={row.ledgerId}
-                              onChange={(v) =>
-                                updateGiftVoucherRow(index, "ledgerId", v)
-                              }
-                              placeholder="Search gift ledger..."
-                            />
-                          </Field>
-                          <Field label="Amount">
-                            <input
-                              type="number"
-                              data-vnav="true"
-                              className={numInput}
-                              value={row.amount}
-                              disabled={!row.giftVoucherId || !row.ledgerId}
-                              min="0"
-                              placeholder={
-                                row.giftVoucherId && row.ledgerId
-                                  ? "0.00"
-                                  : "Select voucher + ledger"
-                              }
-                              onChange={(e) =>
-                                updateGiftVoucherRow(index, "amount", e.target.value)
-                              }
-                            />
-                          </Field>
-                          <div className="flex items-end pb-0.5">
-                            <button
-                              type="button"
-                              onClick={() => removeGiftVoucherRow(index)}
-                              className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+
+                              <button
+                                type="button"
+                                onClick={() => removeGiftVoucherRow(index)}
+                                className="rounded-lg border border-rose-100 px-2 text-rose-500 hover:bg-rose-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  {/* <Field label="Note (optional)">
-                    <textarea
-                      rows={3}
-                      data-vnav="true"
-                      className={inputBase + " resize-y"}
-                      value={form.note}
-                      onChange={(e) =>
-                        setForm((c) => ({ ...c, note: e.target.value }))
-                      }
-                      placeholder="Remarks, delivery instructions…"
-                    />
-                  </Field> */}
                 </div>
 
                 {/* Amount summary */}
-                <div>
-                  <div className="rounded-lg border border-white bg-blue-900 font-bold p-4">
+                <div className="hidden">
+                  <div className="rounded-2xl border border-blue-950 bg-blue-900 p-4 shadow-sm">
                     <p className="mb-3 text-[12px] font-bold uppercase tracking-wide text-white">
                       Order summary
                     </p>
@@ -2380,35 +2419,57 @@ export default function PosVoucherPage({
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white">Subtotal</span>
-                        <span className="text-white">{formatMoney(subtotal, currency.symbol)}</span>
+                        <span className="text-white">
+                          {formatMoney(subtotal, currency.symbol)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white">Item discount</span>
                         <span className="text-white">
-                          - {formatMoney(Math.abs(rowDiscountTotal), currency.symbol)}
+                          -{" "}
+                          {formatMoney(
+                            Math.abs(rowDiscountTotal),
+                            currency.symbol,
+                          )}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white">Additional discount</span>
                         <span className="text-white">
-                          - {formatMoney(Math.abs(additionalExpenseAmount), currency.symbol)}
+                          -{" "}
+                          {formatMoney(
+                            Math.abs(additionalExpenseAmount),
+                            currency.symbol,
+                          )}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white">Redeem points</span>
                         <span className="text-white">
-                          - {formatMoney(Math.abs(rewardRedeemed), currency.symbol)}
+                          -{" "}
+                          {formatMoney(
+                            Math.abs(rewardRedeemed),
+                            currency.symbol,
+                          )}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white">Gift vouchers</span>
                         <span className="text-white">
-                          - {formatMoney(Math.abs(giftVoucherAmount), currency.symbol)}
+                          -{" "}
+                          {formatMoney(
+                            Math.abs(giftVoucherAmount),
+                            currency.symbol,
+                          )}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">
-                        <span className="text-white text-xl">Total payable</span>
-                        <span className="text-white">{formatMoney(totalAmount, currency.symbol)}</span>
+                      <div className="flex items-center justify-between border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">
+                        <span className="text-white text-xl">
+                          Total payable
+                        </span>
+                        <span className="text-white">
+                          {formatMoney(totalAmount, currency.symbol)}
+                        </span>
                       </div>
                     </div>
                     <div className="mt-3 flex justify-between border-t border-dashed border-white pt-3 text-[12px]">
@@ -2423,28 +2484,28 @@ export default function PosVoucherPage({
             </div>
 
             {/* Action bar */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => previewPosInvoiceDocument(printData)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-4 text-[14px] font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Printer className="h-4 w-4" /> Print Now
               </button>
               <button
                 type="button"
                 onClick={() => setShowSaveConfirm(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-3 text-[13px] font-semibold text-white hover:bg-emerald-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-[14px] font-semibold text-white hover:bg-emerald-700"
               >
                 <Check className="h-4 w-4" /> Complete sale
-                <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-bold">
+                <span className="rounded-lg bg-emerald-700 px-2 py-0.5 text-[10px] font-bold">
                   F10
                 </span>
               </button>
               <button
                 type="button"
                 onClick={() => resetForm()}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white py-3 text-[13px] font-medium text-rose-600 hover:bg-rose-50"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white py-4 text-[14px] font-medium text-rose-500 hover:bg-rose-50"
               >
                 <X className="h-4 w-4" /> Cancel
               </button>
@@ -2453,12 +2514,12 @@ export default function PosVoucherPage({
           {/* end left col */}
 
           {/* ── Right sidebar ── */}
-          <aside className="space-y-4 2xl:sticky 2xl:top-4">
+          <aside className="space-y-4 xl:sticky xl:top-4">
             {/* Payment */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+            <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+              <h2 className="mb-4 flex items-center gap-2 text-[15px] font-semibold text-slate-800">
                 <CreditCard className="h-4 w-4 text-slate-400" /> Payment
-                details
+                Details
               </h2>
               <div className="space-y-3">
                 <div>
@@ -2467,7 +2528,7 @@ export default function PosVoucherPage({
                     <button
                       type="button"
                       onClick={addBankPaymentRow}
-                      className="inline-flex items-center gap-1 rounded border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-50"
                     >
                       <Plus className="h-3 w-3" /> Add bank
                     </button>
@@ -2486,7 +2547,7 @@ export default function PosVoucherPage({
                               updateBankPaymentRow(index, "ledgerId", value)
                             }
                             placeholder="Select bank ledger"
-                            inputClassName="rounded border-slate-200 bg-slate-50 text-[13px] focus:border-blue-500 focus:bg-white"
+                            inputClassName="rounded-xl border-slate-200 bg-white text-[13px] focus:border-emerald-400 focus:bg-white"
                           />
                           <input
                             type="number"
@@ -2496,7 +2557,11 @@ export default function PosVoucherPage({
                             disabled={!row.ledgerId}
                             placeholder={row.ledgerId ? "0.00" : "Bank first"}
                             onChange={(e) =>
-                              updateBankPaymentRow(index, "amount", e.target.value)
+                              updateBankPaymentRow(
+                                index,
+                                "amount",
+                                e.target.value,
+                              )
                             }
                           />
                           <button
@@ -2539,7 +2604,7 @@ export default function PosVoucherPage({
                     }
                   />
                 </Field>
-                <div className="rounded-lg bg-yellow-50 px-3 py-3">
+                <div className="rounded-2xl bg-amber-50 px-4 py-4">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-yellow-600">
                     Change to return
                   </p>
@@ -2550,12 +2615,75 @@ export default function PosVoucherPage({
               </div>
             </div>
 
+            <div className="rounded-[24px] border border-blue-950 bg-blue-900 p-5 shadow-sm">
+              <p className="mb-4 text-[14px] font-semibold text-white">
+                Order Summary
+              </p>
+              <div className="space-y-2 text-[13px]">
+                <div className="flex justify-between">
+                  <span className="text-white/90">Items (Qty)</span>
+                  <span className="text-white">{totalItems}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/90">Subtotal</span>
+                  <span className="text-white">
+                    {formatMoney(subtotal, currency.symbol)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/90">Item Discount</span>
+                  <span className="text-white">
+                    - {formatMoney(Math.abs(rowDiscountTotal), currency.symbol)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/90">Additional Discount</span>
+                  <span className="text-white">
+                    -{" "}
+                    {formatMoney(
+                      Math.abs(additionalExpenseAmount),
+                      currency.symbol,
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/90">Redeem Points</span>
+                  <span className="text-white">
+                    - {formatMoney(Math.abs(rewardRedeemed), currency.symbol)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/90">Gift Vouchers</span>
+                  <span className="text-white">
+                    -{" "}
+                    {formatMoney(Math.abs(giftVoucherAmount), currency.symbol)}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-dashed border-white/30 pt-3">
+                  <span className="text-[16px] font-semibold text-white">
+                    Total Payable
+                  </span>
+                  <span className="text-[18px] font-semibold text-white">
+                    {formatMoney(totalAmount, currency.symbol)}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-white/15 bg-white/10 px-3 py-2">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="text-white/85">Reward to earn</span>
+                  <span className="font-semibold text-white">
+                    {rewardToEarn.toLocaleString("en-IN")} pts
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Purchase history */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-[24px] border border-slate-200 bg-white p-5">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800">
                   <History className="h-4 w-4 text-slate-400" /> Purchase
-                  history
+                  History
                 </h2>
                 {activeCustomer?.name && (
                   <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
@@ -2568,7 +2696,7 @@ export default function PosVoucherPage({
                   <p className="text-[13px] text-slate-400">Loading…</p>
                 ) : customerPurchases.length === 0 ? (
                   <p className="text-[13px] text-slate-400">
-                    Enter a phone number to view past purchases.
+                    Select a customer mobile number to view past purchases.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -2582,7 +2710,8 @@ export default function PosVoucherPage({
                           {Number(purchase.qty || 0).toLocaleString("en-IN")}
                         </p>
                         <p className="mt-0.5 text-[11px] text-slate-500">
-                          {(purchase.companyName || "Unknown company").trim()} ({formatLongDisplayDate(purchase.purchaseDate)})
+                          {(purchase.companyName || "Unknown company").trim()} (
+                          {formatLongDisplayDate(purchase.purchaseDate)})
                         </p>
                       </div>
                     ))}
