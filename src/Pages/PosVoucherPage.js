@@ -264,6 +264,10 @@ function VoucherNumberInput({ value, onChange, suggestedNumber }) {
   );
 }
 
+function AutoVoucherNumberDisplay({ value }) {
+  return <input className={readonlyInput} value={value || ""} readOnly tabIndex={-1} />;
+}
+
 /* ─── Main Page ──────────────────────────────────────────────────── */
 export default function PosVoucherPage({
   editVoucherId = "",
@@ -294,6 +298,7 @@ export default function PosVoucherPage({
   const [giftVouchers, setGiftVouchers] = useState([]);
   const [defaults, setDefaults] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [importBusy, setImportBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
@@ -716,6 +721,16 @@ export default function PosVoucherPage({
       .slice(0, 8);
   }, [items, searchTerm]);
 
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setActiveItemIndex(0);
+      return;
+    }
+    setActiveItemIndex((current) =>
+      Math.min(current, Math.max(filteredItems.length - 1, 0)),
+    );
+  }, [searchTerm, filteredItems.length]);
+
   /* ── calculations ── */
   const lineAmount = (row) => {
     const gross = Number(row.qty || 0) * Number(row.rate || 0);
@@ -1062,6 +1077,7 @@ export default function PosVoucherPage({
       };
     });
     setSearchTerm("");
+    setActiveItemIndex(0);
     focusSearchInput();
   };
 
@@ -1762,10 +1778,11 @@ export default function PosVoucherPage({
         <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-5">
           <div className="grid gap-4 xl:grid-cols-[340px_320px_minmax(0,1fr)_160px]">
             <Field label="Voucher no.">
-              <VoucherNumberInput
-                value={form.number}
-                onChange={(v) => setForm((c) => ({ ...c, number: v }))}
-                suggestedNumber={suggestedNumber}
+              <input
+                className={readonlyInput}
+                value={form.number || suggestedNumber || ""}
+                readOnly
+                tabIndex={-1}
               />
             </Field>
             <Field label="Voucher date">
@@ -1973,21 +1990,56 @@ export default function PosVoucherPage({
                     value={searchTerm}
                     onFocus={() => {
                       scannerBufferRef.current = "";
+                      setActiveItemIndex(0);
                     }}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setActiveItemIndex(0);
+                    }}
                     onKeyDown={(e) => {
+                      const trimmedSearch = searchTerm.trim();
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        if (!trimmedSearch) return;
+                        if (!filteredItems.length) return;
+                        setActiveItemIndex((current) =>
+                          Math.min(current + 1, filteredItems.length - 1),
+                        );
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        if (!trimmedSearch) return;
+                        if (!filteredItems.length) return;
+                        setActiveItemIndex((current) => Math.max(current - 1, 0));
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        setSearchTerm("");
+                        setActiveItemIndex(0);
+                        return;
+                      }
                       if (e.key !== "Enter") return;
                       e.preventDefault();
-                      handleBarcodeSubmit(searchTerm);
+                      if (!trimmedSearch) return;
+                      const highlightedItem = filteredItems[activeItemIndex];
+                      if (highlightedItem) {
+                        addItemById(highlightedItem._id);
+                        return;
+                      }
+                      handleBarcodeSubmit(trimmedSearch);
                     }}
                   />
                   {searchTerm && filteredItems.length > 0 && (
                     <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-                      {filteredItems.map((item) => (
+                      {filteredItems.map((item, index) => (
                         <button
                           key={item._id}
                           type="button"
-                          className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50"
+                          className={`flex w-full items-center justify-between px-3 py-2.5 text-left ${
+                            index === activeItemIndex ? "bg-emerald-50" : "hover:bg-slate-50"
+                          }`}
+                          onMouseEnter={() => setActiveItemIndex(index)}
                           onClick={() => addItemById(item._id)}
                         >
                           <div>
