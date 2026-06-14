@@ -323,6 +323,62 @@ function AppShell() {
             <Route path="/masters/create/employee" element={<EmployeeCreationPage mode="create" />} />
             <Route path="/masters/alter/employee" element={<EmployeeCreationPage mode="alter" />} />
             <Route
+              path="/masters/create/gift-voucher"
+              element={
+                <MasterDataPage
+                  title="Gift Vouchers"
+                  subtitle="Create reusable gift voucher masters with optional usage limits, expiry, and bulk import support."
+                  endpoint="gift-vouchers"
+                  globalMaster
+                  actionScopeOverride="masters.accounting.manage"
+                  fields={[
+                    { name: "name", label: "Voucher Name", placeholder: "Gift voucher name / code" },
+                    {
+                      name: "usageLimit",
+                      label: "Usage Limit",
+                      type: "number",
+                      allowEmpty: true,
+                      placeholder: "Ussage Limit",
+                    },
+                    {
+                      name: "expiryDate",
+                      label: "Expiry Date",
+                      type: "date",
+                      placeholder: "Leave blank for no expiry",
+                    },
+                  ]}
+                />
+              }
+            />
+            <Route
+              path="/masters/alter/gift-voucher"
+              element={
+                <MasterDataPage
+                  title="Gift Vouchers"
+                  subtitle="Alter global gift voucher masters and manage expiry or usage policy professionally."
+                  endpoint="gift-vouchers"
+                  globalMaster
+                  actionScopeOverride="masters.accounting.manage"
+                  fields={[
+                    { name: "name", label: "Voucher Name", placeholder: "Gift voucher name / code" },
+                    {
+                      name: "usageLimit",
+                      label: "Usage Limit",
+                      type: "number",
+                      allowEmpty: true,
+                      placeholder: "Ussage Limit",
+                    },
+                    {
+                      name: "expiryDate",
+                      label: "Expiry Date",
+                      type: "date",
+                      placeholder: "Leave blank for no expiry",
+                    },
+                  ]}
+                />
+              }
+            />
+            <Route
               path="/masters/create/stock-group"
               element={
                 <Groups

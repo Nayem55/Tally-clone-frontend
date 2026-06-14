@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
+import { useActiveCompany } from "../Contexts/ActiveCompanyContext";
 import { canPerformAction, readStoredUser } from "../utils/accessControl";
 import {
   buildNameMap,
@@ -11,6 +12,7 @@ import {
   normalizeExcelNumber,
   readWorkbookFromFile,
   resolveNamedOption,
+  toInputDate,
   worksheetToObjects,
 } from "../utils/masterExcel";
 
@@ -27,9 +29,12 @@ export default function MasterDataPage({
   endpoint,
   fields,
   parentOptionsEndpoint = "",
+  globalMaster = false,
+  actionScopeOverride = "",
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { companyId: activeCompanyId, selectedCompany } = useActiveCompany();
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [rows, setRows] = useState([]);
@@ -42,6 +47,7 @@ export default function MasterDataPage({
   const fileInputRef = useRef(null);
   const currentUser = useMemo(readStoredUser, []);
   const actionScope = useMemo(() => {
+    if (actionScopeOverride) return actionScopeOverride;
     const normalizedEndpoint = String(endpoint || "").toLowerCase();
     if (["groups", "ledgers", "voucher-types", "currencies"].includes(normalizedEndpoint)) {
       return "masters.accounting.manage";
@@ -50,13 +56,17 @@ export default function MasterDataPage({
       return "masters.price.manage";
     }
     return "masters.inventory.manage";
-  }, [endpoint]);
+  }, [actionScopeOverride, endpoint]);
   const canManageMasters = useMemo(
     () => canPerformAction(currentUser?.role, actionScope),
     [actionScope, currentUser],
   );
 
   useEffect(() => {
+    if (globalMaster) {
+      setCompanyId(activeCompanyId || "");
+      return;
+    }
     async function loadCompanies() {
       const response = await api.get("/companies");
       setCompanies(response.data);
@@ -65,7 +75,12 @@ export default function MasterDataPage({
       }
     }
     loadCompanies();
-  }, []);
+  }, [activeCompanyId, globalMaster]);
+
+  const apiBase = useMemo(() => {
+    if (!companyId) return "";
+    return `/companies/${companyId}/${endpoint}`;
+  }, [companyId, endpoint]);
 
   async function loadRows(selectedCompanyId = companyId) {
     if (!selectedCompanyId) return;
@@ -107,7 +122,7 @@ export default function MasterDataPage({
       alert(`You do not have permission to change ${title.toLowerCase()}.`);
       return;
     }
-    if (!companyId) return;
+    if (!companyId || !apiBase) return;
     const payload = fields.reduce((accumulator, field) => {
       accumulator[field.name] = form[field.name];
       return accumulator;
@@ -115,9 +130,9 @@ export default function MasterDataPage({
 
     try {
       if (form.id) {
-        await api.put(`/companies/${companyId}/${endpoint}/${form.id}`, payload);
+        await api.put(`${apiBase}/${form.id}`, payload);
       } else {
-        await api.post(`/companies/${companyId}/${endpoint}`, payload);
+        await api.post(apiBase, payload);
       }
       if (location.state?.returnTo) {
         navigate(location.state.returnTo, {
@@ -141,7 +156,7 @@ export default function MasterDataPage({
     }
     if (!window.confirm(`Delete this ${title.toLowerCase()}?`)) return;
     try {
-      await api.delete(`/companies/${companyId}/${endpoint}/${id}`);
+      await api.delete(`${apiBase}/${id}`);
       if (form.id === id) setForm(initialForm);
       await loadRows();
     } catch (error) {
@@ -199,7 +214,7 @@ export default function MasterDataPage({
     }
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !companyId) return;
+    if (!file || !companyId || !apiBase) return;
 
     setImporting(true);
     setStatus("");
@@ -234,12 +249,21 @@ export default function MasterDataPage({
             return;
           }
           if (field.type === "number") {
-            payload[field.name] = normalizeExcelNumber(rawValue, 0);
+            const textValue = String(rawValue ?? "").trim();
+            if (field.allowEmpty && textValue === "") {
+              payload[field.name] = "";
+            } else {
+              payload[field.name] = normalizeExcelNumber(rawValue, 0);
+            }
+            return;
+          }
+          if (field.type === "date") {
+            payload[field.name] = toInputDate(rawValue);
             return;
           }
           payload[field.name] = String(rawValue ?? "").trim();
         });
-        await api.post(`/companies/${companyId}/${endpoint}`, payload);
+        await api.post(apiBase, payload);
       }
 
       await loadRows();
@@ -255,20 +279,31 @@ export default function MasterDataPage({
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className={`grid gap-6 ${globalMaster ? "lg:grid-cols-1" : "lg:grid-cols-[0.9fr_1.1fr]"}`}>
             <div>
               <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
-                Master maintenance
+                {globalMaster ? "Global master" : "Master maintenance"}
               </div>
               <h1 className="mt-3 text-3xl font-bold text-slate-900">{title}</h1>
               <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+              {globalMaster ? (
+                <p className="mt-2 text-sm text-slate-500">
+                  Applies across all companies. Managed from{" "}
+                  <span className="font-semibold text-slate-700">
+                    {selectedCompany?.name || "the active company"}
+                  </span>{" "}
+                  for authorization only.
+                </p>
+              ) : null}
             </div>
-            <CompanyPicker
-              companies={companies}
-              value={companyId}
-              onChange={setCompanyId}
-              label="Company"
-            />
+            {!globalMaster ? (
+              <CompanyPicker
+                companies={companies}
+                value={companyId}
+                onChange={setCompanyId}
+                label="Company"
+              />
+            ) : null}
           </div>
         </section>
 
@@ -395,7 +430,9 @@ export default function MasterDataPage({
                         <td key={field.name} className="px-4 py-3 text-slate-700">
                           {field.type === "select"
                             ? row.parent?.name || row[field.displayKey || field.name] || "-"
-                            : row[field.displayKey || field.name] || "-"}
+                            : field.type === "date"
+                              ? (row[field.displayKey || field.name] ? toInputDate(row[field.displayKey || field.name]) : "-")
+                              : row[field.displayKey || field.name] || "-"}
                         </td>
                       ))}
                       <td className="px-4 py-3">
@@ -411,7 +448,9 @@ export default function MasterDataPage({
                                     ...accumulator,
                                     id: row._id,
                                     [field.name]:
-                                      row[field.name] ||
+                                      (field.type === "date"
+                                        ? toInputDate(row[field.name] || row[field.displayKey || field.name] || "")
+                                        : row[field.name]) ||
                                       row[field.displayKey || field.name] ||
                                       "",
                                   }),

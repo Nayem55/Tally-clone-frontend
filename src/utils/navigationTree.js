@@ -64,6 +64,12 @@ export const menuTree = [
             label: "Payroll Masters",
             children: [{ label: "Employee", to: "/masters/create/employee" }],
           },
+          {
+            label: "Customer & Offer Masters",
+            children: [
+              { label: "Gift Voucher", to: "/masters/create/gift-voucher" },
+            ],
+          },
         ],
       },
       {
@@ -94,6 +100,12 @@ export const menuTree = [
           {
             label: "Payroll Masters",
             children: [{ label: "Employee", to: "/masters/alter/employee" }],
+          },
+          {
+            label: "Customer & Offer Masters",
+            children: [
+              { label: "Gift Voucher", to: "/masters/alter/gift-voucher" },
+            ],
           },
         ],
       },

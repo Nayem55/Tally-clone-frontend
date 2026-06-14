@@ -43,6 +43,7 @@ import {
 const POS_TEMPLATE_SHEET = "POS Voucher";
 const POS_VOUCHER_RETURN_STORAGE_KEY = "pos-voucher-return-draft";
 const emptyAdjustmentRow = { ledgerId: "", value: "" };
+const emptyGiftVoucherRow = { giftVoucherId: "", ledgerId: "", amount: "" };
 const emptyBankPaymentRow = { ledgerId: "", amount: "" };
 
 function formatMaskedPhone(value = "") {
@@ -285,6 +286,7 @@ export default function PosVoucherPage({
   const [employees, setEmployees] = useState([]);
   const [allLedgers, setAllLedgers] = useState([]);
   const [salesLedgers, setSalesLedgers] = useState([]);
+  const [giftVouchers, setGiftVouchers] = useState([]);
   const [defaults, setDefaults] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [importBusy, setImportBusy] = useState(false);
@@ -311,6 +313,7 @@ export default function PosVoucherPage({
     anniversary: "",
     note: "",
     additionalRows: [emptyAdjustmentRow],
+    giftVoucherRows: [emptyGiftVoucherRow],
     redeemLedgerId: "",
     redeemAmount: "",
     bankPayments: [{ ...emptyBankPaymentRow }],
@@ -339,6 +342,7 @@ export default function PosVoucherPage({
         employeeResponse,
         balanceResponse,
         salesLedgerResponse,
+        giftVoucherResponse,
       ] = await Promise.all([
         api.get(`/companies/${effectiveCompanyId}/voucher-types`),
         api.get(`/companies/${effectiveCompanyId}/items`),
@@ -351,12 +355,14 @@ export default function PosVoucherPage({
         api.get(
           `/companies/${effectiveCompanyId}/ledgers/by-group?names=Sales Accounts`,
         ),
+        api.get(`/companies/${effectiveCompanyId}/gift-vouchers`),
       ]);
       setItems(itemResponse.data);
       setPriceLevels(levelResponse.data);
       setEmployees(employeeResponse.data || []);
       setAllLedgers(balanceResponse.data || []);
       setSalesLedgers(salesLedgerResponse.data || []);
+      setGiftVouchers(giftVoucherResponse.data || []);
       setDefaults(defaultResponse.data || {});
       const voucherType = voucherTypeResponse.data.find(
         (r) => r.name.toLowerCase() === "pos voucher",
@@ -521,6 +527,18 @@ export default function PosVoucherPage({
                   { ...emptyAdjustmentRow },
                 ]
             : [{ ...emptyAdjustmentRow }],
+        giftVoucherRows:
+          Array.isArray(voucher.posMeta?.giftVoucherAdjustments) &&
+          voucher.posMeta.giftVoucherAdjustments.length > 0
+            ? [
+                ...voucher.posMeta.giftVoucherAdjustments.map((row) => ({
+                  giftVoucherId: String(row.giftVoucherId || ""),
+                  ledgerId: String(row.ledgerId || ""),
+                  amount: String(row.amount || ""),
+                })),
+                { ...emptyGiftVoucherRow },
+              ]
+            : [{ ...emptyGiftVoucherRow }],
         redeemLedgerId: String(voucher.posMeta?.redeemLedgerId || ""),
         redeemAmount: String(voucher.posMeta?.redeemAmount || ""),
         bankPayments:
@@ -638,6 +656,18 @@ export default function PosVoucherPage({
         .map((l) => ({ value: String(l._id), label: l.name })),
     [allLedgers],
   );
+  const allLedgerOptions = useMemo(
+    () => allLedgers.map((l) => ({ value: String(l._id), label: l.name })),
+    [allLedgers],
+  );
+  const giftVoucherOptions = useMemo(
+    () =>
+      (giftVouchers || []).map((row) => ({
+        value: String(row._id),
+        label: row.name,
+      })),
+    [giftVouchers],
+  );
   const itemNameMap = useMemo(
     () =>
       new Map(items.map((item) => [normalizeExcelNameKey(item.name), item])),
@@ -707,9 +737,29 @@ export default function PosVoucherPage({
       return { ...row, ledger, nature: "EXPENSE", calculatedAmount };
     })
     .filter((r) => r.ledgerId);
+  const giftVoucherRows = (form.giftVoucherRows || [])
+    .map((row) => ({
+      ...row,
+      giftVoucher:
+        giftVouchers.find(
+          (entry) => String(entry._id) === String(row.giftVoucherId || ""),
+        ) || null,
+      ledger: ledgerMap.get(String(row.ledgerId || "")) || null,
+      amount: Number(row.amount || 0),
+    }))
+    .filter(
+      (row) =>
+        row.giftVoucherId &&
+        row.ledgerId &&
+        Number(row.amount || 0) > 0,
+    );
 
   const additionalExpenseAmount = adjustmentRows.reduce(
     (s, r) => s + r.calculatedAmount,
+    0,
+  );
+  const giftVoucherAmount = giftVoucherRows.reduce(
+    (s, r) => s + Number(r.amount || 0),
     0,
   );
   const redeemLedger =
@@ -722,11 +772,23 @@ export default function PosVoucherPage({
     ).toFixed(2),
   );
   const totalDiscountAmount = Number(
-    (rowDiscountTotal + additionalExpenseAmount + rewardRedeemed).toFixed(2),
+    (
+      rowDiscountTotal +
+      additionalExpenseAmount +
+      giftVoucherAmount +
+      rewardRedeemed
+    ).toFixed(2),
   );
   const totalAmount = Math.max(
     0,
-    Number((subtotal - additionalExpenseAmount - rewardRedeemed).toFixed(2)),
+    Number(
+      (
+        subtotal -
+        additionalExpenseAmount -
+        giftVoucherAmount -
+        rewardRedeemed
+      ).toFixed(2),
+    ),
   );
   const totalItems = validRows.reduce((s, r) => s + Number(r.qty || 0), 0);
   const rewardToEarn = validRows.reduce(
@@ -1024,6 +1086,16 @@ export default function PosVoucherPage({
     }));
   };
 
+  const addGiftVoucherRow = () => {
+    setForm((c) => ({
+      ...c,
+      giftVoucherRows: [
+        ...(c.giftVoucherRows || []),
+        { ...emptyGiftVoucherRow },
+      ],
+    }));
+  };
+
   const updateRow = (index, field, value) => {
     setForm((c) => {
       const nextRows = [...c.rows];
@@ -1055,6 +1127,28 @@ export default function PosVoucherPage({
         ...c,
         additionalRows:
           nextRows.length > 0 ? nextRows : [{ ...emptyAdjustmentRow }],
+      };
+    });
+  };
+
+  const updateGiftVoucherRow = (index, field, value) => {
+    setForm((c) => {
+      const nextRows = [...(c.giftVoucherRows || [])];
+      nextRows[index] = {
+        ...(nextRows[index] || emptyGiftVoucherRow),
+        [field]: value,
+      };
+      return { ...c, giftVoucherRows: nextRows };
+    });
+  };
+
+  const removeGiftVoucherRow = (index) => {
+    setForm((c) => {
+      const nextRows = (c.giftVoucherRows || []).filter((_, i) => i !== index);
+      return {
+        ...c,
+        giftVoucherRows:
+          nextRows.length > 0 ? nextRows : [{ ...emptyGiftVoucherRow }],
       };
     });
   };
@@ -1222,6 +1316,7 @@ export default function PosVoucherPage({
       anniversary: "",
       note: "",
       additionalRows: [{ ...emptyAdjustmentRow }],
+      giftVoucherRows: [{ ...emptyGiftVoucherRow }],
       redeemLedgerId: "",
       redeemAmount: "",
       bankPayments: [{ ...emptyBankPaymentRow }],
@@ -1253,175 +1348,115 @@ export default function PosVoucherPage({
     });
   };
 
+  const getApiErrorMessage = (
+    err,
+    fallback = "Unable to save POS voucher",
+  ) => err?.response?.data?.message || err?.message || fallback;
+
   const submit = async (options = {}) => {
-    if (!voucherTypeId) return alert("POS Voucher type is missing");
-    if (!form.customerName.trim()) return alert("Customer name is required");
-    if (form.phone.replace(/\D/g, "").length < 6)
-      return alert("Valid phone number is required");
-    if (!form.salesLedger && !defaults.salesLedger?._id)
-      return alert("Please select a sales ledger");
-    if (validRows.length === 0) return alert("Please add at least one item");
-    const incompleteAdj = (form.additionalRows || []).find((r) => {
-      const hasValue = String(r.value ?? "").trim() !== "";
-      return !r.ledgerId && hasValue;
-    });
-    if (incompleteAdj)
-      return alert("Please select a discount ledger before entering a value.");
-    if (!form.redeemLedgerId && Number(form.redeemAmount || 0) !== 0)
-      return alert(
-        "Please select a redeem discount ledger before entering redeem points.",
+    try {
+      if (!voucherTypeId) return alert("POS Voucher type is missing");
+      if (!form.customerName.trim()) return alert("Customer name is required");
+      if (form.phone.replace(/\D/g, "").length < 6)
+        return alert("Valid phone number is required");
+      if (!form.salesLedger && !defaults.salesLedger?._id)
+        return alert("Please select a sales ledger");
+      if (validRows.length === 0) return alert("Please add at least one item");
+      const incompleteAdj = (form.additionalRows || []).find((r) => {
+        const hasValue = String(r.value ?? "").trim() !== "";
+        return !r.ledgerId && hasValue;
+      });
+      if (incompleteAdj)
+        return alert("Please select a discount ledger before entering a value.");
+      const incompleteGiftVoucher = (form.giftVoucherRows || []).find((row) => {
+        const hasAnyValue =
+          String(row.giftVoucherId || "").trim() !== "" ||
+          String(row.ledgerId || "").trim() !== "" ||
+          String(row.amount || "").trim() !== "";
+        if (!hasAnyValue) return false;
+        return (
+          !row.giftVoucherId ||
+          !row.ledgerId ||
+          !(Number(row.amount || 0) > 0)
+        );
+      });
+      if (incompleteGiftVoucher) {
+        return alert(
+          "Please complete each gift voucher row with voucher, ledger, and amount.",
+        );
+      }
+      if (!form.redeemLedgerId && Number(form.redeemAmount || 0) !== 0)
+        return alert(
+          "Please select a redeem discount ledger before entering redeem points.",
+        );
+      if (Number(form.redeemAmount || 0) < 0)
+        return alert("Redeem points cannot be negative.");
+      if (
+        rewardRedeemed > 0 &&
+        rewardRedeemed > Number(activeCustomer?.rewardPoints || 0)
+      )
+        return alert("Customer does not have enough reward points.");
+      const incompleteBankPayment = (form.bankPayments || []).find(
+        (row) => !row.ledgerId && Number(row.amount || 0) !== 0,
       );
-    if (Number(form.redeemAmount || 0) < 0)
-      return alert("Redeem points cannot be negative.");
-    if (
-      rewardRedeemed > 0 &&
-      rewardRedeemed > Number(activeCustomer?.rewardPoints || 0)
-    )
-      return alert("Customer does not have enough reward points.");
-    const incompleteBankPayment = (form.bankPayments || []).find(
-      (row) => !row.ledgerId && Number(row.amount || 0) !== 0,
-    );
-    if (incompleteBankPayment) {
-      return alert("Please select a bank ledger before entering a bank payment amount.");
-    }
-    if (
-      Number((bankPaymentTotal + cashPayment).toFixed(2)) !==
-      Number(totalAmount.toFixed(2))
-    )
-      return alert("Cash + bank payment must match total payable");
+      if (incompleteBankPayment) {
+        return alert(
+          "Please select a bank ledger before entering a bank payment amount.",
+        );
+      }
+      if (
+        Number((bankPaymentTotal + cashPayment).toFixed(2)) !==
+        Number(totalAmount.toFixed(2))
+      )
+        return alert("Cash + bank payment must match total payable");
 
-    const lines = [
-      ...(cashPayment > 0 && defaults.cashLedger?._id
-        ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
-        : []),
-      ...bankPayments.map((row) => ({
-        ledgerId: row.ledgerId,
-        debit: row.amount,
-        credit: 0,
-      })),
-      {
-        ledgerId: form.salesLedger || defaults.salesLedger?._id || "",
-        debit: 0,
-        credit: subtotal,
-      },
-    ];
-    adjustmentRows.forEach((row) => {
-      const amount = Number(row.calculatedAmount || 0);
-      if (!row.ledgerId || amount === 0) return;
-      lines.push({
-        ledgerId: row.ledgerId,
-        debit: amount > 0 ? amount : 0,
-        credit: amount < 0 ? Math.abs(amount) : 0,
-      });
-    });
-    if (form.redeemLedgerId && rewardRedeemed > 0) {
-      lines.push({
-        ledgerId: form.redeemLedgerId,
-        debit: rewardRedeemed,
-        credit: 0,
-      });
-    }
-
-    const payload = {
-      voucherTypeId,
-      voucherName: "POS Voucher",
-      number: form.number,
-      date: form.date,
-      narration: form.note,
-      customerSnapshot: {
-        name: form.customerName,
-        phone: form.phone,
-        address: form.address,
-        birthDate: form.birthDate,
-        anniversary: form.anniversary,
-      },
-      salesMeta: selectedSalesPerson
-        ? {
-            employeeId: selectedSalesPerson._id,
-            employeeName: selectedSalesPerson.name || "",
-            employeeNumber: selectedSalesPerson.employeeNumber || "",
-            department: selectedSalesPerson.otherDetails?.department || "",
-            designation: selectedSalesPerson.personalDetails?.designation || "",
-          }
-        : {},
-      lines,
-      inventoryLines: validRows.map((row) => {
-        const item = items.find((e) => e._id === row.itemId);
-        const gross = Number(row.qty || 0) * Number(row.rate || 0);
-        const dv = Number(row.discountPercent || 0);
-        return {
-          itemId: row.itemId,
-          itemName: item?.name || "",
-          qty: Number(row.qty || 0),
-          billedQty: Number(row.qty || 0),
-          rate: Number(row.rate || 0),
-          mrpRate: Number(row.mrpRate || row.rate || 0),
-          discount: gross * (dv / 100),
-          discountType: "percent",
-          discountValue: dv,
-          amount: lineAmount(row),
-          groupId: item?.groupId || null,
-          groupName: item?.groupName || "",
-          stockCategoryId: item?.stockCategoryId || null,
-          stockCategoryName: item?.stockCategory || "",
-          alias: item?.alias || "",
-          barcode: item?.barcode || "",
-        };
-      }),
-      posMeta: {
-        salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
-        additionalAdjustments: adjustmentRows.map((r) => ({
-          ledgerId: r.ledgerId,
-          ledgerName: r.ledger?.name || "",
-          nature: "EXPENSE",
-          mode: parseAdjustmentInput(r.value, r.mode).mode,
-          value: parseAdjustmentInput(r.value, r.mode).numericValue,
-          amount: r.calculatedAmount,
-        })),
-        additionalExpenseLedgerId: adjustmentRows[0]?.ledgerId || null,
-        additionalExpenseMode: parseAdjustmentInput(
-          adjustmentRows[0]?.value,
-          adjustmentRows[0]?.mode,
-        ).mode,
-        additionalExpenseValue: parseAdjustmentInput(
-          adjustmentRows[0]?.value,
-          adjustmentRows[0]?.mode,
-        ).numericValue,
-        additionalExpenseAmount,
-        discountType: "fixed",
-        discountValue: 0,
-        invoiceDiscount: 0,
-        redeemLedgerId: form.redeemLedgerId || null,
-        redeemLedgerName: redeemLedger?.name || "",
-        redeemAmount: rewardRedeemed,
-        subtotal,
-        totalAmount,
-        rewardEarned: rewardToEarn,
-        rewardRedeemed,
-        cashAmount: cashPayment,
-        cardAmount: bankPaymentTotal,
-        bankPayments: bankPayments.map((row) => ({
+      const lines = [
+        ...(cashPayment > 0 && defaults.cashLedger?._id
+          ? [{ ledgerId: defaults.cashLedger._id, debit: cashPayment, credit: 0 }]
+          : []),
+        ...bankPayments.map((row) => ({
           ledgerId: row.ledgerId,
-          ledgerName: row.ledger?.name || "",
-          amount: row.amount,
+          debit: row.amount,
+          credit: 0,
         })),
-        cashTendered: Number(form.cashTendered || 0),
-        changeAmount,
-      },
-    };
+        {
+          ledgerId: form.salesLedger || defaults.salesLedger?._id || "",
+          debit: 0,
+          credit: subtotal,
+        },
+      ];
+      adjustmentRows.forEach((row) => {
+        const amount = Number(row.calculatedAmount || 0);
+        if (!row.ledgerId || amount === 0) return;
+        lines.push({
+          ledgerId: row.ledgerId,
+          debit: amount > 0 ? amount : 0,
+          credit: amount < 0 ? Math.abs(amount) : 0,
+        });
+      });
+      giftVoucherRows.forEach((row) => {
+        if (!row.ledgerId || !(Number(row.amount || 0) > 0)) return;
+        lines.push({
+          ledgerId: row.ledgerId,
+          debit: Number(row.amount || 0),
+          credit: 0,
+        });
+      });
+      if (form.redeemLedgerId && rewardRedeemed > 0) {
+        lines.push({
+          ledgerId: form.redeemLedgerId,
+          debit: rewardRedeemed,
+          credit: 0,
+        });
+      }
 
-    if (isEditMode) {
-      await api.put(
-        `/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`,
-        payload,
-      );
-    } else {
-      await api.post(`/companies/${effectiveCompanyId}/pos-vouchers`, {
+      const payload = {
         voucherTypeId,
+        voucherName: "POS Voucher",
         number: form.number,
         date: form.date,
         narration: form.note,
-        customer: {
+        customerSnapshot: {
           name: form.customerName,
           phone: form.phone,
           address: form.address,
@@ -1434,58 +1469,173 @@ export default function PosVoucherPage({
               employeeName: selectedSalesPerson.name || "",
               employeeNumber: selectedSalesPerson.employeeNumber || "",
               department: selectedSalesPerson.otherDetails?.department || "",
-              designation:
-                selectedSalesPerson.personalDetails?.designation || "",
+              designation: selectedSalesPerson.personalDetails?.designation || "",
             }
           : {},
-        salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
-        additionalAdjustments: adjustmentRows.map((r) => ({
-          ledgerId: r.ledgerId,
-          ledgerName: r.ledger?.name || "",
-          nature: "EXPENSE",
-          mode: r.mode || "fixed",
-          value: Number(r.value || 0),
-          amount: r.calculatedAmount,
-        })),
-        redeemedPoints: rewardRedeemed,
-        redeemLedgerId: form.redeemLedgerId || null,
-        redeemLedgerName: redeemLedger?.name || "",
-        payments: {
-          bankPayments: bankPayments.map((row) => ({
-            ledgerId: row.ledgerId,
-            amount: row.amount,
-          })),
-          cash: cashPayment,
-          cashTendered: Number(form.cashTendered || 0),
-        },
-        items: validRows.map((row) => {
+        lines,
+        inventoryLines: validRows.map((row) => {
           const item = items.find((e) => e._id === row.itemId);
+          const gross = Number(row.qty || 0) * Number(row.rate || 0);
+          const dv = Number(row.discountPercent || 0);
           return {
             itemId: row.itemId,
+            itemName: item?.name || "",
             qty: Number(row.qty || 0),
+            billedQty: Number(row.qty || 0),
             rate: Number(row.rate || 0),
             mrpRate: Number(row.mrpRate || row.rate || 0),
+            discount: gross * (dv / 100),
             discountType: "percent",
-            discountValue: Number(row.discountPercent || 0),
+            discountValue: dv,
+            amount: lineAmount(row),
+            groupId: item?.groupId || null,
             groupName: item?.groupName || "",
+            stockCategoryId: item?.stockCategoryId || null,
             stockCategoryName: item?.stockCategory || "",
+            alias: item?.alias || "",
+            barcode: item?.barcode || "",
           };
         }),
-      });
-    }
+        posMeta: {
+          salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
+          additionalAdjustments: adjustmentRows.map((r) => ({
+            ledgerId: r.ledgerId,
+            ledgerName: r.ledger?.name || "",
+            nature: "EXPENSE",
+            mode: parseAdjustmentInput(r.value, r.mode).mode,
+            value: parseAdjustmentInput(r.value, r.mode).numericValue,
+            amount: r.calculatedAmount,
+          })),
+          giftVoucherAdjustments: giftVoucherRows.map((row) => ({
+            giftVoucherId: row.giftVoucherId,
+            giftVoucherName: row.giftVoucher?.name || "",
+            ledgerId: row.ledgerId,
+            ledgerName: row.ledger?.name || "",
+            amount: Number(row.amount || 0),
+          })),
+          additionalExpenseLedgerId: adjustmentRows[0]?.ledgerId || null,
+          additionalExpenseMode: parseAdjustmentInput(
+            adjustmentRows[0]?.value,
+            adjustmentRows[0]?.mode,
+          ).mode,
+          additionalExpenseValue: parseAdjustmentInput(
+            adjustmentRows[0]?.value,
+            adjustmentRows[0]?.mode,
+          ).numericValue,
+          additionalExpenseAmount,
+          giftVoucherAmount,
+          discountType: "fixed",
+          discountValue: 0,
+          invoiceDiscount: 0,
+          redeemLedgerId: form.redeemLedgerId || null,
+          redeemLedgerName: redeemLedger?.name || "",
+          redeemAmount: rewardRedeemed,
+          subtotal,
+          totalAmount,
+          rewardEarned: rewardToEarn,
+          rewardRedeemed,
+          cashAmount: cashPayment,
+          cardAmount: bankPaymentTotal,
+          bankPayments: bankPayments.map((row) => ({
+            ledgerId: row.ledgerId,
+            ledgerName: row.ledger?.name || "",
+            amount: row.amount,
+          })),
+          cashTendered: Number(form.cashTendered || 0),
+          changeAmount,
+        },
+      };
 
-    if (options.printAfterSave) {
-      await options.printVoucher?.();
-    } else {
-      alert(
-        isEditMode
-          ? "POS voucher updated successfully"
-          : "POS voucher completed successfully",
-      );
-    }
-    if (!isEditMode) {
-      const nextNumber = await refreshSuggestedNumber();
-      resetForm(nextNumber);
+      if (isEditMode) {
+        await api.put(
+          `/companies/${effectiveCompanyId}/vouchers/${editVoucherId}`,
+          payload,
+        );
+      } else {
+        await api.post(`/companies/${effectiveCompanyId}/pos-vouchers`, {
+          voucherTypeId,
+          number: form.number,
+          date: form.date,
+          narration: form.note,
+          customer: {
+            name: form.customerName,
+            phone: form.phone,
+            address: form.address,
+            birthDate: form.birthDate,
+            anniversary: form.anniversary,
+          },
+          salesMeta: selectedSalesPerson
+            ? {
+                employeeId: selectedSalesPerson._id,
+                employeeName: selectedSalesPerson.name || "",
+                employeeNumber: selectedSalesPerson.employeeNumber || "",
+                department: selectedSalesPerson.otherDetails?.department || "",
+                designation:
+                  selectedSalesPerson.personalDetails?.designation || "",
+              }
+            : {},
+          salesLedgerId: form.salesLedger || defaults.salesLedger?._id || "",
+          additionalAdjustments: adjustmentRows.map((r) => ({
+            ledgerId: r.ledgerId,
+            ledgerName: r.ledger?.name || "",
+            nature: "EXPENSE",
+            mode: r.mode || "fixed",
+            value: Number(r.value || 0),
+            amount: r.calculatedAmount,
+          })),
+          giftVoucherAdjustments: giftVoucherRows.map((row) => ({
+            giftVoucherId: row.giftVoucherId,
+            giftVoucherName: row.giftVoucher?.name || "",
+            ledgerId: row.ledgerId,
+            ledgerName: row.ledger?.name || "",
+            amount: Number(row.amount || 0),
+          })),
+          redeemedPoints: rewardRedeemed,
+          redeemLedgerId: form.redeemLedgerId || null,
+          redeemLedgerName: redeemLedger?.name || "",
+          payments: {
+            bankPayments: bankPayments.map((row) => ({
+              ledgerId: row.ledgerId,
+              amount: row.amount,
+            })),
+            cash: cashPayment,
+            cashTendered: Number(form.cashTendered || 0),
+          },
+          items: validRows.map((row) => {
+            const item = items.find((e) => e._id === row.itemId);
+            return {
+              itemId: row.itemId,
+              qty: Number(row.qty || 0),
+              rate: Number(row.rate || 0),
+              mrpRate: Number(row.mrpRate || row.rate || 0),
+              discountType: "percent",
+              discountValue: Number(row.discountPercent || 0),
+              groupName: item?.groupName || "",
+              stockCategoryName: item?.stockCategory || "",
+            };
+          }),
+        });
+      }
+
+      if (options.printAfterSave) {
+        await options.printVoucher?.();
+      } else {
+        alert(
+          isEditMode
+            ? "POS voucher updated successfully"
+            : "POS voucher completed successfully",
+        );
+      }
+      if (!isEditMode) {
+        const nextNumber = await refreshSuggestedNumber();
+        resetForm(nextNumber);
+      }
+    } catch (err) {
+      setStatusMessage({
+        tone: "error",
+        title: "Unable to save POS voucher",
+        description: getApiErrorMessage(err, "Please check the gift voucher and try again."),
+      });
     }
   };
 
@@ -1539,7 +1689,7 @@ export default function PosVoucherPage({
     <div
       ref={containerRef}
       onKeyDownCapture={handleEnterNavigation}
-      className="min-h-screen bg-slate-100 p-4"
+      className="min-h-screen bg-slate-100 p-4 mb-32"
     >
       <div className="mx-auto max-w-[1480px] space-y-4">
         {/* ── Page header ── */}
@@ -1587,7 +1737,7 @@ export default function PosVoucherPage({
         </div>
 
         {/* ── Status message ── */}
-        {statusMessage && (
+        {statusMessage && statusMessage.tone !== "error" && (
           <div
             className={`rounded-xl border px-4 py-3 text-[13px] ${statusMessage.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
           >
@@ -2051,7 +2201,7 @@ export default function PosVoucherPage({
                         pts
                       </span> */}
                     </div>
-                    <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_140px_32px]">
+                    <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.8fr)_260px_32px]">
                       <Field
                         label="Redeem discount ledger"
                         action={
@@ -2124,6 +2274,85 @@ export default function PosVoucherPage({
                       </div>
                     </div>
                   </div>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold text-slate-700">
+                        Gift vouchers
+                      </span>
+                      {/* <button
+                        type="button"
+                        onClick={addGiftVoucherRow}
+                        className="inline-flex items-center gap-1 rounded border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                      >
+                        <Plus className="h-3 w-3" /> Add row
+                      </button> */}
+                    </div>
+                    <div className="space-y-2">
+                      {(form.giftVoucherRows || []).map((row, index) => (
+                        <div
+                          key={`gift-${index}`}
+                          className="grid items-end gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_260px_32px]"
+                        >
+                          <Field label="Gift voucher">
+                            <SearchableSelect
+                              options={giftVoucherOptions}
+                              value={row.giftVoucherId}
+                              onChange={(v) =>
+                                updateGiftVoucherRow(index, "giftVoucherId", v)
+                              }
+                              placeholder="Search gift voucher..."
+                            />
+                          </Field>
+                          <Field
+                            label="Gift voucher ledger"
+                            action={
+                              <AddLink
+                                onClick={() =>
+                                  navigateToCreateMaster("/masters/create/ledger")
+                                }
+                              />
+                            }
+                          >
+                            <SearchableSelect
+                              options={allLedgerOptions}
+                              value={row.ledgerId}
+                              onChange={(v) =>
+                                updateGiftVoucherRow(index, "ledgerId", v)
+                              }
+                              placeholder="Search gift ledger..."
+                            />
+                          </Field>
+                          <Field label="Amount">
+                            <input
+                              type="number"
+                              data-vnav="true"
+                              className={numInput}
+                              value={row.amount}
+                              disabled={!row.giftVoucherId || !row.ledgerId}
+                              min="0"
+                              placeholder={
+                                row.giftVoucherId && row.ledgerId
+                                  ? "0.00"
+                                  : "Select voucher + ledger"
+                              }
+                              onChange={(e) =>
+                                updateGiftVoucherRow(index, "amount", e.target.value)
+                              }
+                            />
+                          </Field>
+                          <div className="flex items-end pb-0.5">
+                            <button
+                              type="button"
+                              onClick={() => removeGiftVoucherRow(index)}
+                              className="rounded p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   {/* <Field label="Note (optional)">
                     <textarea
                       rows={3}
@@ -2169,6 +2398,12 @@ export default function PosVoucherPage({
                         <span className="text-white">Redeem points</span>
                         <span className="text-white">
                           - {formatMoney(Math.abs(rewardRedeemed), currency.symbol)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white">Gift vouchers</span>
+                        <span className="text-white">
+                          - {formatMoney(Math.abs(giftVoucherAmount), currency.symbol)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center border-t border-white pt-2.5 text-[14px] font-semibold text-slate-900">
@@ -2422,6 +2657,45 @@ export default function PosVoucherPage({
         title="Complete POS sale?"
         description="Post this POS voucher. You can save now or save and print the bill immediately."
       />
+
+      {statusMessage?.tone === "error" && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-rose-100 px-5 py-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-500">
+                  POS Validation
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                  {statusMessage.title || "Unable to save POS voucher"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusMessage(null)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close error message"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[14px] leading-6 text-slate-600">
+                {statusMessage.description}
+              </p>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setStatusMessage(null)}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-rose-700"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
