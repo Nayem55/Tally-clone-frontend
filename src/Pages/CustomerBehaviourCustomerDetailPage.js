@@ -230,9 +230,13 @@ export default function CustomerBehaviourCustomerDetailPage() {
                 <div className="mt-4 space-y-3">
                   {vouchers.length ? (
                     vouchers.map((row) => (
-                      <div
+                      <button
                         key={row.voucherId}
-                        className="rounded-2xl border border-slate-200 px-4 py-3"
+                        type="button"
+                        onClick={() =>
+                          navigate(`/transactions/alter-vouchers/${row.voucherId}`)
+                        }
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/40"
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
@@ -264,7 +268,7 @@ export default function CustomerBehaviourCustomerDetailPage() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
