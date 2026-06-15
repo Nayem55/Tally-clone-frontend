@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import api, { SESSION_EXPIRED_NOTICE_KEY } from "../api/api";
 import {
+  COMPANY_NAME_STORAGE_KEY,
   STORAGE_KEY,
   useActiveCompany,
 } from "../Contexts/ActiveCompanyContext";
@@ -56,6 +57,12 @@ export default function EmployeeLoginPage() {
           String(form.username || "").toLowerCase(),
       ) || null,
     [form.username, loginEmployees],
+  );
+  const selectedCompany = useMemo(
+    () =>
+      companies.find((company) => String(company._id) === String(form.companyId)) ||
+      null,
+    [companies, form.companyId],
   );
 
   useEffect(() => {
@@ -124,6 +131,12 @@ export default function EmployeeLoginPage() {
       if (!hasPasswordAdmin) {
         setCompanyId(String(form.companyId));
         window.localStorage.setItem(STORAGE_KEY, String(form.companyId));
+        if (selectedCompany?.name) {
+          window.localStorage.setItem(
+            COMPANY_NAME_STORAGE_KEY,
+            selectedCompany.name,
+          );
+        }
         navigate(targetPath, { replace: true });
         return;
       }
@@ -181,6 +194,12 @@ export default function EmployeeLoginPage() {
 
       setCompanyId(String(form.companyId));
       window.localStorage.setItem(STORAGE_KEY, String(form.companyId));
+      if (selectedCompany?.name) {
+        window.localStorage.setItem(
+          COMPANY_NAME_STORAGE_KEY,
+          selectedCompany.name,
+        );
+      }
       window.localStorage.setItem("pos-user", JSON.stringify(user));
       window.localStorage.setItem(EMPLOYEE_SESSION_TOKEN_KEY, token);
       window.localStorage.setItem(

@@ -209,7 +209,7 @@ function ActionButton({ children, className = "" }) {
 }
 
 export default function DashboardPage() {
-  const { companies, companyId, selectedCompany } = useActiveCompany();
+  const { companyId, selectedCompany, activeCompanyName } = useActiveCompany();
   const [dashboard, setDashboard] = useState(null);
 
   useEffect(() => {
@@ -232,7 +232,7 @@ export default function DashboardPage() {
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <h1 className="text-[22px] font-semibold text-slate-900 sm:text-[24px]">Dashboard</h1>
               <span className="w-fit max-w-full truncate rounded-xl bg-slate-100 px-3 py-1 text-sm font-medium text-slate-500 sm:text-[18px]">
-                {selectedCompany?.name || "No company selected"}
+                {activeCompanyName || "No company selected"}
               </span>
             </div>
           </div>

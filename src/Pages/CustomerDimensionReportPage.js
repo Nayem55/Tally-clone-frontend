@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
-import CompanyPicker from "../Component/CompanyPicker";
 import SearchableSelect from "../Component/SearchableSelect";
 import { formatCurrencyAmount } from "../utils/currency";
 
@@ -8,6 +7,8 @@ export default function CustomerDimensionReportPage({ title, endpoint, labelKey 
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [rows, setRows] = useState([]);
+  const [companyOptions, setCompanyOptions] = useState([]);
+  const [companyFilter, setCompanyFilter] = useState("all");
   const [selectedDimension, setSelectedDimension] = useState("");
 
   useEffect(() => {
@@ -22,11 +23,17 @@ export default function CustomerDimensionReportPage({ title, endpoint, labelKey 
   useEffect(() => {
     async function loadReport() {
       if (!companyId) return;
-      const response = await api.get(`/companies/${companyId}/reports/customer-behaviour/${endpoint}`);
-      setRows(response.data);
+      const response = await api.get(
+        `/companies/${companyId}/reports/customer-behaviour/${endpoint}`,
+        {
+          params: { companyFilter },
+        },
+      );
+      setRows(response.data?.rows || []);
+      setCompanyOptions(response.data?.companyOptions || []);
     }
     loadReport();
-  }, [companyId, endpoint]);
+  }, [companyId, endpoint, companyFilter]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
   const dimensionLabel =
@@ -52,7 +59,21 @@ export default function CustomerDimensionReportPage({ title, endpoint, labelKey 
           <p className="mt-2 text-sm text-slate-500">Analyze customer purchase history by {labelKey.toLowerCase()}.</p>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <div className="max-w-md">
-              <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Company Filter
+              </label>
+              <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="all">All Companies</option>
+                {companyOptions.map((option) => (
+                  <option key={option.companyId} value={option.companyId}>
+                    {option.companyName}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="max-w-md">
               <label className="mb-2 block text-sm font-semibold text-slate-700">

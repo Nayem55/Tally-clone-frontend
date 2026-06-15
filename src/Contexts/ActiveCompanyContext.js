@@ -10,6 +10,7 @@ import api from "../api/api";
 import { EMPLOYEE_SESSION_TOKEN_KEY } from "../utils/accessControl";
 
 export const STORAGE_KEY = "accubooks-active-company";
+export const COMPANY_NAME_STORAGE_KEY = "accubooks-active-company-name";
 const ActiveCompanyContext = createContext(null);
 
 function clearEmployeeSession() {
@@ -43,6 +44,9 @@ export function ActiveCompanyProvider({ children }) {
     () => companies.find((company) => String(company._id) === String(companyId)) || null,
     [companies, companyId],
   );
+  const storedCompanyName =
+    window.localStorage.getItem(COMPANY_NAME_STORAGE_KEY) || "";
+  const activeCompanyName = selectedCompany?.name || storedCompanyName || "";
 
   useEffect(() => {
     if (loading || companies.length === 0) return;
@@ -63,6 +67,7 @@ export function ActiveCompanyProvider({ children }) {
 
     if (!preferredCompany) {
       window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(COMPANY_NAME_STORAGE_KEY);
       if (companyId) {
         setCompanyId("");
       }
@@ -70,9 +75,17 @@ export function ActiveCompanyProvider({ children }) {
   }, [companies, companyId, loading]);
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId) {
+      window.localStorage.removeItem(COMPANY_NAME_STORAGE_KEY);
+      return;
+    }
     window.localStorage.setItem(STORAGE_KEY, companyId);
-  }, [companyId]);
+    const company =
+      companies.find((entry) => String(entry._id) === String(companyId)) || null;
+    if (company?.name) {
+      window.localStorage.setItem(COMPANY_NAME_STORAGE_KEY, company.name);
+    }
+  }, [companies, companyId]);
 
   useEffect(() => {
     function handleStorage(event) {
@@ -102,9 +115,10 @@ export function ActiveCompanyProvider({ children }) {
       setCompanyId,
       requestCompanyChange,
       selectedCompany,
+      activeCompanyName,
       loading,
     }),
-    [companies, companyId, requestCompanyChange, selectedCompany, loading],
+    [companies, companyId, requestCompanyChange, selectedCompany, activeCompanyName, loading],
   );
 
   return (

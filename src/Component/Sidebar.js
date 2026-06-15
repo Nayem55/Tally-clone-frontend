@@ -174,7 +174,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
   const [mobileMenuSearch, setMobileMenuSearch] = useState("");
   const [showMobileSearchResults, setShowMobileSearchResults] = useState(false);
   const [mobileHeaderExpanded, setMobileHeaderExpanded] = useState(false);
-  const { companyId, selectedCompany } = useActiveCompany();
+  const { companyId, activeCompanyName } = useActiveCompany();
   const nodeRefs = useRef({});
   const searchInputRef = useRef(null);
   const mobileSearchRef = useRef(null);
@@ -385,7 +385,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile = () => {} }
             Active Company
           </label>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-            {selectedCompany?.name || companyId || "No company selected"}
+            {activeCompanyName || companyId || "No company selected"}
           </div>
           <button
             type="button"
