@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import { formatCurrencyAmount } from "../utils/currency";
 
 export default function CustomerDimensionReportPage({ title, endpoint, labelKey }) {
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [rows, setRows] = useState([]);
+  const [selectedDimension, setSelectedDimension] = useState("");
 
   useEffect(() => {
     async function loadCompanies() {
@@ -27,6 +29,20 @@ export default function CustomerDimensionReportPage({ title, endpoint, labelKey 
   }, [companyId, endpoint]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
+  const dimensionLabel =
+    labelKey === "groupName"
+      ? "Stock Group"
+      : labelKey === "categoryName"
+        ? "Stock Category"
+        : "Dimension";
+  const dimensionOptions = rows.map((row) => ({
+    value: row[labelKey],
+    label: row[labelKey],
+    meta: `${Number(row.uniqueCustomers || 0).toLocaleString("en-IN")} customers`,
+  }));
+  const filteredRows = selectedDimension
+    ? rows.filter((row) => String(row[labelKey]) === String(selectedDimension))
+    : rows;
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -34,12 +50,29 @@ export default function CustomerDimensionReportPage({ title, endpoint, labelKey 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
           <p className="mt-2 text-sm text-slate-500">Analyze customer purchase history by {labelKey.toLowerCase()}.</p>
-          <div className="mt-5 max-w-md">
-            <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="max-w-md">
+              <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
+            </div>
+            <div className="max-w-md">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Filter by {dimensionLabel}
+              </label>
+              <SearchableSelect
+                options={dimensionOptions}
+                value={selectedDimension}
+                onChange={setSelectedDimension}
+                placeholder={`Search ${dimensionLabel.toLowerCase()}...`}
+                emptyOptionLabel={`All ${dimensionLabel}s`}
+                treatEmptyValueAsUnselected
+                inputClassName="rounded-xl border border-slate-200 bg-white px-4 py-3 pl-9 pr-8 text-sm text-slate-900"
+                className="rounded-xl"
+              />
+            </div>
           </div>
         </section>
 
-        {rows.map((row, index) => (
+        {filteredRows.map((row, index) => (
           <section key={`${row[labelKey]}-${index}`} className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
@@ -77,6 +110,12 @@ export default function CustomerDimensionReportPage({ title, endpoint, labelKey 
             </div>
           </section>
         ))}
+
+        {!filteredRows.length ? (
+          <section className="rounded-3xl bg-white p-10 text-center text-sm text-slate-400 shadow-sm ring-1 ring-slate-200">
+            No customer activity found for the selected {dimensionLabel.toLowerCase()}.
+          </section>
+        ) : null}
       </div>
     </div>
   );

@@ -48,19 +48,6 @@ export default function EmployeeLoginPage() {
       })),
     [companies],
   );
-  const employeeOptions = useMemo(
-    () =>
-      loginEmployees.map((employee) => ({
-        value: employee.accessControl?.username || "",
-        label: [
-          employee.name || employee.accessControl?.username || "Employee",
-          employee.accessControl?.role ? `(${employee.accessControl.role})` : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
-      })),
-    [loginEmployees],
-  );
   const selectedEmployee = useMemo(
     () =>
       loginEmployees.find(
@@ -163,7 +150,7 @@ export default function EmployeeLoginPage() {
   async function handleEmployeeLogin(event) {
     event.preventDefault();
     if (!form.companyId || !form.username.trim()) {
-      setErrorMessage("Please select an employee user.");
+      setErrorMessage("Please enter your username.");
       return;
     }
     if (selectedEmployee?.accessControl?.hasPassword && !form.password) {
@@ -285,22 +272,21 @@ export default function EmployeeLoginPage() {
               <>
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Employee User
+                    Username
                   </span>
-                  <SearchableSelect
-                    options={employeeOptions}
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500"
                     value={form.username}
-                    onChange={(value) =>
+                    onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        username: value,
+                        username: event.target.value,
                         password: "",
                       }))
                     }
-                    placeholder="Select employee user"
-                    inputClassName="rounded-xl border border-slate-200 bg-white px-4 py-3 pl-9 pr-8 text-sm text-slate-900"
-                    className="rounded-xl"
-                    allowClear
+                    autoComplete="username"
+                    placeholder="Enter username"
                   />
                 </label>
 
