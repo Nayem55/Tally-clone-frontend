@@ -1,8 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, CalendarRange, Download, Search, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  CalendarRange,
+  Download,
+  Package2,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Funnel,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import api from "../api/api";
 import CompanyPicker from "../Component/CompanyPicker";
+import SearchableSelect from "../Component/SearchableSelect";
 import { formatCurrencyAmount } from "../utils/currency";
 import { exportInventoryReportExcel, exportInventoryReportPdf } from "../utils/inventoryReportExport";
 import useReportKeyboardNav from "../hooks/useReportKeyboardNav";
@@ -86,6 +109,52 @@ function SummaryCard({ title, value, tone = "text-slate-900", icon }) {
   );
 }
 
+function StockGroupDashboardCard({
+  title,
+  primary,
+  secondaryLabel,
+  secondaryValue,
+  tone = "blue",
+  icon,
+}) {
+  const tones = {
+    blue: "bg-blue-50 text-blue-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+  };
+
+  return (
+    <article className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-4">
+        <div
+          className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+            tones[tone] || tones.blue
+          }`}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="mt-2 text-3xl font-bold text-slate-950">{primary}</p>
+          <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+            <span>{secondaryLabel}</span>
+            <span className="font-semibold text-slate-900">{secondaryValue}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ChartShell({ title, children }) {
+  return (
+    <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      <div className="mt-4 h-[270px]">{children}</div>
+    </section>
+  );
+}
+
 const NET_PURCHASE_QTY = "Net Purchase / Qty";
 const NET_PURCHASE_RATE = "Net Purchase / Rate";
 const NET_PURCHASE_VALUE = "Net Purchase / Value";
@@ -114,6 +183,8 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   const requestedGroupId = searchParams.get("groupId") || "";
   const requestedGroupName = searchParams.get("groupName") || "";
   const requestedCategory = searchParams.get("category") || "";
+  const isStockGroupDashboard = variant === "stock-group";
+  const [selectedGroupName, setSelectedGroupName] = useState("all");
 
   useEffect(() => {
     async function loadCompanies() {
@@ -164,16 +235,31 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
   ]);
 
   const selectedCompany = companies.find((company) => company._id === companyId);
+  const groupFilterOptions = useMemo(
+    () => [
+      { value: "all", label: "All Groups" },
+      ...((report.rows || []).map((row) => ({
+        value: row.name,
+        label: row.name,
+        meta: row.secondaryLabel || "",
+      })) || []),
+    ],
+    [report.rows],
+  );
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return report.rows || [];
-    return (report.rows || []).filter((row) =>
+    let rows = report.rows || [];
+    if (isStockGroupDashboard && selectedGroupName !== "all") {
+      rows = rows.filter((row) => String(row.name) === String(selectedGroupName));
+    }
+    if (!query) return rows;
+    return rows.filter((row) =>
       [row.name, row.secondaryLabel, row.metrics?.employeeNumber, row.metrics?.department]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query)),
     );
-  }, [report.rows, search]);
+  }, [report.rows, search, isStockGroupDashboard, selectedGroupName]);
   const totals = useMemo(() => {
     const rows = filteredRows || [];
     if (isSalesPersonView) {
@@ -215,6 +301,54 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
       },
     );
   }, [filteredRows, isSalesPersonView]);
+
+  const stockGroupSummary = useMemo(() => {
+    if (!isStockGroupDashboard) return null;
+    const totalPurchaseQty = totals.inwardQty || 0;
+    const totalPurchaseValue = totals.inwardValue || 0;
+    const totalSalesQty = totals.outwardQty || 0;
+    const totalSalesValue = totals.outwardValue || 0;
+    const closingValue = totals.closingValue || 0;
+
+    const groupBars = filteredRows
+      .slice()
+      .sort(
+        (left, right) =>
+          Number((right.metrics || {}).outwardValue || 0) -
+          Number((left.metrics || {}).outwardValue || 0),
+      )
+      .slice(0, 8)
+      .map((row) => ({
+        name: row.name,
+        purchaseValue: Number(row.metrics?.inwardValue || 0),
+        salesValue: Number(row.metrics?.outwardValue || 0),
+      }));
+
+    const salesPie = filteredRows
+      .slice()
+      .sort(
+        (left, right) =>
+          Number((right.metrics || {}).outwardValue || 0) -
+          Number((left.metrics || {}).outwardValue || 0),
+      )
+      .slice(0, 5)
+      .map((row) => ({
+        name: row.name,
+        value: Number(row.metrics?.outwardValue || 0),
+      }));
+
+    return {
+      totalPurchaseQty,
+      totalPurchaseValue,
+      totalSalesQty,
+      totalSalesValue,
+      closingValue,
+      groupBars,
+      salesPie,
+    };
+  }, [filteredRows, isStockGroupDashboard, totals]);
+
+  const PIE_COLORS = ["#2a7be4", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444"];
   useReportFocusRestore(containerRef, [
     filteredRows,
     companyId,
@@ -461,49 +595,70 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                   ? `Tracking item movement sold by ${requestedSalesPersonName || "the selected sales person"} through group, category, item, and voucher drilldown.`
                   : hideClosing
                       ? "Review net purchase and net sales movement by account group or ledger with the same drill flow as the stock analysis screens."
-                      : "Review opening, net purchase / inward, net sales / outward, and closing movement without leaving inventory books."}
+                  : "Review opening, net purchase / inward, net sales / outward, and closing movement without leaving inventory books."}
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <CalendarRange className="h-4 w-4 text-blue-600" />
-                  From
-                </label>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={fromDate}
-                  onChange={(event) => setFromDate(event.target.value)}
-                />
+            {!isStockGroupDashboard ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <CompanyPicker companies={companies} value={companyId} onChange={setCompanyId} />
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <CalendarRange className="h-4 w-4 text-blue-600" />
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    value={fromDate}
+                    onChange={(event) => setFromDate(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <CalendarRange className="h-4 w-4 text-blue-600" />
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    value={toDate}
+                    onChange={(event) => setToDate(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Search className="h-4 w-4 text-blue-600" />
+                    {view.searchLabel}
+                  </label>
+                  <input
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder={view.searchPlaceholder}
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <CalendarRange className="h-4 w-4 text-blue-600" />
-                  To
-                </label>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={toDate}
-                  onChange={(event) => setToDate(event.target.value)}
-                />
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
+                  onClick={handleExportPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                  onClick={handleExportExcel}
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Search className="h-4 w-4 text-blue-600" />
-                  {view.searchLabel}
-                </label>
-                <input
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  placeholder={view.searchPlaceholder}
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-            </div>
+            )}
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
@@ -529,6 +684,8 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                   {link.label}
                 </button>
               ))}
+              {!isStockGroupDashboard ? (
+                <>
               <button
                 type="button"
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-medium text-white shadow-sm"
@@ -545,9 +702,433 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
                 <Download className="h-4 w-4" />
                 Export Excel
               </button>
+                </>
+              ) : null}
           </div>
         </section>
 
+        {isStockGroupDashboard ? (
+          <>
+            <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="space-y-4">
+                <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <StockGroupDashboardCard
+                    title="Total Purchase"
+                    primary={`${formatQty(stockGroupSummary?.totalPurchaseQty)} pcs`}
+                    secondaryLabel="Value"
+                    secondaryValue={formatCurrencyAmount(
+                      stockGroupSummary?.totalPurchaseValue,
+                      selectedCompany,
+                    )}
+                    tone="blue"
+                    icon={<Package2 className="h-6 w-6" />}
+                  />
+                  <StockGroupDashboardCard
+                    title="Total Sales"
+                    primary={`${formatQty(stockGroupSummary?.totalSalesQty)} pcs`}
+                    secondaryLabel="Value"
+                    secondaryValue={formatCurrencyAmount(
+                      stockGroupSummary?.totalSalesValue,
+                      selectedCompany,
+                    )}
+                    tone="emerald"
+                    icon={<TrendingDown className="h-6 w-6" />}
+                  />
+                  <StockGroupDashboardCard
+                    title="Closing Stock Value"
+                    primary={formatCurrencyAmount(
+                      stockGroupSummary?.closingValue,
+                      selectedCompany,
+                    )}
+                    secondaryLabel="Visible rows"
+                    secondaryValue={formatQty(filteredRows.length)}
+                    tone="amber"
+                    icon={<Wallet className="h-6 w-6" />}
+                  />
+                </section>
+
+                <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+                  <div className="border-b border-slate-200 px-6 py-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-slate-900">
+                          Stock Group Analysis
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                          All groups are shown by default. Filter a single group
+                          or search within the visible movement rows.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative min-w-[260px]">
+                          <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                          <input
+                            className="w-full rounded-xl border border-slate-200 px-4 py-3 pl-9 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                            placeholder="Search stock group..."
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[1320px] w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-500">
+                        <tr>
+                          <th rowSpan="2" className="px-4 py-3 text-left font-medium">
+                            Group Name
+                          </th>
+                          <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                            Purchase
+                          </th>
+                          <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                            Sales
+                          </th>
+                          <th colSpan="3" className="px-4 py-3 text-center font-medium">
+                            Closing
+                          </th>
+                        </tr>
+                        <tr>
+                          {[
+                            "Quantity",
+                            "Eff. Rate",
+                            "Value",
+                            "Quantity",
+                            "Eff. Rate",
+                            "Value",
+                            "Quantity",
+                            "Eff. Rate",
+                            "Value",
+                          ].map((label, index) => (
+                            <th
+                              key={`${label}-${index}`}
+                              className="px-4 py-3 text-right font-medium"
+                            >
+                              {label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRows.map((row, index) => {
+                          const metrics = row.metrics || {};
+                          return (
+                            <tr
+                              key={`${row.id}-${index}`}
+                              className="border-t border-slate-100"
+                            >
+                              <td className="px-4 py-3">
+                                <button
+                                  type="button"
+                                  data-report-nav="true"
+                                  data-focus-key={`ima-${variant}-${row.id || row.name}`}
+                                  className="rounded px-1 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                                  onClick={() => {
+                                    const nextPath = buildDrillPath(row);
+                                    if (nextPath) {
+                                      navigate(nextPath, {
+                                        state: buildReportReturnState(
+                                          location,
+                                          `ima-${variant}-${row.id || row.name}`,
+                                        ),
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <p className="font-medium text-slate-900">{row.name}</p>
+                                  {row.secondaryLabel ? (
+                                    <p className="mt-0.5 text-xs text-slate-400">
+                                      {row.secondaryLabel}
+                                    </p>
+                                  ) : null}
+                                </button>
+                              </td>
+                              <td className="px-4 py-3 text-right text-emerald-700">
+                                {formatQty(metrics.inwardQty)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {formatRate(metrics.inwardRate)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {formatCurrencyAmount(
+                                  metrics.inwardValue,
+                                  selectedCompany,
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right text-rose-700">
+                                {formatQty(metrics.outwardQty)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {formatRate(metrics.outwardRate)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {formatCurrencyAmount(
+                                  metrics.outwardValue,
+                                  selectedCompany,
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                                {formatQty(metrics.closingQty)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {formatRate(metrics.closingRate)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                                {formatCurrencyAmount(
+                                  metrics.closingValue,
+                                  selectedCompany,
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      {filteredRows.length ? (
+                        <tfoot className="bg-slate-50 text-slate-700">
+                          <tr className="border-t border-slate-200 font-semibold">
+                            <td className="px-4 py-4 text-left">Total</td>
+                            <td className="px-4 py-4 text-right text-emerald-700">
+                              {formatQty(totals.inwardQty)}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatRate(
+                                totals.inwardQty
+                                  ? totals.inwardValue / totals.inwardQty
+                                  : 0,
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatCurrencyAmount(totals.inwardValue, selectedCompany)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-rose-700">
+                              {formatQty(totals.outwardQty)}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatRate(
+                                totals.outwardQty
+                                  ? totals.outwardValue / totals.outwardQty
+                                  : 0,
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatCurrencyAmount(totals.outwardValue, selectedCompany)}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatQty(totals.closingQty)}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatRate(
+                                totals.closingQty
+                                  ? totals.closingValue / totals.closingQty
+                                  : 0,
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              {formatCurrencyAmount(totals.closingValue, selectedCompany)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      ) : null}
+                    </table>
+                  </div>
+
+                  {loading ? (
+                    <div className="px-6 py-12 text-center text-sm text-slate-500">
+                      Loading movement analysis...
+                    </div>
+                  ) : filteredRows.length === 0 ? (
+                    <div className="px-6 py-12 text-center text-sm text-slate-500">
+                      No rows matched this stock group analysis filter.
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="grid gap-4 lg:grid-cols-3">
+                  <ChartShell title="Purchase vs Sales (Value)">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          {
+                            name: "Purchase",
+                            value: Number(stockGroupSummary?.totalPurchaseValue || 0),
+                          },
+                          {
+                            name: "Sales",
+                            value: Number(stockGroupSummary?.totalSalesValue || 0),
+                          },
+                        ]}
+                        margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} />
+                        <YAxis tick={{ fill: "#64748b", fontSize: 12 }} />
+                        <Tooltip
+                          formatter={(value) =>
+                            formatCurrencyAmount(value, selectedCompany)
+                          }
+                        />
+                        <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                          <Cell fill="#2a7be4" />
+                          <Cell fill="#10b981" />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartShell>
+
+                  <ChartShell title="Top Groups by Sales Value">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stockGroupSummary?.salesPie || []}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={52}
+                          outerRadius={90}
+                          paddingAngle={3}
+                        >
+                          {(stockGroupSummary?.salesPie || []).map((entry, index) => (
+                            <Cell
+                              key={`${entry.name}-${index}`}
+                              fill={PIE_COLORS[index % PIE_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) =>
+                            formatCurrencyAmount(value, selectedCompany)
+                          }
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartShell>
+
+                  <ChartShell title="Sales by Group">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={stockGroupSummary?.groupBars || []}
+                        layout="vertical"
+                        margin={{ top: 8, right: 12, left: 12, bottom: 8 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          type="number"
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={120}
+                          tick={{ fill: "#64748b", fontSize: 12 }}
+                        />
+                        <Tooltip
+                          formatter={(value) =>
+                            formatCurrencyAmount(value, selectedCompany)
+                          }
+                        />
+                        <Bar
+                          dataKey="salesValue"
+                          fill="#2a7be4"
+                          radius={[0, 8, 8, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartShell>
+                </section>
+              </div>
+
+              <aside className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 h-fit">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-xl bg-blue-50 p-2 text-blue-600">
+                    <Funnel className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">Filters</h3>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Date Range
+                    </label>
+                    <div className="grid gap-3">
+                      <input
+                        type="date"
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        value={fromDate}
+                        onChange={(event) => setFromDate(event.target.value)}
+                      />
+                      <input
+                        type="date"
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        value={toDate}
+                        onChange={(event) => setToDate(event.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Company
+                    </label>
+                    <CompanyPicker
+                      companies={companies}
+                      value={companyId}
+                      onChange={setCompanyId}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Group
+                    </label>
+                    <SearchableSelect
+                      options={groupFilterOptions}
+                      value={selectedGroupName}
+                      onChange={setSelectedGroupName}
+                      placeholder="Select group"
+                      inputClassName="rounded-xl border border-slate-200 bg-white px-4 py-3 pl-9 pr-8 text-sm text-slate-900"
+                      className="rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Search Group
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      placeholder="Type stock group name..."
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#1463ff] px-5 text-[14px] font-semibold text-white shadow-sm"
+                  >
+                    <Funnel className="h-4 w-4" />
+                    Filters Applied Live
+                  </button>
+
+                  <button
+                    type="button"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 shadow-sm"
+                    onClick={() => {
+                      setSelectedGroupName("all");
+                      setSearch("");
+                    }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </aside>
+            </section>
+          </>
+        ) : null}
+
+        {!isStockGroupDashboard ? (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {isSalesPersonView ? (
             <>
@@ -631,7 +1212,9 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
             </>
           )}
         </section>
+        ) : null}
 
+        {!isStockGroupDashboard ? (
         <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
           <div className="border-b border-slate-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-slate-900">{view.title}</h2>
@@ -802,6 +1385,7 @@ export default function InventoryMovementAnalysisPage({ variant = "stock-group" 
             </div>
           ) : null}
         </section>
+        ) : null}
       </div>
     </div>
   );

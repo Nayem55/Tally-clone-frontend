@@ -444,7 +444,6 @@ export default function ProductCustomerReportPage() {
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-
           <InsightCard
             icon={Users}
             label="Repeat Buyers"
